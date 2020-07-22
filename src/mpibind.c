@@ -1389,7 +1389,7 @@ void mpibind_print_mapping(mpibind_t *handle)
  */
 int mpibind_set_env_vars(mpibind_t *handle)
 {
-  int i, v, nc, val;
+  int i, v, nc, val, end;
   char *str;
   int nvars = 4;
   char *vars[] = {"OMP_NUM_THREADS",
@@ -1445,11 +1445,16 @@ int mpibind_set_env_vars(mpibind_t *handle)
 	  nc += snprintf(str+nc, LONG_STR_SIZE-nc, "%d,", val); 
 	} hwloc_bitmap_foreach_end();
       }
+      
+      /* Strip the last comma */
+      end = strlen(str) - 1; 
+      if (str[end] == ',')
+	str[end] = '\0'; 
     } 
   }
 
   /* Store the names of the vars in its own array
-     so that callers can retrieve it easily */
+     so that callers can retrieve them easily */
   handle->names = calloc(nvars, sizeof(char *)); 
   for (v=0; v<nvars; v++) {
     handle->names[v] = malloc(SHORT_STR_SIZE); 

@@ -25,8 +25,7 @@ endif
 PROGS = main
 
 ## HWLOC_XML_VERBOSE=1
-## HWLOC_XMLFILE=topo-xml/lassen-hw2.xml
-## ./mpibind_v0.14.1
+## HWLOC_XMLFILE=../topo-xml/coral-lassen.xml ./main
 
 all: $(PROGS) $(MPIBIND_SONAME) $(MPIBIND_LIB)
 
