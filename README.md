@@ -14,9 +14,24 @@ abstractions as well as heterogeneous devices such as accelerators.
 ### Contributing
 
 Contributions for bug fixes and new features are welcome and follow
-a fork/pull model: Contributors develop on a branch of their
-personal fork and create pull requests to merge their changes into the
-main repository. 
+the GitHub
+[fork and pull model](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/about-collaborative-development-models).
+Contributors develop on a branch of their personal fork and create
+pull requests to merge their changes into the main repository. 
+
+The steps are similar to those of the Flux framework:
+
+1. [Fork](https://help.github.com/en/github/getting-started-with-github/fork-a-repo) `mpibind`.
+2. [Clone](https://help.github.com/en/github/getting-started-with-github/fork-a-repo#keep-your-fork-synced)
+your fork: `git clone git@github.com:[username]/mpibind.git`
+3. Create a topic branch for your changes: `git checkout -b new_feature`
+4. Create feature or add fix (and add tests if possible)
+5. Make sure everything still passes: `make check`
+6. Push the branch to your GitHub repo: `git push origin new_feature`
+7. Create a pull request against `mpibind` and describe what your
+changes do and why you think it should be merged. List any
+outstanding *todo* items. 
+
 
 ### Authors
 
