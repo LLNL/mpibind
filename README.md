@@ -32,10 +32,6 @@ following papers:
   Symposium on Memory Systems, MEMSYS'18, Washington, DC,
   October 2018. ACM. 
 
-* Edgar A. León. *Mapping MPI+X Applications to Multi-GPU
-  Architectures: A Performance-Portable Approach*. In GPU Technology
-  Conference, GTC'18, San Jose, CA, March 2018. 
-
 * Edgar A. León. *mpibind: A Memory-Centric Affinity Algorithm for
   Hybrid Applications*. In International Symposium on Memory Systems,
   MEMSYS'17, Washington, DC, October 2017. ACM.
@@ -44,6 +40,19 @@ following papers:
   Revisited: Enabling Application Scalability and Reproducibility with
   SMT*. In International Parallel & Distributed Processing Symposium,
   IPDPS'16, Chicago, IL, May 2016. IEEE.
+  
+Other references: 
+
+* J. P. Dahm, D. F. Richards, A. Black, A. D. Bertsch, L. Grinberg, I. Karlin, S. Kokkila-Schumacher, E. A. León, R. Neely, R. Pankajakshan, and O. Pearce. *Sierra Center of Excellence: Lessons learned*. In IBM Journal of Research and Development, vol. 64, no. 3/4, May-July 2020.
+
+* Edgar A. León. *Cross-Architecture Affinity of Supercomputers*. In International Supercomputing Conference (Research Poster), ISC’19, Frankfurt, Germany, June 2019. 
+
+* Edgar A. León. *Mapping MPI+X Applications to Multi-GPU
+  Architectures: A Performance-Portable Approach*. In GPU Technology
+  Conference, GTC'18, San Jose, CA, March 2018. 
+  
+  
+
 
 [Bibtex file](doc/mpibind.bib). 
 
