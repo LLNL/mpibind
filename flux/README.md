@@ -32,9 +32,7 @@ a test Flux session:
 
 ```
 $ LD_LIBRARY_PATH=$(pwd)/../src:$LD_LIBRARY_PATH /path/to/flux start -s2
-ƒ(s=2,d=0) $ flux mini run -o initrc=initrc.lua -n2 -c2 /bin/true
-task1: cpu_list=2-3
-task0: cpu_list=0-1
+ƒ(s=2,d=0) $ flux mini run -o initrc=mpibind.lua -n2 -c2 /bin/true
 ƒ(s=2,d=0) $
 ```
 

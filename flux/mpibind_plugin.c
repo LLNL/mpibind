@@ -12,8 +12,6 @@
  *
  *  flux-shell plugin to implement task binding and affinity using libmpibind.
  *
- *  Currently a proof-of-concept, see TODO below.
- *
  *  OPTIONS
  *
  *  {
@@ -31,15 +29,8 @@
  *  the shell's builtin affinity plugin. In shell.init callback, parse any
  *  relevant shell options, and if disabled is set, immediately return.
  *  Otherwise, gather number of local tasks and assigned core list and call
- *  mpibind(3) to generate mapping. Register for the 'task.exec' callback and
- *  pass the mpibind mapping to this function for use.
- *
- *  TODO
- *
- *  + Handle assigned GPUs (see if it's ok to make environemtn variabels blank)
- *  - Process the mpibind per-task environment
- *  - Expose more options as shell options
- *  - Allow defaults to be set via plugin.load config
+ *  mpibind(3) to generate mapping. Register for the 'task.exec' and
+ *  'task.init' callback and pass the mpibind mapping to this function for use.
  */
 
 /*  The name of this plugin. To completely replace the shell's internal
@@ -108,7 +99,8 @@ static int mpibind_apply (mpibind_t *mph, int taskid)
     return 0;
 }
 
-// taken from flux-core/src/shell/gpubind.c
+/* Set an environment variable for a taks
+ */
 static int plugin_task_setenv (flux_plugin_t *p, const char *var, const char *val)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
@@ -119,6 +111,9 @@ static int plugin_task_setenv (flux_plugin_t *p, const char *var, const char *va
     return 0;
 }
 
+/* task.init handler. Sets environment variables for each task based on
+   mpibind results
+ */
 static int mpibind_task_init (flux_plugin_t *p,
                               const char *topic,
                               flux_plugin_arg_t *arg,
@@ -133,6 +128,7 @@ static int mpibind_task_init (flux_plugin_t *p,
         env_var_values = mpibind_get_env_var_values (mph, env_var_names[i]);
         if (env_var_values[taskid]) {
 #if DEBUG
+            fprintf (stderr, "%s\n", getenv ("SLURMD_NODENAME"));
             fprintf (stderr,
                      "Setting %s=%s\n",
                      env_var_names[i],
@@ -145,6 +141,8 @@ static int mpibind_task_init (flux_plugin_t *p,
     return 0;
 }
 
+/* task.exec handler. Enforces mpibind mappings for each task
+ */
 static int mpibind_task (flux_plugin_t *p,
                          const char *topic,
                          flux_plugin_arg_t *arg,
@@ -186,9 +184,12 @@ static bool mpibind_getopt (flux_shell_t *shell,
     return disabled == 0;
 }
 
+/* Destroy mpibind tasks and related variables
+ */
 static void mpibind_destroy (void *arg)
 {
     mpibind_t *mph = arg;
+    // topology isn't freed by mpibind_finalize()
     hwloc_topology_t topo = mpibind_get_topology (mph);
     hwloc_topology_destroy (topo);
     mpibind_finalize (mph);
@@ -239,6 +240,7 @@ static hwloc_cpuset_t derive_pus (hwloc_topology_t topo, char *cores)
         i = hwloc_bitmap_next (coreset, i);
     }
     hwloc_bitmap_free (coreset);
+    return resultset;
 err:
     if (coreset)
         hwloc_bitmap_free (coreset);
@@ -253,7 +255,7 @@ static int mpibind_shell_init (flux_plugin_t *p,
                                void *data)
 {
     int ntasks;
-    char *cores;
+    char *cores, *gpus;
     int smt = -1;
     int greedy = -1;
     int gpu_optim = -1;
@@ -292,12 +294,14 @@ static int mpibind_shell_init (flux_plugin_t *p,
      */
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
-                                     "{s:i, s:{s:s}}",
+                                     "{s:i, s:{s:s, s:s}}",
                                      "ntasks",
                                      &ntasks,
                                      "resources",
                                      "cores",
-                                     &cores)
+                                     &cores,
+                                     "gpus",
+                                     &gpus)
         < 0) {
         shell_die_errno (1, "flux_shell_rank_info_unpack");
         return -1;
@@ -311,6 +315,8 @@ static int mpibind_shell_init (flux_plugin_t *p,
                                     HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
     hwloc_topology_load (*topo);
     topology_restrict_current (*topo);
+
+    fprintf (stderr, "gpus: %s\n", gpus);
 
 #if DEBUG
     fprintf (stderr,
