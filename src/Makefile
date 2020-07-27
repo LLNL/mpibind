@@ -29,6 +29,9 @@ PROGS = main
 
 all: $(PROGS) $(MPIBIND_SONAME) $(MPIBIND_LIB)
 
+hwloc_tests: hwloc_tests.c
+	$(CC) $(BASIC_CFLAGS) $(HWLOC_CFLAGS) $@.c $(HWLOC_LDLIBS) -o $@
+
 dev_tests: dev_tests.c mpibind.h
 	$(CC) $(BASIC_CFLAGS) $(HWLOC_CFLAGS) $@.c $(HWLOC_LDLIBS) -o $@
 
