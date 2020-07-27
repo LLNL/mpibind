@@ -51,3 +51,6 @@ The first non-blank, non-commented line in the answer file is the number of test
     * Trying to run mpibind with an invalid number of threads (e.g. -1)
     * Trying to run mpibind with an invalid number of tasks (e.g. -1)
     * Trying to run mpibind with an invalid SMT level (e.g. -1 or 8 on a machine with SMT-4
+3. Environment Varibles
+    * Check that AMD and NVIDIA gpus can be properly detected
+    * Check that the OMP_PLACES variable is formatted correctly
