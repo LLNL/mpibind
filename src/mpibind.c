@@ -1282,7 +1282,7 @@ int mpibind(mpibind_t *hdl)
   }
   
   /* Input parameters check */
-  if (hdl->ntasks <= 0 || hdl->nthreads < 0) {
+  if (hdl->ntasks <= 0 || hdl->in_nthreads < 0) {
     fprintf(stderr, "Error: ntasks %d or nthreads %d out of range\n",
 	    hdl->ntasks, hdl->in_nthreads);
     return 1;
