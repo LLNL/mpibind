@@ -1,0 +1,1 @@
+SUBDIRS= _mpibind mpibind

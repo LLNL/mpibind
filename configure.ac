@@ -28,6 +28,142 @@ LT_INIT
 
 AC_PROG_CC_C99
 AC_PROG_LN_S
+AC_PROG_MAKE_SET
+AC_PROG_AWK
+
+# Constants to substitute
+HWLOC_LIBS=$(pkg-config --libs hwloc)
+HWLOC_CFLAGS=$(pkg-config --cflags hwloc)
+HWLOC_INCLUDEDIR=$(pkg-config --variable=includedir hwloc) 
+AC_SUBST([HWLOC_LIBS])
+AC_SUBST([HWLOC_CFLAGS])
+AC_SUBST([HWLOC_INCLUDEDIR])
+
+TOPOLOGY_DIR = ./topo-xml
+AC_SUBST([TOPOLOGY_DIR])
+
+# Checks for header files.
+AC_CHECK_HEADERS([stdlib.h string.h sys/param.h unistd.h])
+
+# Checks for typedefs, structures, and compiler characteristics.
+AC_C_RESTRICT
+AC_TYPE_SIZE_T
+
+# Checks for library functions.
+AC_FUNC_FORK
+AC_FUNC_MALLOC
+AC_FUNC_MMAP
+AC_CHECK_FUNCS([regcomp strchr strerror])
+
+################ Python Configuration ################
+
+#  Edit PATH to remove $PWD/src/cmd so that AM_PATH_PYTHON doesn't find
+#  mpibind python script (thus creating a link to itself.) This needs to be
+#  done *before* AX_PYTHON_DEVEL.
+#
+saved_PATH=$PATH
+export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
+
+if test "X$PYTHON_VERSION" = "X" ; then
+  if test "X$PYTHON" = "X" ; then
+    # if the user hasn't specified, try for python 3
+    PYTHON_VERSION=3
+  fi
+fi
+
+# Do not let AX_PYTHON_DEVEL set PYTHON_SITE_PKG
+saved_PYTHON_SITE_PKG=$PYTHON_SITE_PKG
+AX_PYTHON_DEVEL([>='3.6'])
+PYTHON_SITE_PKG=$saved_PYTHON_SITE_PKG
+
+AM_PATH_PYTHON([$ac_python_version])
+if test "X$PYTHON" = "X"; then
+  AC_MSG_ERROR([could not find python])
+fi
+if test "X$PYTHON" = "X"; then
+  AC_MSG_ERROR([could not find python])
+fi
+#  Restore original PATH:
+export PATH=${saved_PATH}
+
+# Flag for PYTHON_LDFLAGS workaround below.
+if test -n "$PYTHON_LDFLAGS"; then
+  ac_python_ldflags_set_by_user=true
+fi
+
+AM_CHECK_PYMOD(cffi,
+               [cffi.__version_info__ >= (1,10)],
+               ,
+               [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
+               )
+AM_CHECK_PYMOD(six,
+               [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
+               )
+AM_CHECK_PYMOD(yaml,
+               [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
+               )
+AM_CHECK_PYMOD(jsonschema,
+               [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
+               )
+
+# Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
+# (e.g. /usr/lib64).  Placing a standard path earlier in the linker
+# search can lead to linking problems.
+#
+# Logic below assumes only newer Python versions, protected by
+# above check for atleast Python 3.6.
+if test "$ac_python_ldflags_set_by_user" != "true"; then
+  AC_CHECK_LIB([$ac_python_library], [PyArg_ParseTuple],
+               [ac_python_in_ld_path=true])
+  if test "$ac_python_in_ld_path" = "true"; then
+    AC_MSG_NOTICE([Removing -L$ac_python_libdir from PYTHON_LDFLAGS])
+    PYTHON_LDFLAGS="-l$ac_python_library"
+  fi
+fi
+AS_VAR_SET(mpibindpydir, $pyexecdir/mpibind)
+AC_SUBST(mpibindpydir)
+AS_VAR_SET(mpibindpysodir, $pyexecdir/_mpibind)
+AC_SUBST(mpibindpysodir)
+AC_SUBST(PYTHON_LIBRARY, lib${ac_python_library}.so)
+
+AS_VAR_SET(mpibindlibdir, $libdir/mpibind)
+AC_SUBST(mpibindlibdir)
+AS_VAR_SET(mpibindpylinkdir, $mpibindlibdir/python$PYTHON_VERSION)
+AC_SUBST(mpibindpylinkdir)
+
+AS_VAR_SET(mpibindbindingincludedir, $includedir/mpibind/_binding)
+AC_SUBST(mpibindbindingincludedir)
+
+AC_DEFINE_UNQUOTED([PYTHON_INTERPRETER], ["$PYTHON"], [The python interpreter mpibind is configured with])
+AC_SUBST(PYTHON)
+
+AC_ARG_ENABLE([pylint],
+  [AS_HELP_STRING([--enable-pylint],
+    [Enable pylint checks of python bindings])],,
+  [enable_pylint="no"]
+)
+AS_IF([test "x$enable_pylint" = "xyes"], [
+  AC_CHECK_PROG(PYLINT,[pylint],[pylint])
+  AS_IF([test "x$PYLINT" != "xpylint"], [AC_MSG_ERROR([No pylint found in PATH])])
+  AM_CHECK_PYMOD(pylint,
+                   [StrictVersion(pylint.__version__) >= StrictVersion('1.8.4')],
+                   ,
+                   [AC_MSG_ERROR([could not find python module pylint, version 1.8.4+ required])]
+                 )
+])
+AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
+
+
+
+# checks for Modules
+
+PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.0.1], [], [])
 
 # hwloc 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
@@ -81,6 +217,10 @@ AC_CONFIG_FILES([
  test-suite/Makefile
  etc/Makefile
  etc/mpibind.pc
+ bindings/Makefile
+ bindings/python/Makefile
+ bindings/python/_mpibind/Makefile
+ bindings/python/mpibind/Makefile
 ])
 
 AC_OUTPUT
