@@ -10,6 +10,20 @@ abstractions as well as heterogeneous devices such as accelerators.
 
 ### Getting Started
 
+This project uses GNU Autotools.
+
+```
+$ ./bootstrap
+
+$ ./configure --prefix=<install_dir>
+
+$ make
+
+$ make install
+```
+
+The resulting library is `libmpibind` and a simple program using it is `src/main.c`
+
 
 ### Contributing
 
