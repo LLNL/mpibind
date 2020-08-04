@@ -609,7 +609,9 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
   hwloc_obj_t obj;
   hwloc_bitmap_t *cpuset;
   hwloc_obj_type_t level_type;
-  char str[SHORT_STR_SIZE]; 
+#if VERBOSE >= 1
+  char str[SHORT_STR_SIZE];
+#endif
   
   for (i=0; i<ntasks; i++) 
     hwloc_bitmap_zero(cpus[i]);
@@ -659,9 +661,13 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
 	obj = hwloc_get_obj_inside_cpuset_by_depth(topo, root->cpuset,
 						   depth, i);
 	cpuset[i] = hwloc_bitmap_dup(obj->cpuset);
+#if VERBOSE >= 1
+	/* Save the object type */ 
+	if (i == 0)
+	  hwloc_obj_type_snprintf(str, sizeof(str), obj, 1);
+#endif
       }
-      hwloc_obj_type_snprintf(str, sizeof(str), obj, 1); 
-
+      
       /* Core level or above should have only 1 PU */ 
       pus_per_obj = 1;
       /* Determine SMT level */ 
@@ -751,7 +757,7 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
   int i, j, num_numas, nt, np, task_offset;
   int *ntasks_per_numa;
   hwloc_obj_t obj;
-  hwloc_bitmap_t io_numa_os_ids; 
+  hwloc_bitmap_t io_numa_os_ids = NULL; 
   
   /* Distribute tasks over numa domains */
   if (gpu_optim) { 
@@ -1027,7 +1033,7 @@ int mpibind_finalize(mpibind_t *hdl)
 
   for (v=0; v<hdl->nvars; v++) {
 #if VERBOSE >= 3
-    printf("Releasing %s\n", handle->env_vars[v].name);
+    printf("Releasing %s\n", hdl->env_vars[v].name);
 #endif
     free(hdl->names[v]); 
     free(hdl->env_vars[v].name);
