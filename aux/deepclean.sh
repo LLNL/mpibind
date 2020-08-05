@@ -2,6 +2,9 @@
 
 #ACLOCAL_PATH=$ACLOCAL_PATH:$(spack location -i pkgconfig)/share/aclocal autoreconf --install
 
+# Todo: I should manage this through 'clean-local:' in Makefile.am
+# https://www.gnu.org/software/automake/manual/html_node/Extending.html#Extending 
+
 set -x
 
 # make maintainer-clean
