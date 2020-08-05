@@ -10,22 +10,21 @@
 
 
 /* 
- * Get the Hardware SMT level. 
- */ 
-static
-int get_smt_level(hwloc_topology_t topo)
+ * Briefly show the hwloc topology. 
+ */
+#if VERBOSE >= 1
+static 
+void print_topo_brief(hwloc_topology_t topo)
 {
-  int level = 1; 
-  hwloc_obj_t obj = NULL;
+  int depth;
+  int topo_depth = hwloc_topology_get_depth(topo); 
   
-  if ( (obj = hwloc_get_next_obj_by_type(topo, HWLOC_OBJ_CORE, obj)) ) {
-    level = (obj->arity == 0) ? 1 : obj->arity; 
-    /* Debug */ 
-    //printf("SMT level: %d\n", level); 
-  }
-  
-  return level;  
+  for (depth = 0; depth < topo_depth; depth++)
+    printf("[%d]: %s[%d]\n", depth,
+	   hwloc_obj_type_string(hwloc_get_depth_type(topo, depth)), 
+	   hwloc_get_nbobjs_by_depth(topo, depth)); 
 }
+#endif
 
 
 /* 
@@ -34,7 +33,7 @@ int get_smt_level(hwloc_topology_t topo)
  * Make sure to always use get_core_type and get_core_depth
  * instead of HWLOC_OBJ_CORE and its depth.
  * Todo: In the future, I may need to have similar functions
- * for NUMA nodes.  
+ * for NUMA domains.  
  */
 static
 int get_core_depth(hwloc_topology_t topo)
@@ -43,18 +42,44 @@ int get_core_depth(hwloc_topology_t topo)
 }
 
 
+/* Commented out to avoid compiler errors. 
+   But, I may use this function later. */ 
 #if 0
-/* To avoid compiler errors since the function is not 
-   being called. But, it may be useful later */ 
 static
 hwloc_obj_type_t get_core_type(hwloc_topology_t topo)
 {
   return hwloc_get_depth_type(topo, get_core_depth(topo));
 }
-#endif
+#endif 
 
 
-//static
+/* 
+ * Get the Hardware SMT level. 
+ */ 
+static
+int get_smt_level(hwloc_topology_t topo)
+{
+  /* If there are no Core objects, assume SMT-1 */ 
+  int level = 1; 
+  hwloc_obj_t obj = NULL;
+  
+  if ( (obj = hwloc_get_next_obj_by_depth(topo, get_core_depth(topo),
+					  obj)) ) {
+    level = (obj->arity == 0) ? 1 : obj->arity; 
+    /* Debug */ 
+    //printf("SMT level: %d (obj->arity: %d)\n", level, obj->arity); 
+  }
+  
+  return level;  
+}
+
+
+/*
+ * Load the hwloc topology. 
+ * This function makes sure GPU devices are visible and also 
+ * filters out levels that do not add any structure. 
+ */ 
+static
 void topology_load(hwloc_topology_t topology)
 {  
   /* Setting HWLOC_XMLFILE in the environment
@@ -72,10 +97,15 @@ void topology_load(hwloc_topology_t topology)
   //hwloc_topology_set_type_filter(topology, HWLOC_OBJ_L1CACHE, 
   //				 HWLOC_TYPE_FILTER_KEEP_NONE);
   
-  /* Remove objects that do not add structure */ 
+  /* Remove objects that do not add structure. 
+     Warning: This function can collapse the Core and PU levels
+     into the PU level. Functions that look for the Core level 
+     may break or behave differently!  
+     Leaving it in for now, because I have my own 'get_core_*' 
+     functions rather than using HWLOC_OBJ_CORE directly */ 
   hwloc_topology_set_all_types_filter(topology,
 				      HWLOC_TYPE_FILTER_KEEP_STRUCTURE); 
-
+  
   /* Too general, enabling only OS devices below */ 
   //hwloc_topology_set_io_types_filter(topology,
   //				     HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
@@ -590,6 +620,9 @@ struct topo_level* build_mapping_levels(hwloc_topology_t topo,
 #endif
 
 
+
+
+
 /*
  * Input:
  *   root: The root object to start from. 
@@ -608,7 +641,6 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
   int depth, core_depth;
   hwloc_obj_t obj;
   hwloc_bitmap_t *cpuset;
-  hwloc_obj_type_t level_type;
 #if VERBOSE >= 1
   char str[SHORT_STR_SIZE];
 #endif
@@ -618,20 +650,31 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
 
   /* it_smt holds the intermediate SMT level */ 
   hw_smt = get_smt_level(topo);
-  level_type = (usr_smt < hw_smt) ? HWLOC_OBJ_CORE : HWLOC_OBJ_PU;
   it_smt = (usr_smt > 1 && usr_smt < hw_smt) ? usr_smt : 0; 
+
+#if VERBOSE >= 4
+  printf("hw_smt=%d usr_smt=%d, it_smt=%d\n", hw_smt, usr_smt, it_smt);
+#endif 
+
+  core_depth = get_core_depth(topo);
   
   /* If need to calculate nthreads, match at Core or usr-SMT level */
   if (*nthreads_ptr <= 0) {
-    nobjs = hwloc_get_nbobjs_inside_cpuset_by_type(topo, root->cpuset,
-						   level_type);
+    depth = (usr_smt < hw_smt) ? core_depth :
+      hwloc_topology_get_depth(topo) - 1; 
+    nobjs = hwloc_get_nbobjs_inside_cpuset_by_depth(topo,
+						    root->cpuset,
+						    depth);
     if (it_smt)
       nobjs *= it_smt; 
     
     /* Set the nthreads output */ 
     *nthreads_ptr = (nobjs >= ntasks) ? nobjs/ntasks : 1;
-    /* Debug */ 
-    //printf("num_threads=%d\n", *nthreads_ptr); 
+    
+#if VERBOSE >= 4
+    printf("num_threads/task=%d nobjs=%d\n", *nthreads_ptr, nobjs);
+    print_obj(root);
+#endif 
   }
   nwks = *nthreads_ptr * ntasks;
   
@@ -642,7 +685,6 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
    * The previous scheme of matching at smt-k or pu level does not 
    * work as well because tasks may overlap cores--BFS vs DFS.  
    */ 
-  core_depth = get_core_depth(topo); 
   
   /* Walk the tree to find a matching level */
   for (depth=root->depth; depth<=core_depth; depth++) { 
@@ -1298,7 +1340,11 @@ int mpibind(mpibind_t *hdl)
     hwloc_topology_init(&hdl->topo);
     topology_load(hdl->topo);
   } else 
-    hwloc_topology_check(hdl->topo); 
+    hwloc_topology_check(hdl->topo);
+
+#if VERBOSE >= 1
+  print_topo_brief(hdl->topo);
+#endif 
   
   if (hdl->smt < 0 || hdl->smt > get_smt_level(hdl->topo)) {
     fprintf(stderr, "Error: SMT parameter %d out of range\n",
