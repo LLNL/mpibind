@@ -1,4 +1,3 @@
-#include <flux/core.h>
 #include <flux/shell.h>
 #include <hwloc.h>
 #include <jansson.h>
@@ -16,6 +15,7 @@
  *
  *  {
  *    "disable":i,
+ *    "verbose":i,
  *    "smt":i,
  *    "greedy":i,
  *    "gpu_optim":i,
@@ -84,6 +84,12 @@ static int topology_restrict_current (hwloc_topology_t topo)
 out:
     if (rset)
         hwloc_bitmap_free (rset);
+
+#if DEBUG
+    int num = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_OSDEV_GPU);
+    fprintf(stderr, "Number of visible gpu devices: %d\n", num);
+#endif
+
     return (rc);
 }
 
@@ -99,7 +105,7 @@ static int mpibind_apply (mpibind_t *mph, int taskid)
     return 0;
 }
 
-/* Set an environment variable for a taks
+/* Set an environment variable for a task
  */
 static int plugin_task_setenv (flux_plugin_t *p, const char *var, const char *val)
 {
@@ -128,7 +134,7 @@ static int mpibind_task_init (flux_plugin_t *p,
         env_var_values = mpibind_get_env_var_values (mph, env_var_names[i]);
         if (env_var_values[taskid]) {
 #if DEBUG
-            fprintf (stderr, "%s\n", getenv ("SLURMD_NODENAME"));
+            //fprintf (stderr, "%s\n", getenv ("SLURMD_NODENAME"));
             fprintf (stderr,
                      "Setting %s=%s\n",
                      env_var_names[i],
@@ -163,24 +169,80 @@ static int mpibind_task (flux_plugin_t *p,
 static bool mpibind_getopt (flux_shell_t *shell,
                             int *psmt,
                             int *pgreedy,
-                            int *pgpu_optim)
+                            int *pgpu_optim,
+                            int *pverbose
+                            )
 {
-    int disabled = 0;
-    if (flux_shell_getopt_unpack (shell,
-                                  "mpibind",
-                                  "{s?i s?i s?i s?i}",
-                                  "disable",
-                                  &disabled,
-                                  "smt",
-                                  psmt,
-                                  "greedy",
-                                  pgreedy,
-                                  "gpu_optim",
-                                  pgpu_optim)
-        < 0) {
-        shell_log_error ("Failed to read mpibind options");
-        return false;
+    int rc, disabled = 0;
+    char mpibind_params[512] = {'\0'};
+    // pointer to match signature of flux_shell_getopt
+    char* param_ptr = mpibind_params;
+    json_t *mpibind_opts = NULL;
+    json_error_t err;
+
+    rc = flux_shell_getopt(shell, "mpibind", &param_ptr);
+    if (rc == -1){
+        shell_die_errno(1, "flux_shell_getopt");
+        return 0;
     }
+    else if (rc == 0){
+        // mpibind disabled since it's not specified
+        return 0; 
+    }
+
+
+    mpibind_opts = json_loads(mpibind_params, 0, &err);
+
+    if(mpibind_opts){
+        /* Take parameters from json */
+        json_unpack_ex(mpibind_opts, &err, JSON_DECODE_ANY, 
+                                    "{s?i s?i s?i s?i s?i}",
+                                    "disable",
+                                    &disabled,
+                                    "smt",
+                                    psmt,
+                                    "greedy",
+                                    pgreedy,
+                                    "gpu_optim",
+                                    pgpu_optim,
+                                    "verbose",
+                                    pverbose);
+    }
+    else{
+        /* Parse series of parameters */
+        char buf[512] = {'\0'};
+        char *token, *value;
+        strcpy(buf, param_ptr);
+
+        token = strtok(buf, "\":");
+
+        while( token != NULL){
+        
+            value = strtok(NULL, ",");
+
+            if(!strcmp(token, "smt")){
+                *psmt = atoi(value);
+            }
+            else if(!strcmp(token, "greedy")){
+                *pgreedy = atoi(value);
+            }
+            else if(!strcmp(token, "gpu_optim")){
+                *pgpu_optim = atoi(value);
+            }
+            else if(!strcmp(token, "verbose")){
+                *pverbose = atoi(value);
+            }
+            else if(!strcmp(token, "disabled")){
+                disabled = atoi(value);
+            }
+            else{
+                shell_die(1, "Unknown mpibind parameters");
+                return 0;
+            }
+            token = strtok(NULL, ":");
+        }
+    }
+
     return disabled == 0;
 }
 
@@ -256,30 +318,16 @@ static int mpibind_shell_init (flux_plugin_t *p,
 {
     int ntasks;
     char *cores, *gpus;
-    int smt = -1;
-    int greedy = -1;
-    int gpu_optim = -1;
+    int smt = 0;
+    int greedy = 1;
+    int gpu_optim = 1;
+    int verbose = 0;
     mpibind_t *mph = NULL;
     hwloc_topology_t *topo = calloc (1, sizeof (hwloc_topology_t));
 
     flux_shell_t *shell = flux_plugin_get_shell (p);
 
-    // load conf settings
-    if (flux_plugin_conf_unpack (p,
-                                 "{s:i, s:i, s:i}",
-                                 "smt",
-                                 &smt,
-                                 "greedy",
-                                 &greedy,
-                                 "gpu_optim",
-                                 &gpu_optim)
-        < 0) {
-        shell_die_errno (1, "flux_plugin_conf_unpack");
-        return -1;
-    }
-
-    // command line gets higher precedence and overwrite conf settings
-    if (!mpibind_getopt (shell, &smt, &greedy, &gpu_optim)) {
+    if (!mpibind_getopt (shell, &smt, &greedy, &gpu_optim, &verbose)) {
         shell_debug ("mpibind disabled");
         fprintf (stderr, "mpibind: disabled\n");
         return 0;
@@ -339,6 +387,13 @@ static int mpibind_shell_init (flux_plugin_t *p,
             return -1;
         }
     }
+    
+    /* Disable gpu-affinity */
+    shell_debug ("disabling built-in gpu-affinity module");
+    if (flux_shell_setopt_pack (shell, "gpu-affinity", "s", "off") < 0) {
+        shell_die_errno (1, "flux_shell_setopt: gpu-affinity=off");
+        return -1;
+    }
 
     if (mpibind_set_ntasks (mph, ntasks) != 0 || mpibind_set_topology (mph, *topo) != 0
         || mpibind_set_restrict_ids (mph, pu_set) != 0
@@ -364,17 +419,22 @@ static int mpibind_shell_init (flux_plugin_t *p,
 
 #if DEBUG
     fprintf (stderr,
-             "input: ntasks=%d restrict=%s greedy=%d smt=%d gpu_optim=%d\n",
+             "input: ntasks=%d restrict=%s greedy=%d smt=%d gpu_optim=%d verbose=%d\n",
              ntasks,
              pu_set,
              greedy,
              smt,
-             gpu_optim);
+             gpu_optim,
+             verbose);
 #endif
 
-    if (mpibind (mph) < 0) {
+    if (mpibind (mph)) {
         shell_die_errno (1, "mpibind");
         return -1;
+    }
+
+    if (verbose) {
+        mpibind_print_mapping(mph);
     }
 
     // set env variables now for the purposes of task.init
