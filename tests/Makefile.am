@@ -1,5 +1,5 @@
 AM_CFLAGS= -Wall -Werror -I$(top_srcdir)/src $(HWLOC_CFLAGS)
-LDADD = ../src/libmpibind.la libtap.la $(HWLOC_LIBS)
+LDADD = $(top_srcdir)/src/libmpibind.la libtap.la $(HWLOC_LIBS)
 
 lib_LTLIBRARIES = libtap.la
 libtap_la_SOURCES = tap.c tap.h
