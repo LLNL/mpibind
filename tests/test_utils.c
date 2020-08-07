@@ -15,6 +15,18 @@ static void print_test_params(mpibind_t *handle) {
 }
 #endif
 
+/*
+ * mpibind relies on Core objects. If the topology
+ * doesn't have them, use an appropriate replacement.
+ * Make sure to always use get_core_type and get_core_depth
+ * instead of HWLOC_OBJ_CORE and its depth.
+ * Todo: In the future, I may need to have similar functions
+ * for NUMA domains.
+ */
+static int get_core_depth(hwloc_topology_t topo) {
+  return hwloc_get_type_or_below_depth(topo, HWLOC_OBJ_CORE);
+}
+
 /**
  * Initialize a test struct to default values.
  * This mimics the behavior of mpibind_init
@@ -116,8 +128,9 @@ void check_mapping(mpibind_t *handle, mpibind_test_ans_t *expected) {
       strcmp(expected->thread_mapping, thread_map_info)) {
     fail("%s", expected->description);
     diag(
-        "\tThreads: %s (expected %s)\n\tCPU: "
-        "%s (expected %s)\n\tGPU: %s (expected %s)",
+        "\tThreads: \"%s\" (provided answer: \"%s\")\n\tCPU: "
+        "\"%s\" (provided answer: \"%s\")\n\tGPU: \"%s\" (provided answer: "
+        "\"%s\")",
         thread_map_info, expected->thread_mapping, cpu_map_info,
         expected->cpu_mapping, gpu_map_info, expected->gpu_mapping);
   } else {
@@ -162,42 +175,50 @@ void run_test(hwloc_topology_t topo, mpibind_test_t *params,
  * **/
 mpibind_test_t **generate_test_information(hwloc_topology_t topo,
                                            int *num_test_ptr) {
-  int num_tests = 11;
+  int num_tests = 12;  // number of tests being created
   mpibind_test_t **tests = calloc(num_tests, sizeof(mpibind_test_t *));
   *num_test_ptr = num_tests;
 
   // find the number of components at each level
   int num_numas = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
-  int num_cores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+  int num_cores = hwloc_get_nbobjs_by_depth(topo, get_core_depth(topo));
 
 #if TEST_DEBUG
-  int num_pus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
   int num_gpus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_OS_DEVICE);
-#endif
+  int num_pus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
 
-  int numa_id =
-      hwloc_get_next_obj_by_type(topo, HWLOC_OBJ_NUMANODE, NULL)->os_index;
-  int core_id =
-      hwloc_get_next_obj_by_type(topo, HWLOC_OBJ_CORE, NULL)->os_index;
-
-  // find max arity btwn all the cores on the machine
-  hwloc_obj_t obj = NULL;
-  hwloc_obj_t prev = NULL;
-  int max_arity = 0;
-
-  while ((obj = hwloc_get_next_obj_by_type(topo, HWLOC_OBJ_CORE, prev))) {
-    if (obj->arity > max_arity) {
-      max_arity = obj->arity;
-    }
-    prev = obj;
-  }
-
-#if TEST_DEBUG
   printf("Num numas: %d \n", num_numas);
   printf("Num gpus: %d \n", num_gpus);
   printf("Num cores: %d \n", num_cores);
   printf("Num PUs: %d \n", num_pus);
 #endif
+
+  // get id of first numa domain for use in tests
+  int numa_id =
+      hwloc_get_next_obj_by_type(topo, HWLOC_OBJ_NUMANODE, NULL)->os_index;
+
+  // get cpuset of first core for use in tests. If the cores have been
+  // collapsed into PUs, then get the id of the first PU instead
+  hwloc_cpuset_t core_cpuset;
+  if (hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE) > 0) {
+    core_cpuset = hwloc_bitmap_dup(
+        hwloc_get_next_obj_by_depth(topo, get_core_depth(topo), NULL)->cpuset);
+  } else {
+    core_cpuset = hwloc_bitmap_alloc();
+    hwloc_bitmap_set(core_cpuset, hwloc_get_next_obj_by_depth(
+                                      topo, get_core_depth(topo), NULL)
+                                      ->os_index);
+  }
+
+  // get first PU for testing
+  int pu_id = hwloc_bitmap_first(core_cpuset);
+
+  // find max arity btwn all the cores on the machine
+  int max_arity = 1;
+  hwloc_obj_t obj;
+  if ((obj = hwloc_get_next_obj_by_depth(topo, get_core_depth(topo), NULL))) {
+    max_arity = obj->arity == 0 ? 1 : obj->arity;
+  }
 
   mpibind_test_t **ptr = tests;
   mpibind_test_t *handle;
@@ -234,8 +255,9 @@ mpibind_test_t **generate_test_information(hwloc_topology_t topo,
   // 5: Restrict x tasks a single core (x == machine's smt level)
   handle->ntasks = max_arity;
   handle->restr_type = MPIBIND_RESTRICT_CPU;
-  handle->restr_set = calloc(10, sizeof(char));
-  sprintf(handle->restr_set, "%d", core_id);
+  handle->restr_set = calloc(50, sizeof(char));
+  hwloc_bitmap_list_snprintf(handle->restr_set, sizeof(handle->restr_set),
+                             core_cpuset);
   *ptr++ = handle;
 
   handle = calloc(1, sizeof(mpibind_test_t));
@@ -282,7 +304,17 @@ mpibind_test_t **generate_test_information(hwloc_topology_t topo,
   handle->gpu_optim = 1;
   *ptr++ = handle;
 
-  // Map using a complex configuration (exact details TBD)
+  handle = calloc(1, sizeof(mpibind_test_t));
+  mpibind_test_t_init(handle);
+  // 12: Map smt tasks to a single pu
+  handle->ntasks = 8;
+  handle->gpu_optim = 0;
+  handle->restr_type = MPIBIND_RESTRICT_CPU;
+  handle->restr_set = calloc(10, sizeof(char));
+  sprintf(handle->restr_set, "%d", pu_id);
+  *ptr++ = handle;
+
+  hwloc_bitmap_free(core_cpuset);
   return tests;
 }
 
@@ -385,6 +417,11 @@ mpibind_test_ans_t **load_answers(char *filename, int *num_tests_ptr) {
   char buf[BUF_SIZE];
   FILE *fp = fopen(filename, "r");
 
+  if (!fp) {
+    diag("Failed to open answers file");
+    return NULL;
+  }
+
   // Remove initial whitespace
   do {
     if (!fgets(buf, sizeof(buf), fp)) {
@@ -426,6 +463,10 @@ void unit_test_topology(char *topology_filename, char *answer_filename) {
   diag("testing %s", topology_filename);
 
   mpibind_test_ans_t **answers = load_answers(answer_filename, &num_answers);
+  if (!answers) {
+    BAIL_OUT("ERROR: could not process answers file");
+  }
+
   mpibind_test_t **tests = generate_test_information(topo, &num_tests);
 
   if (num_answers != num_tests) {

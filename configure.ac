@@ -70,7 +70,11 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
+<<<<<<< HEAD
  test-suite/Makefile
+=======
+ tests/Makefile
+>>>>>>> tests_utils: Update testing to handle smt-1 topos
 ])
 
 AC_OUTPUT

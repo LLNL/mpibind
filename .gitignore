@@ -61,6 +61,8 @@ libltdl/
 # gcov output
 *.gcno
 *.gcda
+# Test files
+*.t
 
 # autoconf-preprocessed
 Makefile

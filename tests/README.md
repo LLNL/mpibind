@@ -46,6 +46,7 @@ The first non-blank, non-commented line in the answer file is the number of test
     * Map two tasks, but restrict them to a single NUMA domain
     * Map number_numas tasks without GPU optimization
     * Map number_numas tasks with GPU optimization
+    * Map 8 tasks to a single PU
 2. Error checking
     * Passing NULL in place of the handle to all of the setter and getter functions.
     * Trying to run mpibind with an invalid number of threads (e.g. -1)
