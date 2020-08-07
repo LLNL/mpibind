@@ -23,9 +23,6 @@ libtool
 .libs/
 libltdl/
 
-# generated library version header
-/src/common/libflux/version.h
-
 # libtool pull-ins
 /config/libtool.m4
 /config/ltoptions.m4
@@ -99,6 +96,3 @@ compile_flags.txt
 .idea
 .clangd
 
-# Rules to ignore auto-generated test harness scripts
-test_*.t
-!/src/bindings/python/test_commands/test_runner.t
