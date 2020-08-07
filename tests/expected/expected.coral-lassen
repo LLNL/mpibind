@@ -5,7 +5,7 @@
 # gpu_mapping.The mapping for each task is separated by a defined character.
 # This separator can be changed in test_utils.c::parse_answer()
 
-11
+12
 
 
 # 1: Map one task to every core
@@ -38,7 +38,7 @@ Mapping such that ntasks < #NUMA nodes but nworkers > #NUMA nodes
 # 5:
 Restrict x tasks a single core (x == machine's smt level)
 "1;1;1;1"
-"8;8;8;8"
+"8;9;10;11"
 "0;0;1;1"
 
 
@@ -70,18 +70,22 @@ Map two tasks, but restrict them to a single NUMA domain
 "0;1"
 
 
-# 11:
+# 10:
 Map num_numa tasks without GPU optimization
 "20;20"
 "8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84;96,100,104,108,112,116,120,124,128,132,136,140,144,148,152,156,160,164,168,172"
 "0-1;2-3"
 
 
-# 12:
+# 11:
 Map num_numa tasks with GPU optimization
 "20;20"
 "8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84;96,100,104,108,112,116,120,124,128,132,136,140,144,148,152,156,160,164,168,172"
 "0-1;2-3"
 
-# TODO:
-# 13: Map using a complex configuration (exact details TBD)
+
+# 12:
+Map 8 tasks to a single pu
+"1;1;1;1;1;1;1;1"
+"8;8;8;8;8;8;8;8"
+"0;0;0;0;1;1;1;1"
