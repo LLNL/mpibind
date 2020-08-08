@@ -31,6 +31,30 @@ AC_PROG_LN_S
 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
 
+PKG_CHECK_MODULES([TAP], [tap],
+  [libtap=true],
+  [AC_MSG_NOTICE([Test suite will not be built])]
+)
+AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
+
+PKG_CHECK_MODULES([FLUX_CORE], [flux-core],
+  [fluxcore=true],
+  [AC_MSG_NOTICE([Flux plugin will not be built])]
+)
+AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
+
+# Notes 
+# AC_DEFINE([HAVE_LIBTAP], 1, [Define libtap to build the test suite])
+# AC_CHECK_FUNC([hwloc_topology_set_all_types_filter])
+# AC_CHECK_HEADERS([pkgconf/libpkgconf/libpkgconf.h])
+# defines HAVE_LIBTAP and prepends -ltap to LIBS
+# AC_CHECK_LIB(tap, plan)
+# AC_SEARCH_LIBS([pkgconf_pkg_free], [pkgconf],
+#  [AC_MSG_NOTICE([Greetings from pkgconf])],
+#  [AC_MSG_ERROR([unable to find pkgconf_pkg_free()])
+#])
+# AS_IF(test-1, [run-if-true-1], ..., [run-if-false])
+
 
 ## Epilogue 
 AC_CONFIG_FILES([
