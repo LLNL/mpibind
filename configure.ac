@@ -29,14 +29,24 @@ LT_INIT
 AC_PROG_CC_C99
 AC_PROG_LN_S
 
+# hwloc 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
 
-PKG_CHECK_MODULES([TAP], [tap],
-  [libtap=true],
+# libtap 
+PKG_CHECK_MODULES([TAP], [tap], [
+  libtap=true
+  libtap_dir=`$PKG_CONFIG --variable=libdir tap`
+  AC_SUBST(TAP_LIBDIR, $libtap_dir)
+  ],
   [AC_MSG_NOTICE([Test suite will not be built])]
 )
 AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
+# PKG_CHECK_VAR([TAP_LIBDIR], [tap], [libdir],
+#   [libtap_libdir=true],
+#   [AC_MSG_NOTICE([TAP's libdir not found])]
+# )
 
+# flux-core
 PKG_CHECK_MODULES([FLUX_CORE], [flux-core],
   [fluxcore=true],
   [AC_MSG_NOTICE([Flux plugin will not be built])]
@@ -52,7 +62,7 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 # AC_SEARCH_LIBS([pkgconf_pkg_free], [pkgconf],
 #  [AC_MSG_NOTICE([Greetings from pkgconf])],
 #  [AC_MSG_ERROR([unable to find pkgconf_pkg_free()])
-#])
+# ])
 # AS_IF(test-1, [run-if-true-1], ..., [run-if-false])
 
 
