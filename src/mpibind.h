@@ -108,14 +108,49 @@ extern "C" {
    */
   int mpibind_set_topology(mpibind_t *handle,
 			   hwloc_topology_t topo);
-  
   /* 
    * Main mapping function. 
    * The resulting mapping can be retrieved with the 
    * mpibind_get* functions below. 
    */ 
   int mpibind(mpibind_t *handle);
-  
+  /*
+   * Get the number of tasks associated with an 
+   * mpibind handle.
+   */
+  int mpibind_get_ntasks(mpibind_t *handle);
+  /*
+   * Get whether or not an mpibind handle has
+   * been set to bind resources greedily.
+   */
+  int mpibind_get_greedy(mpibind_t *handle);
+  /*
+   * Get whether or not gpu optimization has been
+   * specified on an mpibind handle.
+   */
+  int mpibind_get_gpu_optim(mpibind_t *handle);
+  /*
+   * Get the given smt setting associated with an 
+   * mpibind handle.
+   */
+  int mpibind_get_smt(mpibind_t *handle);
+  /*
+   * Get the restrict id set associated with an 
+   * mpibind handle.
+   */
+  char* mpibind_get_restr_set(mpibind_t *handle);
+  /*
+   * Get the restrict type associated with an 
+   * mpibind handle.
+   */
+  int mpibind_get_restr_type(mpibind_t *handle);
+  /*
+   * Array with 'ntasks' elements. Each entry correspond 
+   * to the number of threads to use for the process/task 
+   * corresponding to this entry. 
+   */ 
+  int* mpibind_get_nthreads(mpibind_t *handle);
+
   /* 
    * Output: The mapping policy.
    * Asssign CPUs, GPUs, and number of threads to each 
@@ -123,12 +158,6 @@ extern "C" {
    * These output functions should only be called after 
    * a call to the main 'mpibind' function. 
    */
-  /*
-   * Array with 'ntasks' elements. Each entry correspond 
-   * to the number of threads to use for the process/task 
-   * corresponding to this entry. 
-   */ 
-  int* mpibind_get_nthreads(mpibind_t *handle);
   /*
    * Array with 'ntasks' elements. The physical CPUs to 
    * use for a given process/task.
@@ -152,7 +181,7 @@ extern "C" {
    * is responsible for unloading/freeing the topology. 
    */
   hwloc_topology_t mpibind_get_topology(mpibind_t *handle); 
-  
+
   /*
    * Helper functions 
    */
@@ -200,5 +229,3 @@ extern "C" {
 #endif
 
 #endif /* MPIBIND_H_INCLUDED */
-
-  
