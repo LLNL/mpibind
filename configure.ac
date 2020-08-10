@@ -70,6 +70,7 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
+ test-suite/Makefile
 ])
 
 AC_OUTPUT
