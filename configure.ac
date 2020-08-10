@@ -37,6 +37,7 @@ PKG_CHECK_MODULES([TAP], [tap], [
   libtap=true
   libtap_dir=`$PKG_CONFIG --variable=libdir tap`
   AC_SUBST(TAP_LIBDIR, $libtap_dir)
+  AC_REQUIRE_AUX_FILE([tap-driver.sh])
   ],
   [AC_MSG_NOTICE([Test suite will not be built])]
 )
@@ -70,11 +71,7 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
-<<<<<<< HEAD
  test-suite/Makefile
-=======
- tests/Makefile
->>>>>>> tests_utils: Update testing to handle smt-1 topos
 ])
 
 AC_OUTPUT
