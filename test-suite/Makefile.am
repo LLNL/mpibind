@@ -1,8 +1,6 @@
-
-
-AM_CFLAGS = -Wall -Werror -I$(top_srcdir)/src $(HWLOC_CFLAGS) $(TAP_CFLAGS)
-AM_LDFLAGS = -rpath $(TAP_LIBDIR)
-LDADD = $(top_srcdir)/src/libmpibind.la $(TAP_LIBS)
+AM_CPPFLAGS = -Wall -Werror -I$(top_srcdir)/src $(HWLOC_CFLAGS) $(TAP_CFLAGS)
+AM_LDFLAGS = -rpath $(TAP_LIBDIR) 
+LDADD = $(top_srcdir)/src/libmpibind.la $(TAP_LIBS) $(HWLOC_LIBS)
 
 TESTS = \
     error.t \
@@ -13,7 +11,6 @@ TESTS = \
     cts1_quartz.t
 
 TEST_EXTENSIONS = .t
-
 
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
             $(top_srcdir)/config/tap-driver.sh

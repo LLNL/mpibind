@@ -104,18 +104,23 @@ void check_mapping(mpibind_t *handle, mpibind_test_ans_t *expected) {
   char cpu_map_info[BUF_SIZE] = {'\0'};
   char gpu_map_info[BUF_SIZE] = {'\0'};
 
+  hwloc_bitmap_t* cpus = mpibind_get_cpus(handle);
+  hwloc_bitmap_t* gpus = mpibind_get_gpus(handle);
+  int* threads = mpibind_get_nthreads(handle);
+  int num_tasks = mpibind_get_ntasks(handle);
+
   // Concat string array into single string
   int i = 0;
-  while (i < handle->ntasks) {
+  while (i < num_tasks) {
     sprintf(thread_map_info + strlen(thread_map_info), "%d",
-            handle->nthreads[i]);
+            threads[i]);
     hwloc_bitmap_list_snprintf(cpu_map_info + strlen(cpu_map_info),
-                               sizeof(cpu_map_info), handle->cpus[i]);
+                               sizeof(cpu_map_info), cpus[i]);
     hwloc_bitmap_list_snprintf(gpu_map_info + strlen(gpu_map_info),
-                               sizeof(gpu_map_info), handle->gpus[i]);
+                               sizeof(gpu_map_info), gpus[i]);
 
     // Separate entries with the specified separator
-    if (++i != handle->ntasks) {
+    if (++i != num_tasks) {
       strcat(thread_map_info, separator);
       strcat(cpu_map_info, separator);
       strcat(gpu_map_info, separator);
@@ -170,8 +175,10 @@ void run_test(hwloc_topology_t topo, mpibind_test_t *params,
 }
 
 /**
- * Generate unit test information from a topology
- * TODO: EXPLAIN
+ * Generate unit test information from a topology.
+ * This will take high level information and create an array of
+ * of objects containing parameters for each of the tests. The number
+ * of tests created is passed back via num_test_ptr
  * **/
 mpibind_test_t **generate_test_information(hwloc_topology_t topo,
                                            int *num_test_ptr) {

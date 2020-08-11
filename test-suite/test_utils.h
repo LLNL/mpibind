@@ -3,9 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-
 #include "mpibind.h"
-#include "mpibind-priv.h"
 #include "tap.h"
 
 /**
@@ -61,8 +59,10 @@ void check_mapping(mpibind_t* handle, mpibind_test_ans_t* expected);
  * **/
 void run_test(hwloc_topology_t topo, mpibind_test_t *params,  mpibind_test_ans_t *expected);
 /**
- * Generate unit test information from a topology
- * TODO: EXPLAIN
+ * Generate unit test information from a topology.
+ * This will take high level information and create an array of
+ * of objects containing parameters for each of the tests. The number
+ * of tests created is passed back via num_test_ptr
  * **/
 mpibind_test_t** generate_test_information(hwloc_topology_t topo,
                                           int* num_test_ptr);
