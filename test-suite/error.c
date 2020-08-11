@@ -26,6 +26,19 @@ int test_null_handle() {
   ok(mpibind_set_env_vars(handle) == 1,
      "mpibind_set_end_vars fails when handle == NULL");
 
+  ok(mpibind_get_ntasks(handle) == -1,
+     "mpibind_get_ntasks return -1 when handle == NULL");
+  ok(mpibind_get_greedy(handle) == -1,
+     "mpibind_get_greedy return -1 when handle == NULL");
+  ok(mpibind_get_gpu_optim(handle) == -1,
+     "mpibind_get_gpu_optim return -1 when handle == NULL");
+  ok(mpibind_get_smt(handle) == -1,
+     "mpibind_get_smt return -1 when handle == NULL");
+  ok(mpibind_get_restrict_ids(handle) == NULL,
+     "mpibind_get_ntasks return NULL when handle == NULL");
+  ok(mpibind_get_restrict_type(handle) == -1,
+     "mpibind_get_restrict_type return -1 when handle == NULL");
+
   ok(mpibind_get_nthreads(handle) == NULL,
      "mpibind_get_nthreads returns NULL when handle == NULL");
   ok(mpibind_get_cpus(handle) == NULL,
