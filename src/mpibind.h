@@ -108,48 +108,13 @@ extern "C" {
    */
   int mpibind_set_topology(mpibind_t *handle,
 			   hwloc_topology_t topo);
+  
   /* 
    * Main mapping function. 
    * The resulting mapping can be retrieved with the 
    * mpibind_get* functions below. 
    */ 
   int mpibind(mpibind_t *handle);
-  /*
-   * Get the number of tasks associated with an 
-   * mpibind handle.
-   */
-  int mpibind_get_ntasks(mpibind_t *handle);
-  /*
-   * Get whether or not an mpibind handle has
-   * been set to bind resources greedily.
-   */
-  int mpibind_get_greedy(mpibind_t *handle);
-  /*
-   * Get whether or not gpu optimization has been
-   * specified on an mpibind handle.
-   */
-  int mpibind_get_gpu_optim(mpibind_t *handle);
-  /*
-   * Get the given smt setting associated with an 
-   * mpibind handle.
-   */
-  int mpibind_get_smt(mpibind_t *handle);
-  /*
-   * Get the restrict id set associated with an 
-   * mpibind handle.
-   */
-  char* mpibind_get_restr_set(mpibind_t *handle);
-  /*
-   * Get the restrict type associated with an 
-   * mpibind handle.
-   */
-  int mpibind_get_restr_type(mpibind_t *handle);
-  /*
-   * Array with 'ntasks' elements. Each entry correspond 
-   * to the number of threads to use for the process/task 
-   * corresponding to this entry. 
-   */ 
-  int* mpibind_get_nthreads(mpibind_t *handle);
 
   /* 
    * Output: The mapping policy.
@@ -158,6 +123,12 @@ extern "C" {
    * These output functions should only be called after 
    * a call to the main 'mpibind' function. 
    */
+  /*
+   * Array with 'ntasks' elements. Each entry correspond 
+   * to the number of threads to use for the process/task 
+   * corresponding to this entry. 
+   */ 
+  int* mpibind_get_nthreads(mpibind_t *handle);
   /*
    * Array with 'ntasks' elements. The physical CPUs to 
    * use for a given process/task.
@@ -221,8 +192,44 @@ extern "C" {
    * mpibind_set_env_vars must be called before this function
    * is executed.
    */
-  char** mpibind_get_env_var_names(mpibind_t *handle, int *count); 
-
+  char** mpibind_get_env_var_names(mpibind_t *handle, int *count);
+  
+  /* 
+   * Other "getter" functions. 
+   * These may be used to retrieve mpibind parameters 
+   * in a different context than that where they were 
+   * originally set. 
+   */ 
+  /*
+   * Get the number of tasks associated with an 
+   * mpibind handle.
+   */
+  int mpibind_get_ntasks(mpibind_t *handle);
+  /*
+   * Get whether or not an mpibind handle has
+   * been set to bind resources greedily.
+   */
+  int mpibind_get_greedy(mpibind_t *handle);
+  /*
+   * Get whether or not gpu optimization has been
+   * specified on an mpibind handle.
+   */
+  int mpibind_get_gpu_optim(mpibind_t *handle);
+  /*
+   * Get the given smt setting associated with an 
+   * mpibind handle.
+   */
+  int mpibind_get_smt(mpibind_t *handle);
+  /*
+   * Get the restrict id set associated with an 
+   * mpibind handle.
+   */
+  char* mpibind_get_restrict_ids(mpibind_t *handle);
+  /*
+   * Get the restrict type associated with an 
+   * mpibind handle.
+   */
+  int mpibind_get_restrict_type(mpibind_t *handle);
 
 #ifdef __cplusplus
 } /* extern "C" */
