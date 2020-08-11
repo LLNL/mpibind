@@ -1226,72 +1226,6 @@ int mpibind_set_topology(mpibind_t *handle,
 }
 
 /*
- * Get the number of tasks associated with an 
- * mpibind handle.
- */
-int mpibind_get_ntasks(mpibind_t *handle){
-  if (handle == NULL)
-    return -1;
-
-  return handle->ntasks; 
-}
-
-/*
- * Get whether or not an mpibind handle has
- * been set to bind resources greedily.
- */
-int mpibind_get_greedy(mpibind_t *handle){
-  if (handle == NULL)
-    return -1;
-
-  return handle->greedy; 
-}
-
-/*
- * Get whether or not gpu optimization has been
- * specified on an mpibind handle.
- */
-int mpibind_get_gpu_optim(mpibind_t *handle){
-  if (handle == NULL)
-    return -1;
-
-  return handle->gpu_optim; 
-}
-
-/*
- * Get the given smt setting associated with an 
- * mpibind handle.
- */
-int mpibind_get_smt(mpibind_t *handle){
-  if (handle == NULL)
-    return -1;
-
-  return handle->smt; 
-}
-
-/*
- * Get the restrict id set associated with an 
- * mpibind handle.
- */
-char* mpibind_get_restr_set(mpibind_t *handle){
-  if (handle == NULL)
-    return NULL;
-
-  return handle->restr_set; 
-}
-
-/*
- * Get the restrict type associated with an 
- * mpibind handle.
- */
-int mpibind_get_restr_type(mpibind_t *handle){
-  if (handle == NULL)
-    return -1;
-
-  return handle->restr_type; 
-}
-
-/*
  * Array with 'ntasks' elements. Each entry correspond 
  * to the number of threads to use for the process/task 
  * corresponding to this entry. 
@@ -1353,6 +1287,78 @@ hwloc_topology_t mpibind_get_topology(mpibind_t *handle)
     return NULL;
   
   return handle->topo; 
+}
+
+/*
+ * Get the number of tasks associated with an 
+ * mpibind handle.
+ */
+int mpibind_get_ntasks(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return -1;
+  
+  return handle->ntasks; 
+}
+
+/*
+ * Get whether or not an mpibind handle has
+ * been set to bind resources greedily.
+ */
+int mpibind_get_greedy(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return -1;
+  
+  return handle->greedy; 
+}
+
+/*
+ * Get whether or not gpu optimization has been
+ * specified on an mpibind handle.
+ */
+int mpibind_get_gpu_optim(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return -1;
+  
+  return handle->gpu_optim; 
+}
+
+/*
+ * Get the given smt setting associated with an 
+ * mpibind handle.
+ */
+int mpibind_get_smt(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return -1;
+  
+  return handle->smt; 
+}
+
+/*
+ * Get the restrict id set associated with an 
+ * mpibind handle.
+ */
+char* mpibind_get_restrict_ids(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return NULL;
+
+  return handle->restr_set; 
+}
+
+/*
+ * Get the restrict type associated with an 
+ * mpibind handle.
+ */
+int mpibind_get_restrict_type(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return -1;
+  
+  return handle->restr_type; 
 }
 
 /*
