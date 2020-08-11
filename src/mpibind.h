@@ -163,7 +163,7 @@ extern "C" {
    /*
    * Get the mapping for each task
    */
-  char ** mpibind_get_mapping(mpibind_t *handle);
+  int mpibind_get_mapping_string(mpibind_t *handle, char *mapping_buffer, size_t buffer_size);
   /*
    * Environment variables that need to be exported by the runtime. 
    * CUDA_VISIBLE_DEVICES --comma separated 

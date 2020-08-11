@@ -1,4 +1,5 @@
 from cffi import FFI
+from os import path
 
 ffi = FFI()
 
@@ -8,7 +9,11 @@ typedef struct hwloc_topology * hwloc_topology_t;
 typedef struct { ...; } hwloc_bitmap_t;
 """
 
-with open("_mpibind_preproc.h") as h:
+prepared_headers = "_mpibind_preproc.h"
+if not path.exists(prepared_headers):
+    prepared_headers = "_mpibind/_mpibind_preproc.h"
+
+with open(prepared_headers) as h:
     cdefs = cdefs + h.read()
 
 ffi.cdef(cdefs)
@@ -19,9 +24,8 @@ ffi.set_source(
     """
 #include <src/mpibind.h>
 #include <src/mpibind-priv.h>
-#include <hwloc.h>
     """,
-    libraries=["mpibind", "hwloc"],
+    libraries=["mpibind"],
 )
 
 

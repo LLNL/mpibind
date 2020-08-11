@@ -79,8 +79,6 @@ def process_header(f, including_path="."):
                 l = l.replace('__inline__', 'inline')
                 l = l.replace('INT_MAX', str(platform_c_maxint))
                 l = re.sub('(\d)(UL)?<<(\d)',lambda x: str(int(x.group(1))<<int(x.group(3))),l)
-
-
                 m = re.search('#include\s*"([^"]*)"', l)
                 if m:
                     nf = find_first(args.search, m.group(1), including_path)

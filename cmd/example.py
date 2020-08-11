@@ -9,10 +9,13 @@ gpu_optim = 0
 smt_level = 1
 
 
+def set_handle(handle, ntasks):
+    lib.mpibind_set_ntasks(handle, ntasks)
+
 def quick_example_direct():
     handle = ffi.new("struct mpibind_t *")
 
-    lib.mpibind_set_ntasks(handle, ntasks)
+    set_handle(handle, ntasks)
     lib.mpibind_set_nthreads(handle, nthreads)
     lib.mpibind_set_greedy(handle, greedy)
     lib.mpibind_set_gpu_optim(handle, gpu_optim)
@@ -21,7 +24,11 @@ def quick_example_direct():
     if lib.mpibind(handle) != 0:
         print("oh no")
 
-    lib.mpibind_print_mapping(handle)
+    mapping_buffer = ffi.new("char[]", 2048)
+    lib.mpibind_get_mapping_string(handle, mapping_buffer, 2048)
+    mapping = ffi.string(mapping_buffer).decode("utf-8")
+    print(mapping)
+
 
 
 def quick_example_wrapper():
@@ -31,17 +38,15 @@ def quick_example_wrapper():
     mpibind_py.set_greedy(handle, greedy)
     mpibind_py.set_gpu_optim(handle, gpu_optim)
     mpibind_py.set_smt(handle, smt_level)
+
+    mpibind_py.use_topology('../../topo-xml/coral-lassen.xml')
     
     if mpibind_py.mpibind(handle) != 0:
         print("failure to create mpibind mapping")
 
-    mpibind_py.print_mapping(handle)
-    
-def example_error():
-    try:
-        mpibind_py.function_does_not_exist()
-    except MissingFunctionError:
-        print("Do something if function does not exist")
+     
+    print(mapping)
+    print(mapping.counts)
 
 def trying_hwloc():
     topo = ffi.new("struct hwloc_topology_t *")

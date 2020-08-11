@@ -1,6 +1,6 @@
 mpibindpy_PYTHON=\
 	      __init__.py\
-		  mpibind.py
+		  wrapper.py
 
 clean-local:
 	-rm -f *.pyc *.pyo
