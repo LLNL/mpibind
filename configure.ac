@@ -65,12 +65,17 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 # ])
 # AS_IF(test-1, [run-if-true-1], ..., [run-if-false])
 
+# Define pkgconfigdir to install mpibind.pc
+PKG_INSTALLDIR
+
 
 ## Epilogue 
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
  test-suite/Makefile
+ etc/Makefile
+ etc/mpibind.pc
 ])
 
 AC_OUTPUT
