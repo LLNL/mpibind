@@ -31,7 +31,7 @@ static int get_core_depth(hwloc_topology_t topo) {
  * Initialize a test struct to default values.
  * This mimics the behavior of mpibind_init
  * **/
-int mpibind_test_t_init(mpibind_test_t *hdl) {
+int mpibind_test_in_t_init(mpibind_test_in_t *hdl) {
   if (hdl == NULL) {
     return 1;
   }
@@ -44,15 +44,14 @@ int mpibind_test_t_init(mpibind_test_t *hdl) {
   hdl->restr_set = NULL;
   hdl->restr_type = MPIBIND_RESTRICT_CPU;
   hdl->topo = NULL;
-  hdl->expected = NULL;
 
   return 0;
 }
 
 /**
- * Prints the current state of an mpibind_test_t object
+ * Prints the current state of an mpibind_test_in_t object
  * **/
-void mpibind_test_t_print(mpibind_test_t *params) {
+void mpibind_test_in_t_print(mpibind_test_in_t *params) {
   printf("ntasks: %d\t in_nthreads: %d\n", params->ntasks, params->in_nthreads);
   printf("greedy: %d\n", params->greedy);
   printf("gpu_optim: %d\n", params->gpu_optim);
@@ -65,9 +64,9 @@ void mpibind_test_t_print(mpibind_test_t *params) {
 /**
  * Frees an answer
  * **/
-void mpibind_test_ans_t_free(mpibind_test_ans_t *t) {
+void mpibind_test_out_t_free(mpibind_test_out_t *t) {
   if (!t) {
-    perror("mpibind_test_ans_t == NULL");
+    perror("mpibind_test_out_t == NULL");
   }
 
   free(t->description);
@@ -80,25 +79,22 @@ void mpibind_test_ans_t_free(mpibind_test_ans_t *t) {
 /**
  * Frees a test object
  * **/
-void mpibind_test_t_free(mpibind_test_t *t) {
+void mpibind_test_in_t_free(mpibind_test_in_t *t) {
   if (!t) {
-    perror("mpibind_test_t == NULL");
+    perror("mpibind_test_in_t == NULL");
   }
 
   if (t->restr_set) {
     free(t->restr_set);
   }
-  if (t->expected) {
-    mpibind_test_ans_t_free(t->expected);
-    free(t->expected);
-  }
+
   free(t);
 }
 
 /**
  * Helper function to check the cpu, gpu, and thread mappings
  * **/
-void check_mapping(mpibind_t *handle, mpibind_test_ans_t *expected) {
+void check_mapping(mpibind_t *handle, mpibind_test_out_t *expected) {
   char *separator = ";";
   char thread_map_info[BUF_SIZE] = {'\0'};
   char cpu_map_info[BUF_SIZE] = {'\0'};
@@ -146,13 +142,13 @@ void check_mapping(mpibind_t *handle, mpibind_test_ans_t *expected) {
 /**
  * Runs a set of tests and compares them to their answers.
  * **/
-void run_test(hwloc_topology_t topo, mpibind_test_t *params,
-              mpibind_test_ans_t *expected) {
+void run_test(hwloc_topology_t topo, mpibind_test_in_t *params,
+              mpibind_test_out_t *expected) {
   mpibind_t *handle;
   hwloc_topology_t t;
 
   // dup the topology so the original doesn't accidentally get destroyed
-  mpibind_test_t_print(params);
+  mpibind_test_in_t_print(params);
   hwloc_topology_dup(&t, topo);
   mpibind_init(&handle);
   mpibind_set_topology(handle, t);
@@ -162,7 +158,6 @@ void run_test(hwloc_topology_t topo, mpibind_test_t *params,
   mpibind_set_gpu_optim(handle, params->gpu_optim);
   mpibind_set_smt(handle, params->smt);
   mpibind_set_restrict_type(handle, params->restr_type);
-
   mpibind_set_restrict_ids(handle, params->restr_set);
 
   if (mpibind(handle)) {
@@ -180,11 +175,8 @@ void run_test(hwloc_topology_t topo, mpibind_test_t *params,
  * of objects containing parameters for each of the tests. The number
  * of tests created is passed back via num_test_ptr
  * **/
-mpibind_test_t **generate_test_information(hwloc_topology_t topo,
-                                           int *num_test_ptr) {
-  int num_tests = 12;  // number of tests being created
-  mpibind_test_t **tests = calloc(num_tests, sizeof(mpibind_test_t *));
-  *num_test_ptr = num_tests;
+mpibind_test_in_t **generate_test_information(hwloc_topology_t topo) {
+  mpibind_test_in_t **tests = calloc(NUM_TESTS, sizeof(mpibind_test_in_t *));
 
   // find the number of components at each level
   int num_numas = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
@@ -227,38 +219,38 @@ mpibind_test_t **generate_test_information(hwloc_topology_t topo,
     max_arity = obj->arity == 0 ? 1 : obj->arity;
   }
 
-  mpibind_test_t **ptr = tests;
-  mpibind_test_t *handle;
+  mpibind_test_in_t **ptr = tests;
+  mpibind_test_in_t *handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
+  handle = calloc(1, sizeof(mpibind_test_in_t));
   // 1: Map one task to every core
-  mpibind_test_t_init(handle);
+  mpibind_test_in_t_init(handle);
   handle->ntasks = num_cores;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
+  handle = calloc(1, sizeof(mpibind_test_in_t));
   // 2: Map one task greedily
-  mpibind_test_t_init(handle);
+  mpibind_test_in_t_init(handle);
   handle->ntasks = 1;
   handle->greedy = 1;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
+  handle = calloc(1, sizeof(mpibind_test_in_t));
   // 3: Map two tasks greedily
-  mpibind_test_t_init(handle);
+  mpibind_test_in_t_init(handle);
   handle->ntasks = 2;
   handle->greedy = 1;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 4: Mapping such that ntasks < #NUMA nodes but nworkers > #NUMA nodes
   handle->in_nthreads = num_numas * 2;
   handle->ntasks = (num_numas == 1) ? 1 : num_numas - 1;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 5: Restrict x tasks a single core (x == machine's smt level)
   handle->ntasks = max_arity;
   handle->restr_type = MPIBIND_RESTRICT_CPU;
@@ -267,29 +259,29 @@ mpibind_test_t **generate_test_information(hwloc_topology_t topo,
                              core_cpuset);
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 6: Map two tasks at smt 1
   handle->ntasks = 2;
   handle->smt = 1;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 7: Map two tasks at max_smt
   handle->ntasks = 2;
   handle->smt = max_arity;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 8: Map two tasks at (max_smt - 1)
   handle->ntasks = 2;
   handle->smt = (max_arity == 1) ? 1 : max_arity - 1;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 9: Map two tasks, but restrict them to a single NUMA domain
   handle->ntasks = 2;
   handle->restr_type = MPIBIND_RESTRICT_MEM;
@@ -297,22 +289,22 @@ mpibind_test_t **generate_test_information(hwloc_topology_t topo,
   sprintf(handle->restr_set, "%d", numa_id);
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 11: Map num_numa tasks without GPU optimization
   handle->ntasks = num_numas;
   handle->gpu_optim = 0;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 12: Map num_numa tasks with GPU optimization
   handle->ntasks = num_numas;
   handle->gpu_optim = 1;
   *ptr++ = handle;
 
-  handle = calloc(1, sizeof(mpibind_test_t));
-  mpibind_test_t_init(handle);
+  handle = calloc(1, sizeof(mpibind_test_in_t));
+  mpibind_test_in_t_init(handle);
   // 12: Map smt tasks to a single pu
   handle->ntasks = 8;
   handle->gpu_optim = 0;
@@ -320,6 +312,11 @@ mpibind_test_t **generate_test_information(hwloc_topology_t topo,
   handle->restr_set = calloc(10, sizeof(char));
   sprintf(handle->restr_set, "%d", pu_id);
   *ptr++ = handle;
+
+
+  if( (ptr-tests) / sizeof(mpibind_test_in_t*)){
+      printf("Failure!");
+  }
 
   hwloc_bitmap_free(core_cpuset);
   return tests;
@@ -341,8 +338,8 @@ void load_topology(hwloc_topology_t *topo, char *xml_file) {
  * An answer consists of three consectutive lines with each line containing
  * the thread mapping, cpu mapping, and gpu mapping in that order
  * */
-static int parse_answer(mpibind_test_ans_t *expected, FILE *fp) {
-  if (!expected) {
+static int parse_answer(mpibind_test_out_t *expected, FILE *fp) {
+  if (!expected || feof(fp)) {
     return 1;
   }
 
@@ -352,6 +349,10 @@ static int parse_answer(mpibind_test_ans_t *expected, FILE *fp) {
   // Skip newlines and comments
   do {
     if (!fgets(buf, sizeof(buf), fp)) {
+      if(feof(fp)){
+        diag("End of file reached prematurely");
+        return 1;
+      }
       perror("error reading from file");
       exit(1);
     }
@@ -419,9 +420,7 @@ static int parse_answer(mpibind_test_ans_t *expected, FILE *fp) {
   return 0;
 }
 
-mpibind_test_ans_t **load_answers(char *filename, int *num_tests_ptr) {
-  int num_tests;
-  char buf[BUF_SIZE];
+mpibind_test_out_t **load_answers(char *filename) {
   FILE *fp = fopen(filename, "r");
 
   if (!fp) {
@@ -429,29 +428,23 @@ mpibind_test_ans_t **load_answers(char *filename, int *num_tests_ptr) {
     return NULL;
   }
 
-  // Remove initial whitespace
-  do {
-    if (!fgets(buf, sizeof(buf), fp)) {
-      perror("error reading from file");
-      exit(1);
-    }
-  } while (!strcmp(buf, "\n") || buf[0] == '#');
-
-  // Get number of tests
-  sscanf(buf, "%d\n", &num_tests);
-#if TEST_DEBUG
-  printf("load_answers: num_tests = %d\n", num_tests);
-#endif
-  *num_tests_ptr = num_tests;
-
-  mpibind_test_ans_t **answers =
-      calloc(num_tests, sizeof(mpibind_test_ans_t *));
+  mpibind_test_out_t **answers =
+      calloc(NUM_TESTS, sizeof(mpibind_test_out_t *));
 
   // Parse answers into return pointer
   int i;
-  for (i = 0; i < num_tests; i++) {
-    answers[i] = calloc(1, sizeof(mpibind_test_ans_t));
-    parse_answer(answers[i], fp);
+  for (i = 0; i < NUM_TESTS; i++) {
+    answers[i] = calloc(1, sizeof(mpibind_test_out_t));
+    if(parse_answer(answers[i], fp)){
+        diag("There was an error parsing the expected output."
+          "This could be caused by there being too few answers in the file"
+          "or a malformed answer");
+        BAIL_OUT("Error retrieving expected output from file");
+    }
+  }
+
+  if(!feof(fp)){
+      diag("Info: EOF not reached. There may be more answers that haven't been parsed...");
   }
 
   // Don't forget to close the file
@@ -463,33 +456,27 @@ mpibind_test_ans_t **load_answers(char *filename, int *num_tests_ptr) {
  * Test drivers should call this method
  * **/
 void unit_test_topology(char *topology_filename, char *answer_filename) {
-  int num_answers, num_tests;
   hwloc_topology_t topo;
 
   load_topology(&topo, topology_filename);
   diag("testing %s", topology_filename);
 
-  mpibind_test_ans_t **answers = load_answers(answer_filename, &num_answers);
+  mpibind_test_out_t **answers = load_answers(answer_filename);
   if (!answers) {
     BAIL_OUT("ERROR: could not process answers file");
   }
 
-  mpibind_test_t **tests = generate_test_information(topo, &num_tests);
-
-  if (num_answers != num_tests) {
-    BAIL_OUT("ERROR: num. answers: %d, num. tests: %d\n", num_answers,
-             num_tests);
-  }
+  mpibind_test_in_t **tests = generate_test_information(topo);
 
   int i;
-  for (i = 0; i < num_tests; i++) {
+  for (i = 0; i < NUM_TESTS; i++) {
     run_test(topo, tests[i], answers[i]);
   }
 
   // cleanup everything
-  for (i = 0; i < num_tests; i++) {
-    mpibind_test_ans_t_free(answers[i]);
-    mpibind_test_t_free(tests[i]);
+  for (i = 0; i < NUM_TESTS; i++) {
+    mpibind_test_out_t_free(answers[i]);
+    mpibind_test_in_t_free(tests[i]);
   }
   free(answers);
   free(tests);

@@ -5,8 +5,6 @@
 # gpu_mapping.The mapping for each task is separated by a defined character.
 # This separator can be changed in test_utils.c::parse_answer()
 
-12
-
 
 # 1: Map one task to every core
 Map one task to every core
