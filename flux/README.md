@@ -6,33 +6,17 @@ uses the mpibind C API to set affinities and binding for job tasks.
 
 ### Build
 
-Until mpibind is packaged and installed, build within the mpibind
-git repo:
+The plugin is built by the autotools as long as flux-core is present and
+installed on the system.
 
- * Make sure mpibind c-bindings is built:
- ```
- (cd ../src && make)
- ```
- * Then use `make` to build flux-shell plugin `mpibind.so` in this
-   directory
- * This will build against currently installed version of flux. This
-   plugin will probably only work with flux-core v0.17.0 or later. To
-   build against a flux-core build-tree, adjust CFLAGS to point to your
-   build tree `src/include` so that `mpibind.c` can find `flux/shell.h`.
-   e.g.:
- ```
- CFLAGS=-I/home/grondo/git/flux-core.git/src/include" make
- ```
+# Usage
 
-### Testing
-
-Ensure that `LD_LIBRARY_PATH` includes the path to libmpibind.so during
-testing. An easy way to accomplish this is to set it for the duration of
-a test Flux session:
+You can tell flux to use the mpibind plugin by using the -o flag. 
+mpibind configuration option can be specified in two ways: either as JSON
+or as a list of comma-separated key value pairs. Below are some examples.
 
 ```
-$ LD_LIBRARY_PATH=$(pwd)/../src:$LD_LIBRARY_PATH /path/to/flux start -s2
-ƒ(s=2,d=0) $ flux mini run -o initrc=mpibind.lua -n2 -c2 /bin/true
-ƒ(s=2,d=0) $
+-o mpibind
+-o mpibind=smt:2,gpu_optim=1,verbose=1
+-o mpibind='{"smt":2,"gpu_optim":1,"verbose":1}
 ```
-

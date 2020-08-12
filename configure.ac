@@ -71,6 +71,7 @@ AC_CONFIG_FILES([
  Makefile
  src/Makefile
  test-suite/Makefile
+ flux/Makefile
 ])
 
 AC_OUTPUT

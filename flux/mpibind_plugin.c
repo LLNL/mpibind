@@ -180,6 +180,7 @@ static bool mpibind_getopt (flux_shell_t *shell,
     json_t *mpibind_opts = NULL;
     json_error_t err;
 
+
     rc = flux_shell_getopt(shell, "mpibind", &param_ptr);
     if (rc == -1){
         shell_die_errno(1, "flux_shell_getopt");
