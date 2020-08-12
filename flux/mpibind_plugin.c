@@ -14,19 +14,18 @@
  *  OPTIONS
  *
  *  {
- *    "disable":i,
- *    "verbose":i,
- *    "smt":i,
- *    "greedy":i,
- *    "gpu_optim":i,
+ *    "disable":int,
+ *    "verbose":int,
+ *    "smt":int,
+ *    "greedy":int,
+ *    "gpu_optim":int,
  *  }
  *
  *  e.g. to disable mpibind plugin run with `-o mpibind.disable`
  *
  *  OPERATION
  *
- *  Register with name "affinity" in flux_plugin_init() (see below) to override
- *  the shell's builtin affinity plugin. In shell.init callback, parse any
+ *  In shell.init callback, parse any
  *  relevant shell options, and if disabled is set, immediately return.
  *  Otherwise, gather number of local tasks and assigned core list and call
  *  mpibind(3) to generate mapping. Register for the 'task.exec' and
@@ -35,9 +34,10 @@
 
 /*  The name of this plugin. To completely replace the shell's internal
  *   affinity module, set to "affinity", otherwise choose a different name
- *   such as "mpibind".
+ *   such as "mpibind". If you don't overwrite the affinity module, you'll 
+ *   have to disable the module from within this plugin (see mpibind_init)
  */
-#define PLUGIN_NAME "affinity"
+#define PLUGIN_NAME "mpibind"
 
 /*  Return task id for a shell task
  */
@@ -378,15 +378,11 @@ static int mpibind_shell_init (flux_plugin_t *p,
     hwloc_cpuset_t resultset = derive_pus (*topo, cores);
     hwloc_bitmap_list_snprintf (pu_set, 256, resultset);
 
-    /*  If mpibind is active, and is not named "affinity" (which already
-     *   overrides built-in affinity plugin) disable cpu-affinity explicitly.
-     */
-    if (strcmp (PLUGIN_NAME, "affinity") != 0) {
-        shell_debug ("disabling built-in affinity module");
-        if (flux_shell_setopt_pack (shell, "cpu-affinity", "s", "off") < 0) {
-            shell_die_errno (1, "flux_shell_setopt: cpu-affinity=off");
-            return -1;
-        }
+    /* Disable cpu-affinity */
+    shell_debug ("disabling built-in affinity module");
+    if (flux_shell_setopt_pack (shell, "cpu-affinity", "s", "off") < 0) {
+        shell_die_errno (1, "flux_shell_setopt: cpu-affinity=off");
+        return -1;
     }
     
     /* Disable gpu-affinity */
