@@ -32,11 +32,16 @@ AC_PROG_LN_S
 # hwloc 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
 
-# libtap 
+# libtap
+# In newer versions of pkgconf, I could use
+# PKG_HAVE_WITH_MODULES and PKG_CHECK_VAR.
+# I could also request min-version above with
+# PKG_PROG_PKG_CONFIG([MIN-VERSION])
 PKG_CHECK_MODULES([TAP], [tap], [
   libtap=true
   libtap_dir=`$PKG_CONFIG --variable=libdir tap`
   AC_SUBST(TAP_LIBDIR, $libtap_dir)
+  AC_REQUIRE_AUX_FILE([tap-driver.sh])
   ],
   [AC_MSG_NOTICE([Test suite will not be built])]
 )
@@ -65,6 +70,9 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 # ])
 # AS_IF(test-1, [run-if-true-1], ..., [run-if-false])
 
+# Define pkgconfigdir to install mpibind.pc
+PKG_INSTALLDIR
+
 
 ## Epilogue 
 AC_CONFIG_FILES([
@@ -72,6 +80,8 @@ AC_CONFIG_FILES([
  src/Makefile
  test-suite/Makefile
  flux/Makefile
+ etc/Makefile
+ etc/mpibind.pc
 ])
 
 AC_OUTPUT

@@ -1,0 +1,87 @@
+# Line that start with a pound are comments!
+# The first non-commented line should be the number of tests.
+# After the number of tests, each answer description consist of 4 lines:
+# The test description, the thread mapping, the cpu mapping, and the
+# gpu_mapping.The mapping for each task is separated by a defined character.
+# This separator can be changed in test_utils.c::parse_answer()
+
+
+# 1: Map one task to every core
+Map one task to every core
+"1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1"
+"0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30;31;32;33;34;35"
+";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+
+
+# 2: Map 1 task greedily
+Map 1 task greedily
+"36"
+"0-35"
+""
+
+
+# 3: Map two tasks greedily
+Map two tasks greedily
+"18;18"
+"0-17;18-35"
+";"
+
+# 4:
+Mapping such that ntasks < #NUMA nodes but nworkers > #NUMA nodes
+"36"
+"0-35"
+""
+
+
+# 5:
+Restrict x tasks a single core (x == machine's smt level)
+"1"
+"0"
+""
+
+
+# 6:
+Map two tasks at SMT 1
+"18;18"
+"0-17;18-35"
+";"
+
+
+# 7:
+Map 2 tasks at max smt (across all cores)
+"18;18"
+"0-17;18-35"
+";"
+
+
+# 8:
+Map tasks at max smt-1
+"18;18"
+"0-17;18-35"
+";"
+
+
+# 9:
+Map two tasks, but restrict them to a single NUMA domain
+"9;9"
+"0-8;9-17"
+";"
+
+
+# 10:
+Map num_numa tasks without GPU optimization
+"18;18"
+"0-17;18-35"
+";"
+
+# 11:
+Map num_numa tasks with GPU optimization
+"18;18"
+"0-17;18-35"
+";"
+
+# 12:
+Map 8 tasks to a single pu
+"1;1;1;1;1;1;1;1"
+"0;0;0;0;0;0;0;0"
+";;;;;;;"
