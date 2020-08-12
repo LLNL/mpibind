@@ -32,7 +32,11 @@ AC_PROG_LN_S
 # hwloc 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
 
-# libtap 
+# libtap
+# In newer versions of pkgconf, I could use
+# PKG_HAVE_WITH_MODULES and PKG_CHECK_VAR.
+# I could also request min-version above with
+# PKG_PROG_PKG_CONFIG([MIN-VERSION])
 PKG_CHECK_MODULES([TAP], [tap], [
   libtap=true
   libtap_dir=`$PKG_CONFIG --variable=libdir tap`
