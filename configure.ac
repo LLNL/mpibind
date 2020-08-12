@@ -41,6 +41,7 @@ PKG_CHECK_MODULES([TAP], [tap], [
   libtap=true
   libtap_dir=`$PKG_CONFIG --variable=libdir tap`
   AC_SUBST(TAP_LIBDIR, $libtap_dir)
+  AC_REQUIRE_AUX_FILE([tap-driver.sh])
   ],
   [AC_MSG_NOTICE([Test suite will not be built])]
 )

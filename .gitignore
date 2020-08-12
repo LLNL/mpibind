@@ -29,6 +29,8 @@ libltdl/
 /config/ltsugar.m4
 /config/ltversion.m4
 /config/lt~obsolete.m4
+/config/ar-lib
+/config/tap-driver.sh
 
 # docs intermediate files
 /doc/man*/*.xml
@@ -61,6 +63,8 @@ libltdl/
 # gcov output
 *.gcno
 *.gcda
+# Test files
+*.t
 
 # autoconf-preprocessed
 Makefile
