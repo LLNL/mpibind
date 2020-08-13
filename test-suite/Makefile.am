@@ -40,7 +40,8 @@ TESTS = \
 
 AM_TESTS_ENVIRONMENT = \
 	export PYTHONPATH="$(abs_top_builddir)/bindings/python:$(abs_top_builddir)/test-suite/python::$$PYTHONPATH";\
-	export PYTHON="${PYTHON}";
+	export PYTHON="${PYTHON}";\
+	cp $(top_srcdir)/config/tap-driver.py;
 
 clean-local:
 	rm -rf trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__

@@ -1,4 +1,4 @@
-# TODO: LICENSE FROM FLUX
+# TODO: LICENSE FROM FLUX, note this is also alvailable in GNOME
 
 dnl AM_CHECK_PYMOD(MODNAME [,SYMBOL [,ACTION-IF-FOUND [,ACTION-IF-NOT-FOUND]]])
 dnl Check if a module containing a given symbol is visible to python.

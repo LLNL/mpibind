@@ -57,25 +57,21 @@ AC_CHECK_FUNCS([regcomp strchr strerror])
 
 ################ Python Configuration ################
 
-#  Edit PATH to remove $PWD/src/cmd so that AM_PATH_PYTHON doesn't find
-#  mpibind python script (thus creating a link to itself.) This needs to be
-#  done *before* AX_PYTHON_DEVEL.
-#
-saved_PATH=$PATH
-export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
-
+# Set python_version to 3 if no user requested version
 if test "X$PYTHON_VERSION" = "X" ; then
   if test "X$PYTHON" = "X" ; then
-    # if the user hasn't specified, try for python 3
     PYTHON_VERSION=3
   fi
 fi
 
 # Do not let AX_PYTHON_DEVEL set PYTHON_SITE_PKG
+# AX_PYTHON_DEVEL supplies the PYTHON_VERSION variable
+# https://www.gnu.org/software/autoconf-archive/ax_python_devel.html
 saved_PYTHON_SITE_PKG=$PYTHON_SITE_PKG
 AX_PYTHON_DEVEL([>='3.6'])
 PYTHON_SITE_PKG=$saved_PYTHON_SITE_PKG
 
+# Verify that some version of python was discovered
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
   AC_MSG_ERROR([could not find python])
@@ -83,20 +79,21 @@ fi
 if test "X$PYTHON" = "X"; then
   AC_MSG_ERROR([could not find python])
 fi
-#  Restore original PATH:
-export PATH=${saved_PATH}
 
-# Flag for PYTHON_LDFLAGS workaround below.
-if test -n "$PYTHON_LDFLAGS"; then
-  ac_python_ldflags_set_by_user=true
-fi
-
+# Verify that the discovered python has the required modules
 AM_CHECK_PYMOD(cffi,
                [StrictVersion(cffi.__version__) >= StrictVersion('1.1.0')],
                ,
                [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
                )
 
+AM_CHECK_PYMOD(wheel,
+               [StrictVersion(wheel.__version__) >= StrictVersion('0.0.0')],
+               ,
+               [AC_MSG_ERROR([could not find python module wheel, any version should do])]
+               )
+
+# Set up locations for python bindings
 AS_VAR_SET(mpibindpydir, $pyexecdir/mpibind)
 AC_SUBST(mpibindpydir)
 AS_VAR_SET(mpibindpysodir, $pyexecdir/_mpibind)
