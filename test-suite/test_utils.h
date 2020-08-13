@@ -3,8 +3,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <tap.h>
 #include "mpibind.h"
-#include "tap.h"
 
 /**
  * The number of tests present in the test_suite.

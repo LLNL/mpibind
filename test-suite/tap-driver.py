@@ -1,26 +1,24 @@
 #!/usr/bin/env python
 import sys
 import os
-import argparse
+from os import path
 
-def get_tap_driver(driver_path):
-    return os.path.join(os.path.dirname(os.path.realpath(__file__)), "tap-driver.sh")
+def main():
+    arguments = sys.argv[1:] # 0 is me
+    try:
+        args_split_point = arguments.index('--')
+        driver_args = arguments[:args_split_point]
+        test_command = arguments[args_split_point+1:]
+    except ValueError:
+        for idx, value in enumerate(arguments):
+            if not value.startswith('--'):
+                driver_args = arguments[:idx]
+                test_command = arguments[idx:]
+                break
 
-def get_python_executable():
-    return sys.executable
-
-def split_arguments(args):
-    args_split_point = args.index('--')
-    return args[:args_split_point], args[args_split_point+1:]
-
-def build_command(driver_path, python_executable, args):
-    driver_args, test_path = split_arguments(args)
-    return [driver_path] + driver_args + ['--', python_executable] + test_path
+    driver = path.join(path.dirname(path.realpath(__file__)), "tap-driver.sh")
+    full_command = [driver] + driver_args + ["--", sys.executable] + test_command
+    os.execv(driver, full_command)
 
 if __name__ == "__main__":
-    driver_path = get_tap_driver(sys.argv[1])
-    args = sys.argv[2:]
-
-    full_command = build_command(driver_path, get_python_executable(), args)
-    print(full_command)
-    #os.execv(driver_path, full_command)
+    main()
