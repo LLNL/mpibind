@@ -2,16 +2,18 @@
 
 SUBDIRS= _mpibind mpibind
 
-installable:
-	$(PYTHON) $(srcdir)/setup.py \
-	sdist \
-	bdist_wheel
+AM_CPPFLAGS = \
+	-Wall -Werror -Wno-missing-field-initializers \
+	-I$(top_srcdir) -I$(top_srcdir)/src/ -L$(top_srcdir)/src/.libs \
+	$(PYTHON_CPPFLAGS)
 
-install-exec-local:
-	(cd $(srcdir); $(PYTHON) setup.py sdist bdist_wheel --verbose)
+all-local:
+	(cd $(srcdir); CFLAGS="$(AM_CPPFLAGS)" \
+		$(PYTHON) setup.py bdist_wheel)
 
 clean-local:
 	-rm -f *.pyc *.pyo
 	-rm -rf __pycache__
 	-rm -rf mpibind.egg-info
 	-rm -rf build
+	-rm -rf dist

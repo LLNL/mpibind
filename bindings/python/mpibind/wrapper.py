@@ -1,71 +1,7 @@
 import os
 import re
 
-from _mpibind._mpibind import ffi, lib
-
-class MpibindResourceAssignment():
-    def __init__(self, resource_type, resource_string):
-        self.type = resource_type
-        self.assignment = resource_string
-
-    @property
-    def assignment(self):
-        return self.__assignment
-    
-    @assignment.setter
-    def assignment(self, assignment):
-        self.__assignment = assignment
-        self.count = self._parse_count(assignment)
-
-    def _parse_count(self, assignment):
-        if not assignment:
-            return 0
-
-        count = 0
-        for item in assignment.split(","):
-            count += 1
-            if "-" in item:
-                start, end = item.split("-")
-                count += (int(end) - int(start))
-
-        return count
-
-    def __repr__(self):
-        return f"{self.type}: {self.assignment}"
-
-class MpibindTaskAssignment():
-    def __init__(self, cpus, gpus, thread_count):
-        self.cpus = MpibindResourceAssignment("cpus", cpus)
-        self.gpus = MpibindResourceAssignment("gpus", gpus)
-        self.smt = thread_count
-
-    def __repr__(self):
-        return f"smt: {self.smt} {repr(self.gpus)} {repr(self.cpus)}"
-
-class MpibindMapping():
-    def __init__(self, mapping_string):
-        self.assignments = []
-        self._parse_mapping(mapping_string)
-
-    def _parse_mapping(self, mapping_string):
-        mapping_pattern = r'task([\d\s]+)thds([\d\s]+)gpus([\d\s]+)cpus([\d\s,-]+)'
-        mapping_string = mapping_string.replace('\n', '').split('mpibind:')[1:]
-        for line in mapping_string:
-            result = re.search(mapping_pattern, line)
-            thds = result.group(2).strip()
-            gpus = result.group(3).strip()
-            cpus = result.group(4).strip()
-
-            self.assignments.append(MpibindTaskAssignment(cpus, gpus, thds))
-
-    def __repr__(self):
-        rep = ""
-        for idx, member in enumerate(self.assignments):
-            rep += f"task {idx}: {repr(member)}\n"
-        return rep
-
-    def __getitem__(self, idx):
-        return self.assignments[idx]
+from _mpibind._pympibind import ffi, lib
 
 class MpibindWrapper():
     def __init__(self):
@@ -127,6 +63,71 @@ class MpibindWrapper():
             self.set_gpu_optim(handle, kwargs['gpu_optim'])
         if 'greedy' in kwargs:
             self.set_greedy(handle, kwargs['greedy'])
+
+class MpibindMapping():
+    def __init__(self, mapping_string):
+        self.assignments = []
+        self._parse_mapping(mapping_string)
+
+    def _parse_mapping(self, mapping_string):
+        mapping_pattern = r'task([\d\s]+)thds([\d\s]+)gpus([\d\s]+)cpus([\d\s,-]+)'
+        mapping_string = mapping_string.replace('\n', '').split('mpibind:')[1:]
+        for line in mapping_string:
+            result = re.search(mapping_pattern, line)
+            thds = result.group(2).strip()
+            gpus = result.group(3).strip()
+            cpus = result.group(4).strip()
+
+            self.assignments.append(MpibindTaskAssignment(cpus, gpus, thds))
+
+    def __repr__(self):
+        rep = ""
+        for idx, member in enumerate(self.assignments):
+            rep += f"task {idx}: {repr(member)}\n"
+        return rep
+
+    def __getitem__(self, idx):
+        return self.assignments[idx]
+
+class MpibindTaskAssignment():
+    def __init__(self, cpus, gpus, thread_count):
+        self.cpus = MpibindResourceAssignment("cpus", cpus)
+        self.gpus = MpibindResourceAssignment("gpus", gpus)
+        self.smt = thread_count
+
+    def __repr__(self):
+        return f"smt: {self.smt} {repr(self.gpus)} {repr(self.cpus)}"
+
+
+class MpibindResourceAssignment():
+    def __init__(self, resource_type, resource_string):
+        self.type = resource_type
+        self.assignment = resource_string
+
+    @property
+    def assignment(self):
+        return self.__assignment
+    
+    @assignment.setter
+    def assignment(self, assignment):
+        self.__assignment = assignment
+        self.count = self._parse_count(assignment)
+
+    def _parse_count(self, assignment):
+        if not assignment:
+            return 0
+
+        count = 0
+        for item in assignment.split(","):
+            count += 1
+            if "-" in item:
+                start, end = item.split("-")
+                count += (int(end) - int(start))
+
+        return count
+
+    def __repr__(self):
+        return f"{self.type}: {self.assignment}"
 
 
 if __name__ == "__main__":

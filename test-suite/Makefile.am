@@ -25,3 +25,22 @@ environment_t_SOURCES = environment.c test_utils.c test_utils.h
 if HAVE_LIBTAP
 check_PROGRAMS = $(TESTS)
 endif
+TEST_EXTENSIONS = .t .py
+PY_LOG_DRIVER = $(PYTHON) $(top_srcdir)/config/tap-driver.py
+
+PYSCRIPTS = \
+	python/wrapper.py
+
+TESTS = \
+	$(PYSCRIPTS)
+	
+#if HAVE_LIBTAP
+#check_PROGRAMS = $(TESTS)
+#endif
+
+AM_TESTS_ENVIRONMENT = \
+	export PYTHONPATH="$(abs_top_builddir)/bindings/python:$(abs_top_builddir)/test-suite/python::$$PYTHONPATH";\
+	export PYTHON="${PYTHON}";
+
+clean-local:
+	rm -rf trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__
