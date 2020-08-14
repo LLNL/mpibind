@@ -933,7 +933,7 @@ int distrib_greedy(hwloc_topology_t topo, int ntasks, int *nthreads_pt,
   }
   
   /* I know that this case has less tasks than NUMAs */ 
-  numas_per_task = calloc(ntasks, sizeof(int));
+  numas_per_task = malloc(ntasks * sizeof(int));
   distrib(num_numas, ntasks, numas_per_task);
   /* Verbose */
 #if VERBOSE >=1
