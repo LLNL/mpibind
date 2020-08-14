@@ -31,7 +31,8 @@ libltdl/
 /config/lt~obsolete.m4
 /config/ar-lib
 /config/tap-driver.sh
-
+/config/tap-driver.py
+/config/py-compile
 # docs intermediate files
 /doc/man*/*.xml
 /doc/_build

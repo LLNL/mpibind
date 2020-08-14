@@ -1502,6 +1502,31 @@ void mpibind_print_mapping(mpibind_t *handle)
   }
 }
 
+/*
+ * Print the mapping for each task. 
+ */
+int mpibind_get_mapping_string(mpibind_t *handle, char *mapping_buffer, size_t buffer_size)
+{
+  char str1[LONG_STR_SIZE], str2[LONG_STR_SIZE];
+
+  int i;
+  int written;
+  for (i=0; i<handle->ntasks; i++) {
+    int to_write = buffer_size - strlen(mapping_buffer);
+    hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[i]);
+    hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[i]);
+    written = snprintf(mapping_buffer + strlen(mapping_buffer), 
+      to_write, 
+      "mpibind: task %2d thds %2d gpus %3s cpus %s\n",
+	    i, handle->nthreads[i], str2, str1); 
+
+    if (written < 0 || written > to_write){
+      return -1;
+    }
+  }
+
+  return 0;
+}
 
 /*
  * Environment variables that need to be exported by the runtime. 
