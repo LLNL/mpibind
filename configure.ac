@@ -27,7 +27,9 @@ LT_INIT
 #AC_DISABLE_STATIC
 
 AC_PROG_CC_C99
+AC_PROG_AWK
 AC_PROG_LN_S
+AC_PROG_MKDIR_P
 
 # hwloc 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
@@ -52,8 +54,12 @@ AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 # )
 
 # flux-core
-PKG_CHECK_MODULES([FLUX_CORE], [flux-core],
-  [fluxcore=true],
+PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
+  fluxcore=true
+  flux_shell_plugin_dir=`$PKG_CONFIG --variable=libdir flux-core`
+  flux_shell_plugin_dir+=/flux/shell/plugins
+  AC_SUBST(FLUX_SHELL_PLUGIN_DIR, $flux_shell_plugin_dir)
+  ],
   [AC_MSG_NOTICE([Flux plugin will not be built])]
 )
 AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
@@ -73,12 +79,16 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 # Define pkgconfigdir to install mpibind.pc
 PKG_INSTALLDIR
 
+# Path for mpibind modules, e.g., flux plugin
+AS_VAR_SET(mpibindmoddir, $libdir/mpibind)
+AC_SUBST(mpibindmoddir)
 
 ## Epilogue 
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
  test-suite/Makefile
+ flux/Makefile
  etc/Makefile
  etc/mpibind.pc
 ])
