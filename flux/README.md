@@ -120,8 +120,6 @@ Cloning into 'mpibind'...
 
 $ cd mpibind
 
-mpibind$ git checkout flux_plugin
-
 mpibind$ ./bootstrap
 
 mpibind$ ./configure --prefix=<mpibind-install-dir>
