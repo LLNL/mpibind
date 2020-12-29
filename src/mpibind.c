@@ -1486,6 +1486,11 @@ int mpibind(mpibind_t *hdl)
   return rc; 
 }
 
+/* 
+ * Keep a consistent format for printing the mapping. 
+ */ 
+#define OUT_FMT "mpibind: task %2d thds %2d gpus %3s cpus %s\n" 
+
 /*
  * Print the mapping for each task. 
  */
@@ -1497,11 +1502,41 @@ void mpibind_print_mapping(mpibind_t *handle)
   for (i=0; i<handle->ntasks; i++) {
     hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[i]);
     hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[i]);
-    printf("mpibind: task %2d thds %2d gpus %3s cpus %s\n",
-	   i, handle->nthreads[i], str2, str1); 
+    printf(OUT_FMT, i, handle->nthreads[i], str2, str1); 
   }
 }
 
+/*
+ * Print the mapping for a given task. 
+ */
+void mpibind_print_mapping_task(mpibind_t *handle, int task)
+{
+  char str1[LONG_STR_SIZE], str2[LONG_STR_SIZE];
+
+  if (task >= 0 && task < handle->ntasks) {
+    hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[task]);
+    hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[task]);
+    printf(OUT_FMT, task, handle->nthreads[task], str2, str1); 
+  }
+}
+
+/*
+ * Print the mapping to a string. 
+ */ 
+int mpibind_snprint_mapping(mpibind_t *handle, char *str, size_t size)
+{
+  int i, nc=0;
+  char str1[LONG_STR_SIZE], str2[LONG_STR_SIZE];
+  
+  for (i=0; i<handle->ntasks; i++) {
+    hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[i]);
+    hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[i]);
+    nc += snprintf(str+nc, size, OUT_FMT,
+                   i, handle->nthreads[i], str2, str1);
+  }
+
+  return nc; 
+} 
 
 /*
  * Environment variables that need to be exported by the runtime. 
