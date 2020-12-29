@@ -84,7 +84,7 @@ int plugin_task_setenv(flux_plugin_t *p, const char *var, const char *val)
 
 /* 
  * Handler for task.init.
- * Sets environment variables for each task based mpibind mapping. 
+ * Sets environment variables for each task based on the mpibind mapping. 
  */
 static
 int mpibind_task_init(flux_plugin_t *p, const char *topic,
@@ -141,6 +141,13 @@ int mpibind_task(flux_plugin_t *p, const char *topic,
     shell_die(1, "failed to determine local taskid");
     return -1;
   }
+  
+  /* Can't print the mapping here without other changes
+     including reading the user option 'verbose' (see notes above). 
+     In addition, printf does not show any output, perhaps 
+     because I am running with an old version of Flux. */ 
+  //mpibind_print_mapping_task(mph, taskid);
+
   if (mpibind_apply(mph, taskid) < 0) {
     shell_die(1, "failed to apply mpibind affinity");
   }
@@ -241,22 +248,40 @@ void mpibind_destroy(void *arg)
   hwloc_topology_destroy(topo);
 }
 
+/* 
+ * Flux output options: 
+ * verbose: For the task.* callbacks, I could use stdout/stderr 
+ *          directly, which would fold the plugin's output in 
+ *          with the output of the task (since the plugin is 
+ *          running in the task after fork(2)).
+ *          Otherwise, use shell_log().
+ * debug:   Use shell_debug (verbose level 1) or 
+ *          shell_trace (verbose level 2).
+ *
+ * Printing mpibind's mapping: 
+ * To get rid of the shell_log() prefix, e.g., 
+ * "0.211s: flux-shell[0]: mpibind:", I could print the mapping
+ * out in the task.exec callback, but this would require changes: 
+ * 1. Create a structure with the mpibind handle and a pointer 
+ *    to the user opts structure. 
+ * 2. Pass a pointer to this new structure to the task.exec callback
+ *    instead of the mpibind handle. Don't free the user opts struct yet.  
+ * 3. Pass a pointer to this new structure to the flux primite that 
+ *    registers the mpibind_destroy function. Modify mpibind_destroy 
+ *    accordingly so that it frees the user opts structure.  
+ * 4. In the task.exec callback use mpibind_print_mapping_task 
+ *    to print the mapping for the task based on the value of 
+ *    opt->verbose. 
+ */
 
 /* Todo: mpibind extra functions:
  * mpibind_set_restrict_ids (take in hwloc_bitmap_t)
- * mpibind_print_mapping (take in a char* buffer)
  * mpibind_get_env_var_names(mph, &nvars): don't include 
  *   variables that have no values, e.g., VISIBLE_DEVICES
  * Todo: Flux plugin 
  *   - work on verbose/debug options.
- *       what shell print options do I have? 
- *       verbose: for task.exec callback use stderr directly. 
- *                otherwise use shell_log()
- *       debug: use shell_debug() (verbose level 1) or 
- *                  shell_trace() (verbose level 2)
  *       show mapping, number of gpus, etc. 
- *   - test gpus
- *   - how do I get the verbose var from a handler/cb? 
+ *   - test gpus (use new test program in 'affinity') 
  */ 
 
 /* 
@@ -423,7 +448,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     return -1;
   }
 
-  shell_debug("input: ntasks=%d restrict=%s greedy=%d smt=%d "
+  shell_debug("user opts: ntasks=%d restrict=%s greedy=%d smt=%d "
 	      "gpu_optim=%d verbose=%d",
 	      ntasks, pus, opts->greedy, opts->smt,
 	      opts->gpu_optim, opts->verbose);
@@ -444,11 +469,13 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     shell_die_errno(1, "mpibind");
     return -1;
   }
-
-  /* Todo: Need new print_mapping function that uses a buffer 
-     instead of stdout */ 
+ 
   if (opts->verbose) {
-    mpibind_print_mapping(mph);
+    /* Can't print to stdout within the Flux shell environment */ 
+    //mpibind_print_mapping(mph);
+    char outbuf[LONG_STR_SIZE]; 
+    mpibind_snprint_mapping(mph, outbuf, LONG_STR_SIZE);
+    shell_log("\n%s", outbuf);
   }
   
   /* Set env variables now for the purposes of task.init */
