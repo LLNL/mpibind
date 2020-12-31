@@ -319,31 +319,30 @@ int get_gpus(hwloc_obj_t root, hwloc_bitmap_t gpus)
   // e.g., PCI 04:00.0 or 07:00.0
   // Currently, I assume that each device have a unique id
   // as defined by 'get_device_id'
-  // int num = 0; 
+  // int num = 0;
   hwloc_bitmap_zero(gpus);
-  
+
   if (root->io_arity > 0) {
     hwloc_obj_t obj = root->io_first_child;
     do {
       if (obj->type == HWLOC_OBJ_OS_DEVICE)
-	if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
+        if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
 #if VERBOSE >= 1
-	  print_obj(obj);
+          print_obj(obj);
 #endif
 #if VERBOSE >= 4
-	  print_obj_info(obj);
+          print_obj_info(obj);
 #endif
-	  /* Form the output GPU set */ 
-	  hwloc_bitmap_set(gpus, get_device_id(obj, NULL));
-	  //num++; 
-	}
-    } while((obj = obj->next_sibling) != NULL);
+          /* Form the output GPU set */
+          hwloc_bitmap_set(gpus, get_device_id(obj, NULL));
+          //num++;
+        }
+    } while ((obj = obj->next_sibling) != NULL);
   }
 
-  //return num; 
-  return hwloc_bitmap_weight(gpus); 
+  //return num;
+  return hwloc_bitmap_weight(gpus);
 }
-
 
 //static
 int get_num_gpus(hwloc_topology_t topo, int *gpu_type)
@@ -1489,7 +1488,7 @@ int mpibind(mpibind_t *hdl)
 /* 
  * Keep a consistent format for printing the mapping. 
  */ 
-#define OUT_FMT "mpibind: task %2d thds %2d gpus %3s cpus %s\n" 
+#define OUT_FMT "mpibind: task %2d nths %2d gpus %3s cpus %s\n" 
 
 /*
  * Print the mapping for each task. 
