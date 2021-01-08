@@ -7,24 +7,7 @@
 #include <string.h>
 #include "mpibind.h"
 #include "mpibind-priv.h"
-
-
-/* 
- * Briefly show the hwloc topology. 
- */
-#if VERBOSE >= 1
-static 
-void print_topo_brief(hwloc_topology_t topo)
-{
-  int depth;
-  int topo_depth = hwloc_topology_get_depth(topo); 
-  
-  for (depth = 0; depth < topo_depth; depth++)
-    printf("[%d]: %s[%d]\n", depth,
-	   hwloc_obj_type_string(hwloc_get_depth_type(topo, depth)), 
-	   hwloc_get_nbobjs_by_depth(topo, depth)); 
-}
-#endif
+#include "hwloc_utils.h"
 
 
 /* 
@@ -141,52 +124,6 @@ void distrib(int wks, int doms, int *wk_arr) {
 }
 
 
-#if VERBOSE >= 1
-static
-int obj_atts_str(hwloc_obj_t obj, char *str, size_t size)
-{
-  char tmp[SHORT_STR_SIZE];
-  int nc=0; 
-  
-  /* Common attributes */
-  hwloc_obj_type_snprintf(tmp, sizeof(tmp), obj, 1);
-  nc += snprintf(str+nc, size-nc, "%s: ", tmp);
-  nc += snprintf(str+nc, size-nc, "depth=%d ", obj->depth);
-  nc += snprintf(str+nc, size-nc, "l_idx=%d ", obj->logical_index);
-  //nc += snprintf(str+nc, size-nc, "gp_idx=0x%llx ", obj->gp_index);
-  
-  /* IO attributes */
-  if (hwloc_obj_type_is_io(obj->type)) {
-    // obj->attr->type
-    // HWLOC_OBJ_OSDEV_COPROC HWLOC_OBJ_OSDEV_OPENFABRICS
-    nc += snprintf(str+nc, size-nc, "name=%s ", obj->name);
-    nc += snprintf(str+nc, size-nc, "subtype=%s ", obj->subtype);
-  } else {
-    nc += snprintf(str+nc, size-nc, "os_idx=%d ", obj->os_index);
-    hwloc_bitmap_list_snprintf(tmp, sizeof(tmp), obj->cpuset);
-    nc += snprintf(str+nc, size-nc, "cpuset=%s ", tmp);
-    hwloc_bitmap_list_snprintf(tmp, sizeof(tmp), obj->nodeset);
-    nc += snprintf(str+nc, size-nc, "nodeset=%s ", tmp);
-    nc += snprintf(str+nc, size-nc, "arity=%d ", obj->arity);
-    nc += snprintf(str+nc, size-nc, "amem=%d ", obj->memory_arity);
-    nc += snprintf(str+nc, size-nc, "aio=%d ", obj->io_arity);
-  }
-
-  return nc; 
-}
-#endif 
-
-
-#if VERBOSE >= 1
-static
-void print_obj(hwloc_obj_t obj) {
-  char str[LONG_STR_SIZE];
-  obj_atts_str(obj, str, sizeof(str)); 
-  printf("%s\n", str);
-}
-#endif
-
-
 /* 
  * Print an array on one line starting with 'head'
  */
@@ -201,36 +138,6 @@ void print_array(int *arr, int size, char *label)
     nc += snprintf(str+nc, sizeof(str)-nc, "[%d]=%d ", i, arr[i]);
 
   printf("%s: %s\n", label, str); 
-}
-#endif 
-
-
-/*
- * struct hwloc_info_s ∗ infos
- *   char*name
- *   char*value
- * unsigned infos_count
- */
-#if VERBOSE >=4 
-static
-int obj_info_str(hwloc_obj_t obj, char *str, size_t size)
-{
-  int i, nc=0;
-  
-  for (i=0; i<obj->infos_count; i++) 
-    nc += snprintf(str+nc, size, "Info: %s = %s\n",
-		   obj->infos[i].name, obj->infos[i].value);
-
-  return nc; 
-} 
-#endif
-
-#if VERBOSE >=4
-static
-void print_obj_info(hwloc_obj_t obj) {
-  char str[LONG_STR_SIZE];
-  if ( obj_info_str(obj, str, sizeof(str)) )
-    printf("%s", str);
 }
 #endif 
 
@@ -292,9 +199,9 @@ int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
       hwloc_bitmap_or(numas, numas, parent->nodeset);
       /* Debug / verbose */
 #if VERBOSE >= 4
-      print_obj(obj);
+      print_obj(obj, 0);
       print_obj_info(obj);  
-      print_obj(parent);
+      print_obj(parent, 0);
 #endif
     }
   
@@ -328,7 +235,7 @@ int get_gpus(hwloc_obj_t root, hwloc_bitmap_t gpus)
       if (obj->type == HWLOC_OBJ_OS_DEVICE)
         if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
 #if VERBOSE >= 1
-          print_obj(obj);
+          print_obj(obj, 0);
 #endif
 #if VERBOSE >= 4
           print_obj_info(obj);
@@ -672,7 +579,7 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
     
 #if VERBOSE >= 4
     printf("num_threads/task=%d nobjs=%d\n", *nthreads_ptr, nobjs);
-    print_obj(root);
+    print_obj(root, 0);
 #endif 
   }
   nwks = *nthreads_ptr * ntasks;
