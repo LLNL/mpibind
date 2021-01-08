@@ -17,7 +17,7 @@ libmpibind_la_LIBADD  = $(HWLOC_LIBS)
 
 noinst_PROGRAMS = main hwloc_tests
 
-hwloc_tests_SOURCES = hwloc_tests.c
+hwloc_tests_SOURCES = hwloc_tests.c hwloc_utils.c hwloc_utils.h
 hwloc_tests_LDADD   = $(HWLOC_LIBS)
 #hwloc_tests_CPPFLAGS = -Wall -Werror $(HWLOC_CFLAGS)
 

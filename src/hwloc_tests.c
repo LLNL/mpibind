@@ -7,20 +7,11 @@
 #include <hwloc/plugins.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
+#include "hwloc_utils.h"
 
-#define SHORT_STR_SIZE 32
-#define LONG_STR_SIZE 1024
 
-void show_quick_topo(hwloc_topology_t topo)
-{
-  int depth;
-  int topo_depth = hwloc_topology_get_depth(topo); 
-  
-  for (depth = 0; depth < topo_depth; depth++)
-    printf("[%d]: %s[%d]\n", depth,
-	   hwloc_obj_type_string(hwloc_get_depth_type(topo, depth)), 
-	   hwloc_get_nbobjs_by_depth(topo, depth)); 
-}  
+
 
 void get_cpuset_of_nobjs(hwloc_topology_t topo,
 			 int nobjs, hwloc_obj_type_t type, 
@@ -85,77 +76,6 @@ int restr_topo_to_n_cores(hwloc_topology_t topo, int ncores)
   return 0; 
 }
 
-int obj_info_str(hwloc_obj_t obj, char *str, size_t size)
-{
-  int i, nc=0;
-  
-  for (i=0; i<obj->infos_count; i++) 
-    nc += snprintf(str+nc, size, "Info: %s = %s\n",
-		   obj->infos[i].name, obj->infos[i].value);
-
-  return nc; 
-} 
-
-/* 
- * Get the PCI Bus ID of an I/O device. 
- */ 
-int get_pcibus_id(hwloc_obj_t io_obj, char *buf, size_t size)
-{
-  hwloc_obj_t obj; 
-
-  if (io_obj->type == HWLOC_OBJ_PCI_DEVICE)
-    obj = io_obj; 
-  else if (io_obj->parent->type == HWLOC_OBJ_PCI_DEVICE)
-    obj = io_obj->parent; 
-  else
-    return 0; 
-
-  return snprintf(buf, size, "%04x:%02x:%02x.%01x", 
-    obj->attr->pcidev.domain, obj->attr->pcidev.bus, 
-    obj->attr->pcidev.dev, obj->attr->pcidev.func);
-}
-
-
-/* 
- * Get the Universally Unique ID (UUID) of a GPU device.
- * 
- * The GPU UUID is located in the info attributes of the 
- * associated OSDEV_GPU device (rather than OSDEV_COPROC). 
- * The backend for NVIDIA is NVML and for AMD is RSMI.  
- * NVML GPU OS devices
- *     NVIDIAUUID, NVIDIASerial 
- *     NVML is the NVIDIA Management Library and is included in CUDA.
- * RSMI GPU OS devices
- *     AMDUUID, AMDSerial 
- *     RSMI is the AMD ROCm SMI library
- */
-int get_uuid(hwloc_obj_t dev, char *buf, size_t size)
-{
-  int nc=0; 
-  hwloc_obj_t obj=NULL; 
-
-  if (dev->type == HWLOC_OBJ_OS_DEVICE && 
-      dev->attr->osdev.type == HWLOC_OBJ_OSDEV_GPU)
-        obj = dev;
-    
-  else if (dev->parent->io_arity > 0) {
-    hwloc_obj_t io = dev->parent->io_first_child;
-    do {
-      if (io->type == HWLOC_OBJ_OS_DEVICE && 
-          io->attr->osdev.type == HWLOC_OBJ_OSDEV_GPU)
-        obj = io; 
-    } while ((io = io->next_sibling) != NULL);
-  }
-
-  if (obj) {
-    nc = snprintf(buf, size, hwloc_obj_get_info_by_name(obj, "AMDUUID")); 
-    if (nc <= 0)
-      nc = snprintf(buf, size, hwloc_obj_get_info_by_name(obj, "NVIDIAUUID")); 
-  }
-
-  return nc; 
-}
-
 /*
  * Print object properties to a string. 
  * I/O objects considered include PCI devices and 
@@ -168,7 +88,7 @@ int obj_attrs_str(hwloc_obj_t obj, char *str, size_t size, int verbose)
   int nc=0; 
   
   nc += hwloc_obj_type_snprintf(str+nc, size-nc, obj, 1);
-  nc += snprintf(str+nc, size-nc, ": depth=%d gp_index=0x%lx ",
+  nc += snprintf(str+nc, size-nc, ": depth=%d gp_index=0x%" PRIu64 " ",
            obj->depth, obj->gp_index);
   
   if (hwloc_obj_type_is_normal(obj->type)) {
@@ -191,10 +111,10 @@ int obj_attrs_str(hwloc_obj_t obj, char *str, size_t size, int verbose)
         obj->subtype);
     case HWLOC_OBJ_OSDEV_GPU : 
       nc += snprintf(str+nc, size-nc, "\n  uuid="); 
-      nc += get_uuid(obj, str+nc, size-nc);
+      nc += gpu_uuid_snprintf(str+nc, size-nc, obj);
     case HWLOC_OBJ_OSDEV_OPENFABRICS :
       nc += snprintf(str+nc, size-nc, " busid=");
-      nc += get_pcibus_id(obj, str+nc, size-nc);
+      nc += pci_busid_snprintf(str+nc, size-nc, obj);
       nc += snprintf(str+nc, size-nc, " name=%s ",
         obj->name);
       if (verbose > 0) {
@@ -218,65 +138,110 @@ int obj_attrs_str(hwloc_obj_t obj, char *str, size_t size, int verbose)
 }
 
 
-void print_obj(hwloc_obj_t obj) {
-  char str[LONG_STR_SIZE];
-  obj_attrs_str(obj, str, sizeof(str), 0); 
-  printf("%s\n", str);
+void check_topo_filters(hwloc_topology_t topo)
+{
+  enum hwloc_type_filter_e f1, f2; 
+  hwloc_topology_get_type_filter(topo, 
+    HWLOC_OBJ_PCI_DEVICE, &f1);
+  hwloc_topology_get_type_filter(topo, 
+    HWLOC_OBJ_MISC, &f2);
+
+  if (f1 == HWLOC_TYPE_FILTER_KEEP_IMPORTANT ||
+      f1 == HWLOC_TYPE_FILTER_KEEP_ALL)
+      printf("PCI devices enabled\n");
+  if (f2 == HWLOC_TYPE_FILTER_KEEP_IMPORTANT ||
+      f2 == HWLOC_TYPE_FILTER_KEEP_ALL)
+      printf("Misc objects enabled\n");
 }
 
 
-
-/* Todo 12/30/2020 
- * Use the PCI busid (get_pcibus_id) in mpibind to 
- * detect when two devices are the same, e.g., 
- * opencl and cuda. Their obj->parent would be the 
- * same PCI device. 
- * Then use UUID (get_uuid) instead of GPU index 
- * to restrict the topology with VISIBLE_DEVICES. 
- * Make sure to enable PCI devices before loading 
- * the topology. 
- * Replace obj_atts_str() with obj_attr_str().
- * AMD: rocm-smi --showuniqueid --showbus
+/* Todo in mpibind.c:  
+ * Use the PCI busid (pci_busid_snprintf) to detect 
+ * when two devices are the same, e.g., opencl, cuda, 
+ * and nvml. Their obj->parent would be the same PCI 
+ * device. Make sure to enable PCI devices before 
+ * loading the topology. 
+ * 
+ * Then use UUID (gpu_uuid_snprintf) instead of GPU 
+ * indices to restrict the topology with VISIBLE_DEVICES. 
+ * Unfortunately, I can't go there yet, because
+ * ROCR_VISIBLE_DEVICES doesn't support UUIDs (we need
+ * to request this) even though ROCm does: 
+ *   rocm-smi --showuniqueid --showbus
+ * We need to request 
+ * CUDA_VISIBLE_DEVICES does support UUIDs. 
+ * Replace obj_atts_str() with obj_attr_snprintf().
+ * 
+ * I should not rely on the device ID provided by
+ * cuda<x> or opencl<x>d<y>, because these are relative
+ * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
+ * NVML and RSMI, on the other hand, seem to use (absolute)
+ * IDs, which won't change as a result of env vars. 
+ * Currently, it seems that the best thing to do is 
+ * to use the pcibus_id, because it is absolute and
+ * it does not rely on having the nvml or rsmi components
+ * loaded (needed to get the uuid). 
+ * 
  */
 
 int main(int argc, char *argv[])
 {
   hwloc_topology_t topology;
-  hwloc_obj_t obj; 
 
   hwloc_topology_init(&topology); 
   /* OS devices are filtered by default, enable to see GPUs */
   hwloc_topology_set_type_filter(topology, HWLOC_OBJ_OS_DEVICE,
                                  HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
   /* Include PCI devices to determine whether two GPUs 
-     are the same device, i.e., opencl1d1 and cuda1. If so, 
-     their parent is the same PCI device */ 
+     are the same device, i.e., opencl1d1 and cuda1 */ 
   hwloc_topology_set_type_filter(topology, HWLOC_OBJ_PCI_DEVICE,
                                  HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
   hwloc_topology_load(topology); 
   
-  show_quick_topo(topology);
+
+  printf("=====Begin brief topology\n");
+  print_topo_brief(topology);
+  printf("=====End brief topology\n");
+
+  printf("=====Begin I/O topology\n");
+  print_topo_io(topology);
+  printf("=====End I/O topology\n");
+
+  printf("=====Begin flat list of devices\n");
+  print_devices(topology, HWLOC_OBJ_GROUP); 
+  print_devices(topology, HWLOC_OBJ_OS_DEVICE); 
+  printf("=====End flat list of devices\n");
+
+  printf("=====Begin filter type\n");
+  check_topo_filters(topology);
+  printf("=====End filter type\n");
+
+#if 0
+  /* I haven't been able to use VISIBLE_DEVICES
+     within a process to restrict the GPU set */ 
+  printf("=====Begin ENV\n"); 
+  print_devices(topology, HWLOC_OBJ_OS_DEVICE);
+
+  int rc = putenv("CUDA_VISIBLE_DEVICES=1");
+  printf("===CUDA_VISIBLE_DEVICES=1 rc=%d===\n", rc);
+  
+  hwloc_topology_t topo2; 
+  hwloc_topology_init(&topo2);
+  hwloc_topology_set_io_types_filter(topo2, 
+    HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
+  hwloc_topology_load(topo2); 
+  print_devices(topo2, HWLOC_OBJ_OS_DEVICE);
+  hwloc_topology_destroy(topo2);
+  printf("=====End ENV\n");  
+#endif
 
   printf("=====Begin root\n"); 
-  print_obj(hwloc_get_root_obj(topology)); 
+  print_obj(hwloc_get_root_obj(topology), 0); 
   printf("=====End root\n");  
-
-  printf("=====Begin PCI devices\n");  
-  obj = NULL; 
-  while ( (obj = hwloc_get_next_pcidev(topology, obj)) != NULL ) 
-    print_obj(obj); 
-  printf("=====End PCI devices\n");  
-
-  printf("=====Begin OS devices\n");  
-  obj = NULL; 
-  while ( (obj = hwloc_get_next_osdev(topology, obj)) != NULL ) {
-    print_obj(obj);
-  }
-  printf("=====End OS devices\n");  
 
   printf("=====Begin hwloc_restrict\n");
   restr_topo_to_n_cores(topology, 4); 
-  show_quick_topo(topology);
+  print_topo_brief(topology);
   printf("=====End hwloc_restrict\n");
   
   printf("=====Begin hwloc_distrib\n");
