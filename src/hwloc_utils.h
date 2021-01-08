@@ -5,6 +5,11 @@
 #ifndef HWLOC_UTILS_H_INCLUDED
 #define HWLOC_UTILS_H_INCLUDED
 
+#include <hwloc.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int pci_busid_snprintf(char *buf, size_t size, hwloc_obj_t io); 
 
@@ -18,5 +23,8 @@ void print_topo_brief(hwloc_topology_t topo);
 
 void print_topo_io(hwloc_topology_t topo);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif // HWLOC_UTILS_H_INCLUDED
