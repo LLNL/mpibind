@@ -73,12 +73,13 @@ int gpu_uuid_snprintf(char *buf, size_t size, hwloc_obj_t dev)
   return nc; 
 }
 
-
-#if 0
-/* Not in use at the moment */ 
 /* 
- * Get the name, value pairs of the infos structure  
+ * Get the 'name=value' pairs of the infos structure  
  * of an object. 
+ * struct hwloc_info_s ∗ infos
+ *   char*name
+ *   char*value
+ * unsigned infos_count
  */
 static 
 int obj_infos_snprintf(char *str, size_t size, hwloc_obj_t obj)
@@ -91,7 +92,6 @@ int obj_infos_snprintf(char *str, size_t size, hwloc_obj_t obj)
 
   return nc; 
 } 
-#endif 
 
 /*
  * Get the attributes of a normal or I/O object. 
@@ -210,6 +210,16 @@ void tree_walk_io(hwloc_topology_t topo, hwloc_obj_t root,
       tree_walk_io(topo, obj, apply, depth+1); 
     } while ((obj = obj->next_sibling) != NULL);
   }
+}
+
+/*
+ * Print the 'name=value' pairs of the infos structure  
+ * of an object. 
+ */ 
+void print_obj_info(hwloc_obj_t obj) {
+  char str[LONG_STR_SIZE];
+  if ( obj_infos_snprintf(str, sizeof(str), obj) )
+    printf("%s\n", str);
 }
 
 /* 
