@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
   //mpibind_set_nthreads(handle, 3);
   mpibind_set_greedy(handle, 0);
   mpibind_set_gpu_optim(handle, 0);
-  mpibind_set_smt(handle, 4);
+  //mpibind_set_smt(handle, 4);
   //params.restr_type = MEM; 
   //  mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
   //params.restr_set = "24-29,72-77,36-41,84-89";
