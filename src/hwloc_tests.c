@@ -155,34 +155,6 @@ void check_topo_filters(hwloc_topology_t topo)
 }
 
 
-/* Todo in mpibind.c:  
- * Use the PCI busid (pci_busid_snprintf) to detect 
- * when two devices are the same, e.g., opencl, cuda, 
- * and nvml. Their obj->parent would be the same PCI 
- * device. Make sure to enable PCI devices before 
- * loading the topology. 
- * 
- * Then use UUID (gpu_uuid_snprintf) instead of GPU 
- * indices to restrict the topology with VISIBLE_DEVICES. 
- * Unfortunately, I can't go there yet, because
- * ROCR_VISIBLE_DEVICES doesn't support UUIDs (we need
- * to request this) even though ROCm does: 
- *   rocm-smi --showuniqueid --showbus
- * We need to request 
- * CUDA_VISIBLE_DEVICES does support UUIDs. 
- * Replace obj_atts_str() with obj_attr_snprintf().
- * 
- * I should not rely on the device ID provided by
- * cuda<x> or opencl<x>d<y>, because these are relative
- * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
- * NVML and RSMI, on the other hand, seem to use (absolute)
- * IDs, which won't change as a result of env vars. 
- * Currently, it seems that the best thing to do is 
- * to use the pcibus_id, because it is absolute and
- * it does not rely on having the nvml or rsmi components
- * loaded (needed to get the uuid). 
- * 
- */
 
 int main(int argc, char *argv[])
 {
