@@ -97,6 +97,11 @@ void topology_load(hwloc_topology_t topology)
   hwloc_topology_set_type_filter(topology, HWLOC_OBJ_OS_DEVICE,
   				 HWLOC_TYPE_FILTER_KEEP_IMPORTANT); 
 
+  /* Include PCI devices to determine whether two GPUs 
+     are the same device, i.e., opencl1d1 and cuda1 */ 
+  hwloc_topology_set_type_filter(topology, HWLOC_OBJ_PCI_DEVICE,
+                                 HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
+
   /* Detect the topology */ 
   hwloc_topology_load(topology);
 }
@@ -142,6 +147,44 @@ void print_array(int *arr, int size, char *label)
 #endif 
 
 
+/* Todo list: 
+ * Use the PCI busid (pci_busid_snprintf) to detect 
+ * when two devices are the same, e.g., opencl, cuda, 
+ * and nvml. Their obj->parent would be the same PCI 
+ * device. 
+ * 
+ * Then use UUID (gpu_uuid_snprintf) instead of GPU 
+ * indices to restrict the topology with VISIBLE_DEVICES. 
+ * Unfortunately, I can't go there yet, because
+ * ROCR_VISIBLE_DEVICES doesn't support UUIDs even 
+ * though ROCm does: 
+ *   rocm-smi --showuniqueid --showbus
+ * CUDA_VISIBLE_DEVICES does support UUIDs. 
+ * 
+ * I don't like relying on the device ID provided by
+ * cuda<x> or opencl<x>d<y>, because these are relative
+ * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
+ * NVML and RSMI, on the other hand, seem to use (absolute)
+ * IDs, which won't change as a result of env vars. 
+ * Currently, it seems that the best thing to do is 
+ * to use the pcibus_id, because it is absolute and
+ * it does not rely on having the nvml or rsmi components
+ * loaded (needed to get the uuid). When relying on 
+ * the PCI busid, add a check to verify PCI devices
+ * are not filtered out:
+ * hwloc_topology_get_type_filter(..,HWLOC_OBJ_PCI_DEVICE)
+ * I would need this check when the topology is passed
+ * in by the caller (rather than mpibind discovering
+ * the topology). 
+ * 
+ * A benefit of using small non-negative indices for 
+ * GPUs is to keep track of them with a bitmap. 
+ * 
+ * What I can do right now is to create a structure
+ * with the GPU ID info: 
+ * - PCI busid
+ * - UUID
+ */
 /*
  * Return the device id of a co-processor object, 
  * otherwise return -1
@@ -208,6 +251,28 @@ int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
   return hwloc_bitmap_weight(numas);   
 }
 
+/* 
+ * If the input object is a GPU, add it to the input set. 
+ * Function to be passed to tree_walk_io(). 
+ */ 
+static
+void add_gpu_to_set(hwloc_obj_t obj, void *set, int depth)
+{
+  hwloc_bitmap_t gpus = set; 
+  
+  if (obj->type == HWLOC_OBJ_OS_DEVICE)
+    if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
+#if VERBOSE >= 1
+      print_obj(obj, depth);
+#endif
+#if VERBOSE >= 4
+      print_obj_info(obj);
+#endif
+      /* Form the output GPU set */
+      hwloc_bitmap_set(gpus, get_device_id(obj, NULL));
+    }
+}
+
 
 /*
  * Input: 
@@ -218,17 +283,20 @@ int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
 static
 int get_gpus(hwloc_obj_t root, hwloc_bitmap_t gpus)
 {
-  // Don't count the GPUs with a counter inside the loop (num),
-  // because a single GPU can be shown by hwloc as both
-  // CUDA and OpenCL device. In the future, I may consider
-  // checking the PCI ID, which should be the same for a
-  // CUDA and an OpenCL device if they are the same GPU,
-  // e.g., PCI 04:00.0 or 07:00.0
-  // Currently, I assume that each device have a unique id
-  // as defined by 'get_device_id'
-  // int num = 0;
+  /* Don't count the GPUs with a counter inside the loop (num),
+     because a single GPU can be shown by hwloc as both
+     CUDA and OpenCL device. In the future, I may consider
+     checking the PCI ID, which should be the same for a
+     CUDA and an OpenCL device if they are the same GPU,
+     e.g., PCI 04:00.0 or 07:00.0
+     Currently, I assume teach device has a unique id
+     as defined by 'get_device_id' */ 
   hwloc_bitmap_zero(gpus);
 
+  /* Using a deep search instead of a shallow search. 
+     There may be other objects, e.g., PCI devices, 
+     in between the root object and the GPUs. */ 
+#if 0
   if (root->io_arity > 0) {
     hwloc_obj_t obj = root->io_first_child;
     do {
@@ -246,12 +314,15 @@ int get_gpus(hwloc_obj_t root, hwloc_bitmap_t gpus)
         }
     } while ((obj = obj->next_sibling) != NULL);
   }
+#else
+  tree_walk_io(add_gpu_to_set, root, gpus, 0);
+#endif 
 
-  //return num;
   return hwloc_bitmap_weight(gpus);
 }
 
-//static
+
+static
 int get_num_gpus(hwloc_topology_t topo, int *gpu_type)
 {
   int res; 
@@ -1322,6 +1393,7 @@ int mpibind(mpibind_t *hdl)
 
 #if VERBOSE >= 1
   print_topo_brief(hdl->topo);
+  print_topo_io(hdl->topo);
 #endif 
   
   if (hdl->smt < 0 || hdl->smt > get_smt_level(hdl->topo)) {
