@@ -197,8 +197,8 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
  * 'print_topo_io'
  */
 static
-void tree_walk_io(hwloc_topology_t topo, hwloc_obj_t root,
-                  void (*apply)(hwloc_obj_t, int), int depth)
+void tree_walk_io_simple(void (*apply)(hwloc_obj_t, int), 
+                         hwloc_obj_t root, int depth)
 {
   hwloc_obj_t obj; 
 
@@ -207,10 +207,31 @@ void tree_walk_io(hwloc_topology_t topo, hwloc_obj_t root,
   if (root->io_arity > 0) {
     obj = root->io_first_child; 
     do {
-      tree_walk_io(topo, obj, apply, depth+1); 
+      tree_walk_io_simple(apply, obj, depth+1); 
     } while ((obj = obj->next_sibling) != NULL);
   }
 }
+
+/*
+ * A generalization of tree_walk_io() that allows 
+ * a function with arguments to be applied to 
+ * each object 
+ */
+void tree_walk_io(void (*apply)(hwloc_obj_t, void*, int), 
+                  hwloc_obj_t root, void *args, int depth)
+{
+  hwloc_obj_t obj; 
+
+  (*apply)(root, args, depth); 
+  
+  if (root->io_arity > 0) {
+    obj = root->io_first_child; 
+    do {
+      tree_walk_io(apply, obj, args, depth+1); 
+    } while ((obj = obj->next_sibling) != NULL);
+  }
+}
+
 
 /*
  * Print the 'name=value' pairs of the infos structure  
@@ -292,7 +313,7 @@ void print_topo_io(hwloc_topology_t topo)
       /* If not, print it out with its I/O children */ 
       if (i == nonio_cnt) { 
         nonio_gp[nonio_cnt++] = parent->gp_index; 
-        tree_walk_io(topo, parent, print_obj, 0);
+        tree_walk_io_simple(print_obj, parent, 0);
       }
     }
 }  

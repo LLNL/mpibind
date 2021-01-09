@@ -15,6 +15,9 @@ int pci_busid_snprintf(char *buf, size_t size, hwloc_obj_t io);
 
 int gpu_uuid_snprintf(char *buf, size_t size, hwloc_obj_t dev); 
 
+void tree_walk_io(void (*apply)(hwloc_obj_t, void*, int), 
+                  hwloc_obj_t root, void *args, int depth);
+
 void print_obj_info(hwloc_obj_t obj);
 
 void print_obj(hwloc_obj_t obj, int indent);
