@@ -10,6 +10,109 @@
 #define LONG_STR_SIZE 1024
 
 
+#if 0
+struct topo_level {
+  char *name;
+  int nobjs;
+  int depth;
+  int pus_per_obj; 
+  hwloc_bitmap_t cpuset; 
+};
+
+static
+void get_level_info(hwloc_topology_t topo,
+		    hwloc_cpuset_t cpuset, int depth, 
+		    int pus_per_obj, struct topo_level *info)
+{
+  int i, nobjs, pu, count, nc; 
+  hwloc_obj_t obj;
+  char *str; 
+
+  info->cpuset = hwloc_bitmap_alloc();
+  info->name = malloc(SHORT_STR_SIZE);
+  info->nobjs = 0;
+  info->depth = depth;
+  info->pus_per_obj = pus_per_obj; 
+  str = info->name; 
+  
+  nobjs = hwloc_get_nbobjs_inside_cpuset_by_depth(topo, cpuset, depth);
+  
+  /* Get the pus for the given depth and cpuset */ 
+  for (i=0; i<nobjs; i++) {
+    obj = hwloc_get_obj_inside_cpuset_by_depth(topo, cpuset, depth, i);
+    
+    count = 0; 
+    hwloc_bitmap_foreach_begin(pu, obj->cpuset) {
+      hwloc_bitmap_set(info->cpuset, pu);
+      info->nobjs++; 
+      if (++count == pus_per_obj)
+	break;
+    } hwloc_bitmap_foreach_end(); 
+  }
+  
+  /* Get the name of the matching level */ 
+  nc = hwloc_obj_type_snprintf(str, SHORT_STR_SIZE, obj, 1);
+  if (depth == hwloc_get_type_depth(topo, HWLOC_OBJ_CORE))
+    snprintf(str+nc, SHORT_STR_SIZE-nc, "SMT%d", pus_per_obj); 
+}
+
+static
+void free_topo_levels(struct topo_level *levels, int size)
+{
+  int i;
+
+  for (i=0; i<size; i++) {
+    free(levels[i].name);
+    hwloc_bitmap_free(levels[i].cpuset); 
+  }
+
+  free(levels); 
+}
+
+/* 
+ * While I can walk down the tree to find out what level 
+ * is to be used for given ntasks/nthreads, I would have
+ * special cases since the topology does not have SMT-2, 
+ * SMT-3, etc. levels. 
+ * Thus, this function creates my own level structure that 
+ * I can use to manage any request uniformly. 
+ */
+static
+struct topo_level* build_mapping_levels(hwloc_topology_t topo,
+					hwloc_obj_t root,
+					int *size)
+{
+  int idx, topo_depth, depth, hw_smt, smt, core_depth, nlevels;
+  struct topo_level *topo_levels; 
+
+  hw_smt = get_smt_level(topo); 
+  topo_depth = hwloc_topology_get_depth(topo);
+  core_depth = hwloc_get_type_depth(topo, HWLOC_OBJ_CORE);
+  
+  nlevels = topo_depth - root->depth;
+  if (hw_smt > 2)
+    nlevels += hw_smt - 2;
+  topo_levels = calloc(nlevels, sizeof(struct topo_level));
+  
+  /* Walk the tree starting from the root */
+  idx = 0; 
+  for (depth=root->depth; depth<topo_depth; depth++) {
+    get_level_info(topo, root->cpuset, depth, 1, topo_levels+idx); 
+    idx++; 
+
+    /* Build SMT levels starting at the Core+1 level */ 
+    if (depth == core_depth) 
+      for (smt=2; smt<hw_smt; smt++) {
+	get_level_info(topo, root->cpuset, depth, smt, topo_levels+idx);
+	idx++; 
+      }
+  }
+  
+  *size = idx; 
+  return topo_levels; 
+}
+#endif
+
 /* 
  * Get the PCI Bus ID of an I/O device object, e.g., 
  * 0000:04:00.0
@@ -172,10 +275,10 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
       nc += hwloc_obj_type_snprintf(str+nc, size-nc, obj, 1);
       nc += snprintf(str+nc, size-nc, ": busid=");
       nc += pci_busid_snprintf(str+nc, size-nc, obj);
-      nc += snprintf(str+nc, size-nc, " linkspeed=%.2fGB/s ",
+      nc += snprintf(str+nc, size-nc, " link=%.2fGB/s ",
         obj->attr->pcidev.linkspeed); 
-      // nc += snprintf(str+nc, size-nc, "class_id=0x%x ",
-      //   obj->attr->pcidev.class_id);
+      nc += snprintf(str+nc, size-nc, "class=0x%x ",
+        obj->attr->pcidev.class_id);
       nc += snprintf(str+nc, size-nc, "PCIDevice=%s ",
         hwloc_obj_get_info_by_name(obj, "PCIDevice")); 
       nc += snprintf(str+nc, size-nc, "   ");
