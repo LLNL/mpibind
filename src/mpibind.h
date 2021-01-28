@@ -145,6 +145,10 @@ extern "C" {
   char** mpibind_get_gpus_ptask(mpibind_t *handle, 
           int taskid, int *ngpus); 
   /*
+   * Get the number of GPUs in the system/allocation. 
+   */        
+  int mpibind_get_num_gpus(mpibind_t *handle);
+  /*
    * Return an array with 'ntasks' elements. 
    * The GPUs to use for a given process/task. 
    * The GPU IDs use mpibind's device IDs 

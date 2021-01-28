@@ -24,11 +24,13 @@ void howto_gpu_ids(mpibind_t *handle)
     printf("GPU IDs using %s\n", desc[k]);
     /* Get the IDs per task */ 
     for (i=0; i<ntasks; i++) {
-      printf("\tTask %d: ", i);
       gpu_str = mpibind_get_gpus_ptask(handle, i, &ngpus);
-      for (j=0; j<ngpus; j++) {
-        printf("%s", gpu_str[j]);
-        printf( (j == ngpus-1) ? "\n" : "," ); 
+      if (ngpus > 0) {
+        printf("\tTask %d: ", i);
+        for (j=0; j<ngpus; j++) {
+          printf("%s", gpu_str[j]);
+          printf( (j == ngpus-1) ? "\n" : "," ); 
+        }
       }
     }
   }
@@ -36,10 +38,9 @@ void howto_gpu_ids(mpibind_t *handle)
   /* For reference, show mpibind device IDs */ 
   hwloc_bitmap_t *gpus = mpibind_get_gpus(handle);
   printf("GPU IDs using mpibind numbering\n");
-  for (i=0; i<ntasks; i++) {
-    hwloc_bitmap_list_snprintf(str, sizeof(str), gpus[i]); 
-    printf("\tTask %d: %s\n", i, str); 
-  }  
+  for (i=0; i<ntasks; i++)
+    if (hwloc_bitmap_list_snprintf(str, sizeof(str), gpus[i]) > 0)
+      printf("\tTask %d: %s\n", i, str);  
 }
 
 
@@ -69,8 +70,10 @@ void howto_env_vars(mpibind_t *handle)
 
   values = mpibind_get_env_var_values(handle, names[nvars-1]);
   printf("%s:\n", names[nvars-1]);
-  for (i=0; i<ntasks; i++)
-    printf("\t[%d]: %s\n", i, values[i]); 
+  for (i=0; i<ntasks; i++) {
+    if (strlen(values[i]))
+      printf("\t[%d]: %s\n", i, values[i]); 
+  }
 #endif
 }
 
@@ -78,18 +81,20 @@ void howto_env_vars(mpibind_t *handle)
 
 int main(int argc, char *argv[])
 {
-  mpibind_t *handle;
-  hwloc_topology_t topo; 
+  /* Optional program input: number of tasks */ 
+  int ntasks = 5; 
+  if (argc > 1)
+    ntasks = atoi(argv[1]); 
 
+  mpibind_t *handle;
   mpibind_init(&handle);
 
   /* User input */
-  int ntasks = 5; 
   mpibind_set_ntasks(handle, ntasks);
   //mpibind_set_nthreads(handle, 3);
   //mpibind_set_greedy(handle, 0);
   //mpibind_set_gpu_optim(handle, 0);
-  //mpibind_set_smt(handle, 4);
+  //mpibind_set_smt(handle, 1);
   //params.restr_type = MEM; 
   //  mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
   //params.restr_set = "24-29,72-77,36-41,84-89";
@@ -103,15 +108,19 @@ int main(int argc, char *argv[])
     return 1;
   
   /* Get the hwloc topology to parse the hwloc_bitmaps */ 
+  hwloc_topology_t topo; 
   topo = mpibind_get_topology(handle); 
 
   /* Verbose mapping */ 
   //Specify the type of GPU IDs to use
-  //mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS);
+  mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS);
   mpibind_mapping_print(handle); 
 
-  /* Example using various GPU IDs */ 
-  howto_gpu_ids(handle);
+  int ngpus = mpibind_get_num_gpus(handle);
+  printf("There are %d GPUs\n", ngpus);
+  if (ngpus > 0)
+    /* Example using various GPU IDs */ 
+    howto_gpu_ids(handle);
   
   /* Example using affinity environment variables */ 
   howto_env_vars(handle);
@@ -119,7 +128,7 @@ int main(int argc, char *argv[])
   /* Clean up */ 
   mpibind_finalize(handle);
 
-  /* Don't forget to unload/free the topology */ 
+  /* Last clean up activity: destroy the topology */ 
   hwloc_topology_destroy(topo);
   
   return 0;
