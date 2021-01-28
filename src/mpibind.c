@@ -5,9 +5,27 @@
 #include <hwloc.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 #include "mpibind.h"
 #include "mpibind-priv.h"
 #include "hwloc_utils.h"
+
+
+/*
+ * Todo list: 
+ * 
+ * Split mpibind.c into two files: 
+ * mpibind.c user-facing functions
+ * internals.c non-user facing functions
+ *
+ * github repo: 
+ *   Tag mpibind versions. Look at the commit history
+ *   to write the release notes. 
+ *   Include an example of how to use mpibind in README
+ *   If src/main.c grows too much, create an examples 
+ *   directory with different focal points, e.g., 
+ *   dealing with GPU IDs. 
+ */
 
 
 /* 
@@ -25,9 +43,9 @@ int get_core_depth(hwloc_topology_t topo)
 }
 
 
-/* Commented out to avoid compiler errors. 
-   But, I may use this function later. */ 
 #if 0
+/* Commented out to avoid compiler errors (static function). 
+   But, I may use this function later. */ 
 static
 hwloc_obj_type_t get_core_type(hwloc_topology_t topo)
 {
@@ -87,7 +105,7 @@ void topology_load(hwloc_topology_t topology)
      Leaving it in for now, because I have my own 'get_core_*' 
      functions rather than using HWLOC_OBJ_CORE directly */ 
   hwloc_topology_set_all_types_filter(topology,
-				      HWLOC_TYPE_FILTER_KEEP_STRUCTURE); 
+				  HWLOC_TYPE_FILTER_KEEP_STRUCTURE); 
   
   /* Too general, enabling only OS devices below */ 
   //hwloc_topology_set_io_types_filter(topology,
@@ -95,12 +113,12 @@ void topology_load(hwloc_topology_t topology)
   
   /* OS devices are filtered by default, enable to see GPUs */ 
   hwloc_topology_set_type_filter(topology, HWLOC_OBJ_OS_DEVICE,
-  				 HWLOC_TYPE_FILTER_KEEP_IMPORTANT); 
+  				HWLOC_TYPE_FILTER_KEEP_IMPORTANT); 
 
   /* Include PCI devices to determine whether two GPUs 
      are the same device, i.e., opencl1d1 and cuda1 */ 
   hwloc_topology_set_type_filter(topology, HWLOC_OBJ_PCI_DEVICE,
-                                 HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
+          HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
 
   /* Detect the topology */ 
   hwloc_topology_load(topology);
@@ -147,44 +165,313 @@ void print_array(int *arr, int size, char *label)
 #endif 
 
 
-/* Todo list: 
- * Use the PCI busid (pci_busid_snprintf) to detect 
- * when two devices are the same, e.g., opencl, cuda, 
- * and nvml. Their obj->parent would be the same PCI 
- * device. 
+#if 0
+static
+int is_osdev_interest(hwloc_obj_t obj)
+{
+  if (obj->type == HWLOC_OBJ_OS_DEVICE) {
+    hwloc_obj_osdev_type_t type = obj->attr->osdev.type; 
+    if (type == HWLOC_OBJ_OSDEV_COPROC || 
+        type == HWLOC_OBJ_OSDEV_GPU ||
+        type == HWLOC_OBJ_OSDEV_OPENFABRICS)
+      return 1;
+  }
+  return 0; 
+}
+#endif 
+
+
+/*
+ * Get the PCI bus ID of an input device
+ * (save it into input string). 
+ * Return a pointer to the associated PCI object. 
+ */ 
+static 
+hwloc_obj_t get_pci_busid(hwloc_obj_t dev, char *busid, int size)
+{
+  hwloc_obj_t obj; 
+
+  if (dev->type == HWLOC_OBJ_PCI_DEVICE)
+    obj = dev; 
+  else if (dev->parent->type == HWLOC_OBJ_PCI_DEVICE)
+    obj = dev->parent; 
+  else 
+    return NULL; 
+
+  snprintf(busid, size, "%04x:%02x:%02x.%01x", 
+      obj->attr->pcidev.domain, obj->attr->pcidev.bus, 
+      obj->attr->pcidev.dev, obj->attr->pcidev.func);
+
+  return obj; 
+}
+
+
+/* 
+ * Input: An hwloc topology. 
+ * Output: An array of devices. 
  * 
- * Then use UUID (gpu_uuid_snprintf) instead of GPU 
- * indices to restrict the topology with VISIBLE_DEVICES. 
- * Unfortunately, I can't go there yet, because
- * ROCR_VISIBLE_DEVICES doesn't support UUIDs even 
- * though ROCm does: 
- *   rocm-smi --showuniqueid --showbus
- * CUDA_VISIBLE_DEVICES does support UUIDs. 
+ * For every unique I/O device, add an entry to the 
+ * output array with the device's different IDs: 
+ *   PCI Bus ID 
+ *   Universally Unique ID 
+ *   *_VISIBLE_DEVICES ID 
+ *   SMI ID (RSMI or NVML)
+ * This function includes GPUs and OpenFabrics NICs 
+ * and can add other devices as necessary. 
  * 
+ * mpibind uses its own IDs to refer to I/O devices,
+ * namely the index of the device ID array. 
+ * Having small non-negative integers allows using 
+ * efficient storage: bitmaps. 
+ * Given an mpibind ID, one can map it to whatever the 
+ * caller wishes to use, e.g., ID for *_VISIBLE_DEVICES. 
+ *  
+ * Notes on the different type of IDs: 
  * I don't like relying on the device ID provided by
  * cuda<x> or opencl<x>d<y>, because these are relative
  * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
- * NVML and RSMI, on the other hand, seem to use (absolute)
- * IDs, which won't change as a result of env vars. 
- * Currently, it seems that the best thing to do is 
- * to use the pcibus_id, because it is absolute and
- * it does not rely on having the nvml or rsmi components
- * loaded (needed to get the uuid). When relying on 
- * the PCI busid, add a check to verify PCI devices
- * are not filtered out:
- * hwloc_topology_get_type_filter(..,HWLOC_OBJ_PCI_DEVICE)
- * I would need this check when the topology is passed
- * in by the caller (rather than mpibind discovering
- * the topology). 
- * 
- * A benefit of using small non-negative indices for 
- * GPUs is to keep track of them with a bitmap. 
- * 
- * What I can do right now is to create a structure
- * with the GPU ID info: 
- * - PCI busid
- * - UUID
+ * NVML and RSMI, on the other hand, act as absolute
+ * IDs--don't change as a result of env vars. 
+ * Currently, I rely on the pcibus_id, because it 
+ * is absolute and it does not rely on having the 
+ * nvml or rsmi components loaded. These components 
+ * though are required to get the uuid. 
  */
+static
+int discover_devices(hwloc_topology_t topo, 
+                     struct device **devs, int size)
+{
+  int i, id, index, ndevs=0; 
+  char busid[PCI_BUSID_LEN];
+  hwloc_obj_osdev_type_t type;
+  hwloc_obj_t pci_obj, obj;
+
+  /* First pass: Discover devices that must be added to the 
+     input list of devices ('devs'). 
+     Do not consider OSDEV_GPU devices in the first passs
+     because they do not honor VISIBLE_DEVICES variables--
+     If the caller wants to restrict the visible devices, 
+     I should honor her request. */ 
+  obj = NULL; 
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL ) {
+    type = obj->attr->osdev.type; 
+    if (type == HWLOC_OBJ_OSDEV_COPROC || 
+        type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+
+      /* Get the PCI bus ID */ 
+      pci_obj = get_pci_busid(obj, busid, sizeof(busid)); 
+      if (pci_obj == NULL) {
+        fprintf(stderr, "Warn: Couldn't get PCI busid of I/O device\n");
+        continue; 
+      }
+
+      /* Have we seen this device already? 
+         opencl0d0 and cuda0 may correspond to the same GPU HW */ 
+      for (index=0; index<ndevs; index++) 
+        if (strcmp(devs[index]->pci, busid) == 0)
+          break; 
+      /* Add a new device with a unique PCI busid */ 
+      if (index == ndevs) {
+        if (ndevs >= size) {
+          fprintf(stderr, "Warn: I/O device array maxed out\n"); 
+          return ndevs; 
+        }
+
+        /* Allocate and initialize the new device */ 
+        devs[index] = malloc(sizeof(struct device));
+        devs[index]->univ[0] = '\0'; 
+        devs[index]->smi = -1;
+        devs[index]->visdevs = -1; 
+        devs[index]->type = -1; 
+
+        devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
+        devs[index]->ancestor = 
+          hwloc_get_non_io_ancestor_obj(topo, obj)->gp_index; 
+        if (type == HWLOC_OBJ_OSDEV_COPROC)
+          devs[index]->type = DEV_GPU;
+        else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+          devs[index]->type = DEV_NIC;  
+          snprintf(devs[index]->univ, UUID_LEN, "%s", 
+              hwloc_obj_get_info_by_name(obj, "NodeGUID")); 
+        }
+        snprintf(devs[index]->name, SHORT_STR_SIZE, "%s", obj->name); 
+        if (sscanf(obj->name, "cuda%d", &id) == 1)
+          devs[index]->visdevs = id; 
+        else if (sscanf(obj->name, "opencl%dd%d", &i, &id) == 2)
+          devs[index]->visdevs = id;
+
+        snprintf(devs[ndevs++]->pci, PCI_BUSID_LEN, "%s", busid);
+      }
+    }
+  }
+
+  /* Second pass: Add additional info to existing devices,
+     e.g., RSMI/NVML (OSDEV_GPU) devices have the UUID */ 
+  obj = NULL; 
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL )
+    if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_GPU) {
+
+      /* Get the PCI bus ID */ 
+      get_pci_busid(obj, busid, sizeof(busid)); 
+
+      /* Find the associated device */ 
+      for (index=0; index<ndevs; index++) 
+        if (strcmp(devs[index]->pci, busid) == 0) {
+
+          /* Add the UUID and System Management ID */ 
+          if (sscanf(obj->name, "rsmi%d", &id) == 1) {
+            devs[index]->smi = id; 
+            snprintf(devs[index]->univ, UUID_LEN, "%s", 
+                hwloc_obj_get_info_by_name(obj, "AMDUUID")); 
+          } else if (sscanf(obj->name, "nvml%d", &id) == 1) {
+            devs[index]->smi = id; 
+            snprintf(devs[index]->univ, UUID_LEN, "%s", 
+                hwloc_obj_get_info_by_name(obj, "NVIDIAUUID")); 
+          }
+
+          break; 
+        }
+    }
+
+  return ndevs; 
+}
+
+#if 0
+/* 
+ * First shot at discover devices. 
+ * It has an issue with ordering of discovery of 
+ * devices, for example if OSDEV_GPU is discovered
+ * before its associated OSDEV_COPROC
+ */ 
+static 
+int discover_devices(hwloc_topology_t topo, 
+                     struct device **devs, int size)
+{
+  int i, id, index, ndevs=0; 
+  char busid[PCI_BUSID_LEN];
+  const char *uuid_name[] = { "AMDUUID", "NVIDIAUUID", "NodeGUID" };
+  int num_uuids = sizeof(uuid_name) / sizeof(const char *); 
+  hwloc_obj_osdev_type_t type;
+  hwloc_obj_t pci_obj, obj=NULL;
+
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL ) {
+    type = obj->attr->osdev.type; 
+    if (type == HWLOC_OBJ_OSDEV_COPROC || 
+        type == HWLOC_OBJ_OSDEV_GPU ||
+        type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+
+      /* Get the PCI bus ID */ 
+      if (obj->parent->type == HWLOC_OBJ_PCI_DEVICE) {
+        pci_obj = obj->parent; 
+        snprintf(busid, sizeof(busid), "%04x:%02x:%02x.%01x", 
+        pci_obj->attr->pcidev.domain, pci_obj->attr->pcidev.bus, 
+        pci_obj->attr->pcidev.dev, pci_obj->attr->pcidev.func);
+      } else {
+        fprintf(stderr, "Warn: Couldn't get PCI busid of I/O device\n");
+        continue; 
+      }
+      //printf("Discovering device %s\n", busid);
+
+      /* Have we seen this device already? */ 
+      for (index=0; index<ndevs; index++) 
+        if (strcmp(devs[index]->pci, busid) == 0)
+          break; 
+      /* Add new devices to the list--must have
+         a unique PCI busid.  
+         Don't add RSMI/NVML (OSDEV_GPU) devices, because 
+         they do not honor the VISIBLE_DEVICES variables. 
+         If the caller wants to restrict the visible 
+         devices, I should honor her request. */ 
+      if (index == ndevs && type != HWLOC_OBJ_OSDEV_GPU) {
+        if (ndevs >= size) {
+          fprintf(stderr, "Warn: I/O device array maxed out\n"); 
+          return ndevs; 
+        }
+
+        /* Allocate and initialize the new device */ 
+        devs[index] = malloc(sizeof(struct device));
+        devs[index]->univ[0] = '\0'; 
+        devs[index]->smi = -1;
+        devs[index]->visdevs = -1; 
+        devs[index]->type = -1; 
+
+        devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
+        devs[index]->ancestor = 
+          hwloc_get_non_io_ancestor_obj(topo, obj)->gp_index; 
+        if (type == HWLOC_OBJ_OSDEV_COPROC)
+          devs[index]->type = DEV_GPU;
+        else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS)
+          devs[index]->type = DEV_NIC;  
+        snprintf(devs[index]->name, SHORT_STR_SIZE, "%s", obj->name); 
+        snprintf(devs[ndevs++]->pci, PCI_BUSID_LEN, "%s", busid);
+      }
+
+      /* Add the UUID. For GPUs, UUID comes from OSDEV_GPU */ 
+      for (i=0; i<num_uuids; i++)
+        if ( hwloc_obj_get_info_by_name(obj, uuid_name[i]) ) {
+          /* Save UUID if space has been allocated */ 
+          if (devs[index] != NULL) {
+            snprintf(devs[index]->univ, UUID_LEN, "%s", 
+              hwloc_obj_get_info_by_name(obj, uuid_name[i])); 
+          }
+          break; 
+        }
+      
+      /* Add the Visible Devices or System Management ID */ 
+      if (sscanf(obj->name, "cuda%d", &id) == 1) {
+        devs[index]->visdevs = id; 
+      } else if (sscanf(obj->name, "opencl%dd%d", &i, &id) == 2) {
+        devs[index]->visdevs = id;
+      } else if (sscanf(obj->name, "rsmi%d", &id) == 1) {
+        if (devs[index] != NULL) 
+          devs[index]->smi = id; 
+      } else if (sscanf(obj->name, "nvml%d", &id) == 1) {
+        if (devs[index] != NULL)
+          devs[index]->smi = id; 
+      }
+    }
+  }
+
+  return ndevs;    
+}
+#endif 
+
+/*
+ * Return the number of NUMA domains with GPUs. 
+ * Output:
+ *   numas: OS indexes of the numa domains with GPUs.  
+ */
+static
+int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
+{
+  hwloc_obj_t obj, parent; 
+  
+  hwloc_bitmap_zero(numas);
+
+  obj = NULL; 
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL )
+    if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
+      parent = hwloc_get_non_io_ancestor_obj(topo, obj);
+      hwloc_bitmap_or(numas, numas, parent->nodeset);
+      /* Debug / verbose */
+#if VERBOSE >= 4
+      print_obj(obj, 0);
+      print_obj_info(obj);  
+      print_obj(parent, 0);
+#endif
+    }
+  
+  return hwloc_bitmap_weight(numas);   
+}
+
+
+#if 0
+/* The following functions have been replaced with ones 
+   that use the device structure (struct device).
+   This change reduces significantly the number of times 
+   the hwloc topology is traversed and enables the use
+   of different types of IDs such as PCI BUSID */
+
 /*
  * Return the device id of a co-processor object, 
  * otherwise return -1
@@ -222,35 +509,6 @@ int get_device_id(hwloc_obj_t obj, int *vendor)
   return device_idx; 
 }
 
-
-/*
- * Return the number of NUMA domains with GPUs. 
- * Output:
- *   numas: OS indexes of the numa domains with GPUs.  
- */
-static
-int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
-{
-  hwloc_obj_t obj, parent; 
-  
-  hwloc_bitmap_zero(numas);
-
-  obj = NULL; 
-  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL )
-    if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
-      parent = hwloc_get_non_io_ancestor_obj(topo, obj);
-      hwloc_bitmap_or(numas, numas, parent->nodeset);
-      /* Debug / verbose */
-#if VERBOSE >= 4
-      print_obj(obj, 0);
-      print_obj_info(obj);  
-      print_obj(parent, 0);
-#endif
-    }
-  
-  return hwloc_bitmap_weight(numas);   
-}
-
 /* 
  * If the input object is a GPU, add it to the input set. 
  * Function to be passed to tree_walk_io(). 
@@ -272,7 +530,6 @@ void add_gpu_to_set(hwloc_obj_t obj, void *set, int depth)
       hwloc_bitmap_set(gpus, get_device_id(obj, NULL));
     }
 }
-
 
 /*
  * Input: 
@@ -321,7 +578,9 @@ int get_gpus(hwloc_obj_t root, hwloc_bitmap_t gpus)
   return hwloc_bitmap_weight(gpus);
 }
 
-
+/*
+ * Get number of GPUs.
+ */
 static
 int get_num_gpus(hwloc_topology_t topo, int *gpu_type)
 {
@@ -339,6 +598,58 @@ int get_num_gpus(hwloc_topology_t topo, int *gpu_type)
   hwloc_bitmap_free(gpus); 
 
   return res; 
+}
+#endif 
+
+
+/*
+ * Input: 
+ *   root: A normal object (not numa, io, or misc object). 
+ * Output: 
+ *   gpus: The co-processors reachable from the root. 
+ */
+static
+int get_gpus(struct device **devs, int ndevs, 
+             hwloc_obj_t root, hwloc_bitmap_t gpus)
+{
+  int i; 
+  hwloc_bitmap_zero(gpus);
+
+  for (i=0; i<ndevs; i++)
+    if (devs[i]->ancestor == root->gp_index && devs[i]->type == DEV_GPU)
+      hwloc_bitmap_set(gpus, i);
+
+  return hwloc_bitmap_weight(gpus);
+}
+
+
+/* 
+ * The visible GPUs on the system have their 
+ * visible devices ID set to a non-negative integer.
+ */ 
+static 
+int get_num_gpus(struct device **devs, int ndevs)
+{
+  int i, count=0; 
+
+  for (i=0; i<ndevs; i++)
+    if (devs[i]->type == DEV_GPU)
+      count++; 
+
+  return count; 
+}
+
+
+static 
+int get_gpu_vendor(struct device **devs, int ndevs)
+{
+  int i, vendor=-1; 
+
+  for (i=0; i<ndevs; i++)
+    if (devs[i]->type == DEV_GPU)
+      vendor = devs[i]->vendor; 
+
+  return vendor; 
 }
 
 
@@ -385,7 +696,6 @@ void fill_in_buckets(int *elems, int nelems,
       }
     }
   }
-
 
 #if VERBOSE >=3
   char str[LONG_STR_SIZE];
@@ -491,113 +801,6 @@ void distrib_and_assign_pus(hwloc_bitmap_t *puset, int nobjs,
     hwloc_bitmap_free(bucket[task]); 
   }
 }
-
-
-#if 0
-struct topo_level {
-  char *name;
-  int nobjs;
-  int depth;
-  int pus_per_obj; 
-  hwloc_bitmap_t cpuset; 
-};
-
-static
-void get_level_info(hwloc_topology_t topo,
-		    hwloc_cpuset_t cpuset, int depth, 
-		    int pus_per_obj, struct topo_level *info)
-{
-  int i, nobjs, pu, count, nc; 
-  hwloc_obj_t obj;
-  char *str; 
-
-  info->cpuset = hwloc_bitmap_alloc();
-  info->name = malloc(SHORT_STR_SIZE);
-  info->nobjs = 0;
-  info->depth = depth;
-  info->pus_per_obj = pus_per_obj; 
-  str = info->name; 
-  
-  nobjs = hwloc_get_nbobjs_inside_cpuset_by_depth(topo, cpuset, depth);
-  
-  /* Get the pus for the given depth and cpuset */ 
-  for (i=0; i<nobjs; i++) {
-    obj = hwloc_get_obj_inside_cpuset_by_depth(topo, cpuset, depth, i);
-    
-    count = 0; 
-    hwloc_bitmap_foreach_begin(pu, obj->cpuset) {
-      hwloc_bitmap_set(info->cpuset, pu);
-      info->nobjs++; 
-      if (++count == pus_per_obj)
-	break;
-    } hwloc_bitmap_foreach_end(); 
-  }
-  
-  /* Get the name of the matching level */ 
-  nc = hwloc_obj_type_snprintf(str, SHORT_STR_SIZE, obj, 1);
-  if (depth == hwloc_get_type_depth(topo, HWLOC_OBJ_CORE))
-    snprintf(str+nc, SHORT_STR_SIZE-nc, "SMT%d", pus_per_obj); 
-}
-
-static
-void free_topo_levels(struct topo_level *levels, int size)
-{
-  int i;
-
-  for (i=0; i<size; i++) {
-    free(levels[i].name);
-    hwloc_bitmap_free(levels[i].cpuset); 
-  }
-
-  free(levels); 
-}
-
-/* 
- * While I can walk down the tree to find out what level 
- * is to be used for given ntasks/nthreads, I would have
- * special cases since the topology does not have SMT-2, 
- * SMT-3, etc. levels. 
- * Thus, this function creates my own level structure that 
- * I can use to manage any request uniformly. 
- */
-static
-struct topo_level* build_mapping_levels(hwloc_topology_t topo,
-					hwloc_obj_t root,
-					int *size)
-{
-  int idx, topo_depth, depth, hw_smt, smt, core_depth, nlevels;
-  struct topo_level *topo_levels; 
-
-  hw_smt = get_smt_level(topo); 
-  topo_depth = hwloc_topology_get_depth(topo);
-  core_depth = hwloc_get_type_depth(topo, HWLOC_OBJ_CORE);
-  
-  nlevels = topo_depth - root->depth;
-  if (hw_smt > 2)
-    nlevels += hw_smt - 2;
-  topo_levels = calloc(nlevels, sizeof(struct topo_level));
-  
-  /* Walk the tree starting from the root */
-  idx = 0; 
-  for (depth=root->depth; depth<topo_depth; depth++) {
-    get_level_info(topo, root->cpuset, depth, 1, topo_levels+idx); 
-    idx++; 
-
-    /* Build SMT levels starting at the Core+1 level */ 
-    if (depth == core_depth) 
-      for (smt=2; smt<hw_smt; smt++) {
-	get_level_info(topo, root->cpuset, depth, smt, topo_levels+idx);
-	idx++; 
-      }
-  }
-  
-  *size = idx; 
-  return topo_levels; 
-}
-#endif
-
-
-
 
 
 /*
@@ -728,8 +931,9 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
  *            assigned to task i. 
  */ 
 static
-void gpu_match(hwloc_obj_t root, int ntasks,
-	       hwloc_bitmap_t *gpus_pt)
+void gpu_match(struct device **devs, int ndevs, 
+               hwloc_obj_t root, int ntasks,
+	             hwloc_bitmap_t *gpus_pt)
 {
   hwloc_bitmap_t gpus;
   int i, devid, num_gpus;
@@ -737,7 +941,7 @@ void gpu_match(hwloc_obj_t root, int ntasks,
   
   /* Get the GPUs of this NUMA */
   gpus = hwloc_bitmap_alloc();
-  num_gpus = get_gpus(root, gpus);
+  num_gpus = get_gpus(devs, ndevs, root, gpus);
 #if VERBOSE >=2
   printf("Num GPUs for this NUMA domain: %d\n", num_gpus); 
 #endif
@@ -767,6 +971,7 @@ void gpu_match(hwloc_obj_t root, int ntasks,
  */
 static
 int distrib_mem_hierarchy(hwloc_topology_t topo,
+        struct device **devs, int ndevs,
 			  int ntasks, int nthreads,
 			  int gpu_optim, int smt, 
 			  int *nthreads_pt, 
@@ -830,7 +1035,7 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
       nthreads_pt[j+task_offset] = nt;
     
     /* Get the gpuset for each task assigned to this NUMA */
-    gpu_match(obj->parent, np, gpus_pt+task_offset);
+    gpu_match(devs, ndevs, obj->parent, np, gpus_pt+task_offset);
     
     task_offset+=np; 
   }
@@ -842,7 +1047,6 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
 
   return 0; 
 }
-
 
 
 #if 0
@@ -878,7 +1082,6 @@ void greedy_singleton(hwloc_topology_t topo,
 #endif 
 
 
-
 /* 
  * For jobs with less tasks than NUMA domains, 
  * assign all of the node resources even though 
@@ -890,8 +1093,10 @@ void greedy_singleton(hwloc_topology_t topo,
  * associated with a single NUMA domain. 
  */ 
 static
-int distrib_greedy(hwloc_topology_t topo, int ntasks, int *nthreads_pt, 
-		   hwloc_bitmap_t *cpus_pt, hwloc_bitmap_t *gpus_pt)
+int distrib_greedy(hwloc_topology_t topo, 
+                   struct device **devs, int ndevs,
+                   int ntasks, int *nthreads_pt, 
+		               hwloc_bitmap_t *cpus_pt, hwloc_bitmap_t *gpus_pt)
 {
   int i, task, num_numas; 
   int *numas_per_task;
@@ -931,7 +1136,7 @@ int distrib_greedy(hwloc_topology_t topo, int ntasks, int *nthreads_pt,
     hwloc_bitmap_or(cpus_pt[task], cpus_pt[task], obj->parent->cpuset);
 
     /* Get the GPUs */ 
-    get_gpus(obj->parent, gpus);
+    get_gpus(devs, ndevs, obj->parent, gpus);
     hwloc_bitmap_or(gpus_pt[task], gpus_pt[task], gpus);
 
 #if VERBOSE >= 2
@@ -960,8 +1165,9 @@ int distrib_greedy(hwloc_topology_t topo, int ntasks, int *nthreads_pt,
 /* 
  * The main mapping function. 
  */ 
-//static
+static
 int mpibind_distrib(hwloc_topology_t topo,
+        struct device **devs, int ndevs,
 		    int ntasks, int nthreads,
 		    int greedy, int gpu_optim, int smt, 
 		    int *nthreads_pt, 
@@ -982,20 +1188,21 @@ int mpibind_distrib(hwloc_topology_t topo,
 #endif  
 
   if (greedy && ntasks < num_numas) 
-    rc = distrib_greedy(topo, ntasks, nthreads_pt, cpus_pt, gpus_pt);
+    rc = distrib_greedy(topo, devs, ndevs, 
+              ntasks, nthreads_pt, cpus_pt, gpus_pt);
   else 
-    rc = distrib_mem_hierarchy(topo, ntasks, nthreads, gpu_optim, smt, 
-			       nthreads_pt, cpus_pt, gpus_pt);
+    rc = distrib_mem_hierarchy(topo, devs, ndevs, 
+              ntasks, nthreads, gpu_optim, smt, 
+			        nthreads_pt, cpus_pt, gpus_pt);
   
   return rc; 
 }
 
 
-
-
 /*********************************************
  * Public interface (non-static functions)
  *********************************************/
+
 
 /* 
  * Initialize an mpibind handle. All mpibind functions require
@@ -1024,11 +1231,16 @@ int mpibind_init(mpibind_t **handle)
   hdl->nvars = 0;
   hdl->names = NULL; 
   hdl->env_vars = NULL; 
+
+  hdl->ndevs = 0; 
+  hdl->devs = NULL; 
+  hdl->gpus_usr = NULL; 
   
   *handle = hdl;
   
   return 0; 
 }
+
 
 /* 
  * Release resources associated with the input handle.
@@ -1036,11 +1248,22 @@ int mpibind_init(mpibind_t **handle)
  */ 
 int mpibind_finalize(mpibind_t *hdl)
 {
-  int i, v;
+  int i, j, v;
   
   if (hdl == NULL)
     return 1;
 
+  /* Release user-specified GPU ID type */ 
+  if (hdl->gpus_usr != NULL) {
+    for (i=0; i<hdl->ntasks; i++) {
+      for (j=0; j<hwloc_bitmap_weight(hdl->gpus[i]); j++)
+        free(hdl->gpus_usr[i][j]);
+      free(hdl->gpus_usr[i]); 
+    }
+    free(hdl->gpus_usr); 
+  }
+
+  /* Release mapping space */ 
   for (i=0; i<hdl->ntasks; i++) {
     hwloc_bitmap_free(hdl->cpus[i]);
     hwloc_bitmap_free(hdl->gpus[i]); 
@@ -1049,7 +1272,12 @@ int mpibind_finalize(mpibind_t *hdl)
   free(hdl->gpus);
   free(hdl->nthreads);
 
+  /* Release I/O devices structure */ 
+  for (i=0; i<hdl->ndevs; i++) 
+    free(hdl->devs[i]);
+  free(hdl->devs);   
 
+  /* Release env variables space */ 
   for (v=0; v<hdl->nvars; v++) {
 #if VERBOSE >= 3
     printf("Releasing %s\n", hdl->env_vars[v].name);
@@ -1065,10 +1293,12 @@ int mpibind_finalize(mpibind_t *hdl)
   if (hdl->env_vars != NULL)
     free(hdl->env_vars);
   
+  /* Release the main structure */ 
   free(hdl);
   
   return 0; 
 }
+
 
 /* 
  * The number of processes/tasks in the job.
@@ -1083,6 +1313,7 @@ int mpibind_set_ntasks(mpibind_t *handle,
   
   return 0; 
 }
+
 
 /*
  * The number of threads per process. 
@@ -1100,6 +1331,7 @@ int mpibind_set_nthreads(mpibind_t *handle,
   
   return 0; 
 }
+
 
 /*
  * Valid values are 0 and 1. Default is 1. 
@@ -1120,6 +1352,7 @@ int mpibind_set_greedy(mpibind_t *handle,
   return 0; 
 }
 
+
 /*
  * Valid values are 0 and 1. Default is 1. 
  * If 1, optimize task placement for GPUs. 
@@ -1135,6 +1368,7 @@ int mpibind_set_gpu_optim(mpibind_t *handle,
   
   return 0; 
 }
+
 
 /*
  * Map the application workers to this SMT-level.
@@ -1153,6 +1387,7 @@ int mpibind_set_smt(mpibind_t *handle,
   return 0; 
 }
 
+
 /*
  * Restrict the hardware topology to resources
  * associated with the specified hardware ids of type 'restr_type'.
@@ -1167,6 +1402,7 @@ int mpibind_set_restrict_ids(mpibind_t *handle,
   
   return 0; 
 }
+
 
 /*
  * Specify the type of resource to use to restrict 
@@ -1186,6 +1422,7 @@ int mpibind_set_restrict_type(mpibind_t *handle,
   return 0;   
 }
 
+
 /*
  * Pass a loaded topology to mpibind. 
  * mpibind will use this topology to perform the mappings
@@ -1202,6 +1439,7 @@ int mpibind_set_topology(mpibind_t *handle,
   return 0;   
 }
 
+
 /*
  * Array with 'ntasks' elements. Each entry correspond 
  * to the number of threads to use for the process/task 
@@ -1215,6 +1453,7 @@ int* mpibind_get_nthreads(mpibind_t *handle)
   return handle->nthreads; 
 }
 
+
 /*
  * Array with 'ntasks' elements. The physical CPUs to 
  * use for a given process/task.
@@ -1227,9 +1466,27 @@ hwloc_bitmap_t* mpibind_get_cpus(mpibind_t *handle)
   return handle->cpus; 
 }
 
+
 /*
  * Array with 'ntasks' elements. The GPUs to use for a 
  * given process/task. 
+ *
+ * Get the GPU mapping. 
+ * This function returns the GPU IDs based on 
+ * mpibind's internal assignment of IDs, 
+ * rather than VISIBLE_DEVICES IDs. 
+ * To use these other type of IDs, use functions
+ * mpibind_set_gpu_ids() and mpibind_get_gpus_ptask(). 
+ * 
+ * With mpibind IDs one can obtain other type of IDs 
+ * such as VISIBLE_DEVICES or PCI BUSID. This is 
+ * really an internal function but I am making it 
+ * user visible for completeness with 
+ * mpibind_get_cpus(). In the future, I may add 
+ * another function that translates an mpibind ID 
+ * to another type of ID such as PCI BUSID, so that
+ * the user has the flexibility to translate
+ * individual IDs. 
  */
 hwloc_bitmap_t* mpibind_get_gpus(mpibind_t *handle)
 {
@@ -1237,19 +1494,70 @@ hwloc_bitmap_t* mpibind_get_gpus(mpibind_t *handle)
     return NULL;
 
   return handle->gpus; 
+
+#if 0
+  /* Example of translating mpibind IDs to 
+     VIS_DEVS IDs */ 
+  int i, val; 
+  hwloc_bitmap_t *arr = calloc(handle->ntasks, 
+                              sizeof(hwloc_bitmap_t)); 
+  for (i=0; i<handle->ntasks; i++) {
+    arr[i] = hwloc_bitmap_alloc(); 
+    hwloc_bitmap_zero(arr[i]);
+    hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
+      hwloc_bitmap_set(arr[i], handle->devs[val]->visdevs);
+	  } hwloc_bitmap_foreach_end();
+  }
+  return arr; 
+#endif
 }
 
+
 /*
- * The GPU vendor associated with the GPUs on this 
- * node: MPIBIND_GPU_TYPE_AMD or MPIBIND_GPUT_TYPE_NVIDIA. 
+ * Get a string associated with the specified 
+ * ID type for a given device. 
  */
-int mpibind_get_gpu_type(mpibind_t *handle)
+int device_key_snprint(char *buf, size_t size, 
+                        struct device *dev, int id_type)
 {
-  if (handle == NULL)
-    return -1;
-  
-  return handle->gpu_type; 
+  switch (id_type) {
+  case MPIBIND_ID_UNIV :
+    return snprintf(buf, size, "%s", dev->univ); 
+  case MPIBIND_ID_VISDEVS :
+    return snprintf(buf, size, "%d", dev->visdevs); 
+  case MPIBIND_ID_PCIBUS :
+    return snprintf(buf, size, "%s", dev->pci); 
+  case MPIBIND_ID_NAME :
+    return snprintf(buf, size, "%s", dev->name);
+  default: 
+    return -1; 
+  }
 }
+
+
+/*
+ * Get an array of strings with the GPU IDs of 
+ * the specified task. The type of ID used can 
+ * be specified by the user with 
+ * mpibind_set_gpu_ids()
+ * The default ID type is MPIBIND_ID_VISDEVS. 
+ */
+char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid, 
+                               int *ngpus)
+{
+  if (handle == NULL || taskid >= handle->ntasks || taskid < 0)
+    return NULL; 
+
+  if (handle->gpus_usr == NULL)
+    /* User hasn't called mpibind_set_gpu_ids(). 
+       Call this function with the default ID type */ 
+    mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS); 
+
+  *ngpus = hwloc_bitmap_weight(handle->gpus[taskid]); 
+
+  return handle->gpus_usr[taskid]; 
+}
+
 
 /*
  * Get the hwloc loaded topology used by mpibind so that 
@@ -1266,6 +1574,7 @@ hwloc_topology_t mpibind_get_topology(mpibind_t *handle)
   return handle->topo; 
 }
 
+
 /*
  * Get the number of tasks associated with an 
  * mpibind handle.
@@ -1277,6 +1586,7 @@ int mpibind_get_ntasks(mpibind_t *handle)
   
   return handle->ntasks; 
 }
+
 
 /*
  * Get whether or not an mpibind handle has
@@ -1290,6 +1600,7 @@ int mpibind_get_greedy(mpibind_t *handle)
   return handle->greedy; 
 }
 
+
 /*
  * Get whether or not gpu optimization has been
  * specified on an mpibind handle.
@@ -1301,6 +1612,7 @@ int mpibind_get_gpu_optim(mpibind_t *handle)
   
   return handle->gpu_optim; 
 }
+
 
 /*
  * Get the given smt setting associated with an 
@@ -1314,6 +1626,7 @@ int mpibind_get_smt(mpibind_t *handle)
   return handle->smt; 
 }
 
+
 /*
  * Get the restrict id set associated with an 
  * mpibind handle.
@@ -1326,6 +1639,7 @@ char* mpibind_get_restrict_ids(mpibind_t *handle)
   return handle->restr_set; 
 }
 
+
 /*
  * Get the restrict type associated with an 
  * mpibind handle.
@@ -1337,6 +1651,7 @@ int mpibind_get_restrict_type(mpibind_t *handle)
   
   return handle->restr_type; 
 }
+
 
 /*
  * Process the input and call the main mapping function. 
@@ -1358,7 +1673,7 @@ int mpibind_get_restrict_type(mpibind_t *handle)
  *        If smt>0 workers are always mapped to the specified SMT
  *        level regardless of the given number of threads. 
  * Output: 
- *   nthreads, cpus, gpus, and gpu_type. 
+ *   nthreads, cpus, gpus. 
  * Returns 0 on success. 
  */
 int mpibind(mpibind_t *hdl)
@@ -1388,8 +1703,22 @@ int mpibind(mpibind_t *hdl)
   if (hdl->topo == NULL) { 
     hwloc_topology_init(&hdl->topo);
     topology_load(hdl->topo);
-  } else 
+  } else {
+    /* Caller provides the hwloc topology */ 
     hwloc_topology_check(hdl->topo);
+
+    enum hwloc_type_filter_e filter;
+    hwloc_topology_get_type_filter(hdl->topo, 
+      HWLOC_OBJ_PCI_DEVICE, &filter);
+    if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT &&
+        filter != HWLOC_TYPE_FILTER_KEEP_ALL)
+      fprintf(stderr, "Warn: User topology doesn't include PCI devices\n");
+    hwloc_topology_get_type_filter(hdl->topo, 
+      HWLOC_OBJ_OS_DEVICE, &filter);
+    if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT && 
+        filter != HWLOC_TYPE_FILTER_KEEP_ALL)
+      fprintf(stderr, "Warn: User topology doesn't include OS devices\n");
+  }
 
 #if VERBOSE >= 1
   print_topo_brief(hdl->topo);
@@ -1429,9 +1758,25 @@ int mpibind(mpibind_t *hdl)
     hwloc_bitmap_free(set);
   }
 
-  /* If there's no GPUs, mapping should be CPU-guided.
-     Set the type of GPU as well */
-  gpu_optim = (get_num_gpus(hdl->topo, &hdl->gpu_type)) ? 1 : 0; 
+  /* Discover I/O devices */
+  hdl->devs = calloc(MAX_IO_DEVICES, sizeof(struct device *)); 
+  for (i=0; i<MAX_IO_DEVICES; i++)
+    hdl->devs[i] = NULL; 
+  hdl->ndevs = discover_devices(hdl->topo, hdl->devs, MAX_IO_DEVICES);
+
+#if VERBOSE >=1 
+  printf("Effective I/O devices: %d\n", hdl->ndevs); 
+  for (i=0; i<hdl->ndevs; i++) 
+    printf("[%d]: busid=%s smi=%d visdevs=%d vendor=0x%x "
+           "name=%s\n\tuuid=%s ancestor=0x%" PRIu64 "\n",
+           i, hdl->devs[i]->pci, hdl->devs[i]->smi, 
+           hdl->devs[i]->visdevs, hdl->devs[i]->vendor, 
+           hdl->devs[i]->name, hdl->devs[i]->univ,
+           hdl->devs[i]->ancestor);
+#endif
+
+  /* If there's no GPUs, mapping should be CPU-guided */
+  gpu_optim = ( get_num_gpus(hdl->devs, hdl->ndevs) ) ? 1 : 0; 
   gpu_optim &= hdl->gpu_optim;
   
   /* Allocate space to store the resulting mapping */
@@ -1446,75 +1791,149 @@ int mpibind(mpibind_t *hdl)
 #if VERBOSE >= 1
   printf("Input: tasks %d threads %d greedy %d smt %d\n",
 	 hdl->ntasks, hdl->in_nthreads, hdl->greedy, hdl->smt); 
-  printf("GPUs: number %d optim %d type %d\n",
-	 get_num_gpus(hdl->topo, NULL), gpu_optim, hdl->gpu_type);
+  printf("GPUs: number %d optim %d vendor 0x%x\n",
+	 get_num_gpus(hdl->devs, hdl->ndevs), gpu_optim, 
+   get_gpu_vendor(hdl->devs, hdl->ndevs));
 #endif 
 
   /* Calculate the mapping. 
      I could pass the mpibind handle, but using explicit 
      parameters for now. */
-  rc = mpibind_distrib(hdl->topo, hdl->ntasks, hdl->in_nthreads,
-		       hdl->greedy, gpu_optim, hdl->smt, 
-		       hdl->nthreads, hdl->cpus, hdl->gpus);
+  rc = mpibind_distrib(hdl->topo, hdl->devs, hdl->ndevs, 
+          hdl->ntasks, hdl->in_nthreads,
+		      hdl->greedy, gpu_optim, hdl->smt, 
+		      hdl->nthreads, hdl->cpus, hdl->gpus);
   
-  /* Don't clean up, because the caller may need the topology
-     to parse the resulting cpu/gpu bitmaps */ 
+  /* Don't destroy the topology, because the caller may 
+     need it to parse the resulting cpu/gpu bitmaps */ 
   //hwloc_topology_destroy(topo);
   
   return rc; 
 }
 
-/* 
- * Keep a consistent format for printing the mapping. 
- */ 
-#define OUT_FMT "mpibind: task %2d nths %2d gpus %3s cpus %s\n" 
 
 /*
- * Print the mapping for each task. 
+ * Print the mapping for a given task to a string. 
  */
-void mpibind_print_mapping(mpibind_t *handle)
+int mpibind_mapping_ptask_snprint(char *buf, size_t size, 
+                                  mpibind_t *handle, int taskid)
 {
-  int i;
-  char str1[LONG_STR_SIZE], str2[LONG_STR_SIZE];
-  
-  for (i=0; i<handle->ntasks; i++) {
-    hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[i]);
-    hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[i]);
-    printf(OUT_FMT, i, handle->nthreads[i], str2, str1); 
+  if (handle == NULL || taskid < 0 || taskid >= handle->ntasks)
+    return -1; 
+
+  int j, nc=0; 
+  /* The number of threads */ 
+  nc += snprintf(buf+nc, size-nc, "mpibind: task %2d nths %2d gpus ",
+                 taskid, handle->nthreads[taskid]); 
+
+  /* The GPUs */ 
+  if (handle->gpus_usr == NULL)
+    /* The user did not specify the type of IDs to use:
+       Use the mpibind IDs */ 
+    nc += hwloc_bitmap_list_snprintf(buf+nc, size-nc, handle->gpus[taskid]);
+  else {
+    /* Use the user-specified IDs (stored in gpus_usr) */ 
+    for (j=0; j<hwloc_bitmap_weight(handle->gpus[taskid]); j++) 
+      nc += snprintf(buf+nc, size-nc, "%s,", handle->gpus_usr[taskid][j]); 
+    if (buf[nc-1] == ',')
+      nc--; 
   }
+
+  /* The CPUs */ 
+  nc += snprintf(buf+nc, size-nc, " cpus "); 
+  nc += hwloc_bitmap_list_snprintf(buf+nc, size-nc, handle->cpus[taskid]);
+
+  return nc; 
 }
 
-/*
- * Print the mapping for a given task. 
- */
-void mpibind_print_mapping_task(mpibind_t *handle, int task)
-{
-  char str1[LONG_STR_SIZE], str2[LONG_STR_SIZE];
-
-  if (task >= 0 && task < handle->ntasks) {
-    hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[task]);
-    hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[task]);
-    printf(OUT_FMT, task, handle->nthreads[task], str2, str1); 
-  }
-}
 
 /*
  * Print the mapping to a string. 
  */ 
-int mpibind_snprint_mapping(mpibind_t *handle, char *str, size_t size)
+int mpibind_mapping_snprint(char *buf, size_t size, 
+                            mpibind_t *handle)
 {
+  if (handle == NULL)
+    return -1; 
+
   int i, nc=0;
-  char str1[LONG_STR_SIZE], str2[LONG_STR_SIZE];
   
   for (i=0; i<handle->ntasks; i++) {
-    hwloc_bitmap_list_snprintf(str1, sizeof(str1), handle->cpus[i]);
-    hwloc_bitmap_list_snprintf(str2, sizeof(str2), handle->gpus[i]);
-    nc += snprintf(str+nc, size, OUT_FMT,
-                   i, handle->nthreads[i], str2, str1);
+    nc += mpibind_mapping_ptask_snprint(buf+nc, size-nc, handle, i);
+    nc += snprintf(buf+nc, size-nc, "\n"); 
   }
+  if (nc > 0)
+    buf[--nc] = '\0';
 
   return nc; 
 } 
+
+
+/*
+ * Print the mapping. 
+ */
+void mpibind_mapping_print(mpibind_t *handle)
+{
+  if (handle == NULL)
+    return; 
+
+  char str[handle->ntasks * LONG_STR_SIZE]; 
+  mpibind_mapping_snprint(str, sizeof(str), handle);
+  printf("%s\n", str);
+}
+
+
+/*
+ * Specify the type of IDs to use when retrieving 
+ * GPUs from the mpibind mapping, e.g., MPIBIND_ID_PCIBUS.
+ * mpibind() must precede this function. The default 
+ * ID type is MPIBIND_ID_VISDEVS. 
+ * This function returns 0 on success and 1 otherwise. 
+ */
+int mpibind_set_gpu_ids(mpibind_t *handle, int id_type)
+{
+  int val, i, j, ngpus; 
+
+  if (handle == NULL || 
+      (id_type != MPIBIND_ID_NAME && 
+      id_type != MPIBIND_ID_PCIBUS &&
+      id_type != MPIBIND_ID_VISDEVS && 
+      id_type != MPIBIND_ID_UNIV))
+    return 1; 
+
+  /* If space has not been allocated, allocate space 
+     to store GPU mapping. Space should be allocated 
+     only once */ 
+  if (handle->gpus_usr == NULL) {
+    handle->gpus_usr = calloc(handle->ntasks, sizeof(char **));
+    for (i=0; i<handle->ntasks; i++) {
+      ngpus = hwloc_bitmap_weight(handle->gpus[i]); 
+      handle->gpus_usr[i] = calloc(ngpus, sizeof(char *));
+      for (j=0; j<ngpus; j++)
+        /* UUID_LEN is the largest size */ 
+        handle->gpus_usr[i][j] = calloc(UUID_LEN, sizeof(char));
+    }
+  }
+
+  for (i=0; i<handle->ntasks; i++) {
+    j = 0; 
+    hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
+      device_key_snprint(handle->gpus_usr[i][j], 
+        UUID_LEN, handle->devs[val], id_type); 
+      j++; 
+	  } hwloc_bitmap_foreach_end();
+  }    
+
+#if VERBOSE >= 2
+  for (i=0; i<handle->ntasks; i++) 
+    for (j=0; j<hwloc_bitmap_weight(handle->gpus[i]); j++)
+      printf("Task[%d] GPU[%d]: %s\n", i, j, 
+        handle->gpus_usr[i][j]);
+#endif
+
+  return 0; 
+}
+
 
 /*
  * Environment variables that need to be exported by the runtime. 
@@ -1523,16 +1942,24 @@ int mpibind_snprint_mapping(mpibind_t *handle, char *str, size_t size)
  * OMP_NUM_THREADS
  * OMP_PLACES --comma separated, each item in curly braces. 
  * OMP_PROC_BIND --spread
+ * 
+ * Todo: Use UUIDs instead of GPU indices to restrict 
+ * the topology with VISIBLE_DEVICES. I cannot 
+ * proceed because ROCR_VISIBLE_DEVICES doesn't 
+ * support UUIDs even though ROCm does: 
+ *   rocm-smi --showuniqueid --showbus
+ * CUDA_VISIBLE_DEVICES does support UUIDs. 
  */
 int mpibind_set_env_vars(mpibind_t *handle)
 {
-  int i, v, nc, val, end;
+  int i, v, nc, val, end, vendor;
   char *str;
-  int nvars = 4;
-  char *vars[] = {"OMP_NUM_THREADS",
+  const char *vars[] = {
+      "OMP_NUM_THREADS",
 		  "OMP_PLACES",
 		  "OMP_PROC_BIND",
 		  "VISIBLE_DEVICES"};
+  int nvars = sizeof(vars) / sizeof(const char *);
 
   if (handle == NULL)
     return 1; 
@@ -1540,6 +1967,8 @@ int mpibind_set_env_vars(mpibind_t *handle)
   /* Initialize/allocate env */  
   handle->nvars = nvars;
   handle->env_vars = calloc(nvars, sizeof(mpibind_env_var));
+
+  vendor = get_gpu_vendor(handle->devs, handle->ndevs); 
 
   for (v=0; v<nvars; v++) {    
     /* Fill in env_vars */ 
@@ -1556,37 +1985,41 @@ int mpibind_set_env_vars(mpibind_t *handle)
       str[0] = '\0';
 
       if ( strncmp(vars[v], "OMP_NUM_THREADS", 8) == 0 )
-	snprintf(str, LONG_STR_SIZE, "%d", handle->nthreads[i]);
+	      snprintf(str, LONG_STR_SIZE, "%d", handle->nthreads[i]);
 
       else if ( strncmp(vars[v], "OMP_PLACES", 8) == 0 ) {
-	nc = 0;
-	hwloc_bitmap_foreach_begin(val, handle->cpus[i]) {
-	  nc += snprintf(str+nc,
-			 (LONG_STR_SIZE-nc < 0) ? 0 : LONG_STR_SIZE-nc, 
-			 "{%d},", val);
-	} hwloc_bitmap_foreach_end();
+	      nc = 0;
+	      hwloc_bitmap_foreach_begin(val, handle->cpus[i]) {
+	        nc += snprintf(str+nc,
+			      (LONG_STR_SIZE-nc < 0) ? 0 : LONG_STR_SIZE-nc, 
+			      "{%d},", val);
+	      } hwloc_bitmap_foreach_end();
       }
       
       else if ( strncmp(vars[v], "OMP_PROC", 8) == 0 )  
-	snprintf(str, LONG_STR_SIZE, "spread");
+	      snprintf(str, LONG_STR_SIZE, "spread");
       
       else if ( strncmp(vars[v], "VISIBLE_DEVICES", 8) == 0 ) {
-	if (handle->gpu_type == MPIBIND_GPU_AMD)
-	  snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
-		   "ROCR_VISIBLE_DEVICES");
-	else if (handle->gpu_type == MPIBIND_GPU_NVIDIA)
-	  snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
-		   "CUDA_VISIBLE_DEVICES");
-	nc = 0; 
-	hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
-	  nc += snprintf(str+nc, LONG_STR_SIZE-nc, "%d,", val); 
-	} hwloc_bitmap_foreach_end();
+	      if (vendor == 0x1002)
+	        snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
+		        "ROCR_VISIBLE_DEVICES");
+	      else if (vendor == 0x10de)
+	        snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
+		        "CUDA_VISIBLE_DEVICES");
+	      nc = 0; 
+        /* Use the GPU's visible devices ID (visdevs), 
+           not the mpibind ID (val).
+           Todo: When AMD supports UUIDs, use UUIDs instead */ 
+	      hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
+	        nc += snprintf(str+nc, LONG_STR_SIZE-nc, "%d,", 
+                  handle->devs[val]->visdevs); 
+	      } hwloc_bitmap_foreach_end();
       }
       
       /* Strip the last comma */
       end = strlen(str) - 1; 
       if (str[end] == ',')
-	str[end] = '\0'; 
+	      str[end] = '\0'; 
     } 
   }
 
@@ -1602,7 +2035,7 @@ int mpibind_set_env_vars(mpibind_t *handle)
 }
 
 
-void mpibind_print_env_vars(mpibind_t *handle)
+void mpibind_env_vars_print(mpibind_t *handle)
 {
   int i, v; 
 
@@ -1630,6 +2063,7 @@ char** mpibind_get_env_var_values(mpibind_t *handle,
   
   return NULL; 
 }
+
 
 char** mpibind_get_env_var_names(mpibind_t *handle, int *count)
 {

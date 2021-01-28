@@ -15,10 +15,12 @@ extern "C" {
     /* Caller can restrict the topology based on CPU or MEM */
     MPIBIND_RESTRICT_CPU,
     MPIBIND_RESTRICT_MEM,
-    
-    /* The type of GPU by vendor */
-    MPIBIND_GPU_AMD,    
-    MPIBIND_GPU_NVIDIA,
+
+    /* Type of I/O ID */ 
+    MPIBIND_ID_UNIV, 
+    MPIBIND_ID_VISDEVS,
+    MPIBIND_ID_PCIBUS,
+    MPIBIND_ID_NAME,
   }; 
   
   /* Opaque mpibind handle */ 
@@ -48,7 +50,7 @@ extern "C" {
    * The number of processes/tasks in the job.
    */ 
   int mpibind_set_ntasks(mpibind_t *handle,
-			 int ntasks);
+	      int ntasks);
   
   /* 
    * Optional input parameters 
@@ -60,7 +62,7 @@ extern "C" {
    * (see mpibind_get_nthreads). 
    */ 
   int mpibind_set_nthreads(mpibind_t *handle,
-			   int nthreads);
+	      int nthreads);
   /*
    * Valid values are 0 and 1. Default is 1. 
    * If 1 and the number of tasks is less than the number of 
@@ -70,14 +72,14 @@ extern "C" {
    * (and associated resources) per task. 
    */ 
   int mpibind_set_greedy(mpibind_t *handle,
-			 int greedy);
+	      int greedy);
   /*
    * Valid values are 0 and 1. Default is 1. 
    * If 1, optimize task placement for GPUs. 
    * Otherwise, optimize placement for CPUs. 
    */  
   int mpibind_set_gpu_optim(mpibind_t *handle,
-			    int gpu_optim);
+			  int gpu_optim);
   /*
    * Map the application workers to this SMT-level.
    * For an n-way SMT architecture, valid values are 1 to n.
@@ -85,13 +87,13 @@ extern "C" {
    * appropriately based on the number of input workers. 
    */    
   int mpibind_set_smt(mpibind_t *handle,
-		      int smt);
+		    int smt);
   /*
    * Restrict the hardware topology to resources
    * associated with the specified hardware ids of type 'restr_type'.
    */
   int mpibind_set_restrict_ids(mpibind_t *handle,
-			       char *restr_set);
+			  char *restr_set);
   /*
    * Specify the type of resource to use to restrict 
    * the hardware topology: MPIBIND_RESTRICT_CPU or 
@@ -105,6 +107,8 @@ extern "C" {
    * Pass a loaded topology to mpibind. 
    * mpibind will use this topology to perform the mappings
    * instead of loading its own topology. 
+   * Call this function after mpibind_init() and
+   * before mpibind(). 
    */
   int mpibind_set_topology(mpibind_t *handle,
 			   hwloc_topology_t topo);
@@ -117,39 +121,42 @@ extern "C" {
   int mpibind(mpibind_t *handle);
 
   /* 
-   * Output: The mapping policy.
+   * Output: The mapping of workers to the hardware.
    * Asssign CPUs, GPUs, and number of threads to each 
    * task/process in the job. 
    * These output functions should only be called after 
-   * a call to the main 'mpibind' function. 
+   * mpibind(). 
    */
   /*
-   * Array with 'ntasks' elements. Each entry correspond 
-   * to the number of threads to use for the process/task 
-   * corresponding to this entry. 
+   * Return an array with 'ntasks' elements. 
+   * Each entry correspond to the number of threads to use 
+   * for the process/task corresponding to this entry. 
    */ 
   int* mpibind_get_nthreads(mpibind_t *handle);
   /*
-   * Array with 'ntasks' elements. The physical CPUs to 
-   * use for a given process/task.
+   * Return an array with 'ntasks' elements. 
+   * The physical CPUs to use for a given process/task.
    */ 
   hwloc_bitmap_t* mpibind_get_cpus(mpibind_t *handle);
   /*
-   * Array with 'ntasks' elements. The GPUs to use for a 
-   * given process/task. 
+   * Return an array with the GPUs assigned to the 
+   * given task. The size of the array is set in 'ngpus'. 
+   */
+  char** mpibind_get_gpus_ptask(mpibind_t *handle, 
+          int taskid, int *ngpus); 
+  /*
+   * Return an array with 'ntasks' elements. 
+   * The GPUs to use for a given process/task. 
+   * The GPU IDs use mpibind's device IDs 
+   * (as opposed to VISIBLE_DEVICES IDs). 
    */
   hwloc_bitmap_t* mpibind_get_gpus(mpibind_t *handle);
-  /*
-   * The GPU vendor associated with the GPUs on this 
-   * node: MPIBIND_GPU_AMD or MPIBIND_GPU_NVIDIA. 
-   */
-  int mpibind_get_gpu_type(mpibind_t *handle);
   /*
    * Get the hwloc loaded topology used by mpibind so that 
    * callers can continue to use it even after mpibind has
    * been finalized. This call, however, must be called 
    * before mpibind_finalize. This also means that the caller
-   * is responsible for unloading/freeing the topology. 
+   * is responsible for destroying the topology. 
    */
   hwloc_topology_t mpibind_get_topology(mpibind_t *handle); 
 
@@ -159,17 +166,27 @@ extern "C" {
   /*
    * Print the mapping for each task. 
    */
-  void mpibind_print_mapping(mpibind_t *handle);
+  void mpibind_mapping_print(mpibind_t *handle);
   /* 
    * Print the mapping for a given task.
    */
-  void mpibind_print_mapping_task(mpibind_t *handle, int task);
+  int mpibind_mapping_ptask_snprint(char *buf, size_t size, 
+        mpibind_t *handle, int taskid);
   /*
    * Print the mapping for each task to a string. 
    * Returns the number of characters printed to the string. 
    */
-  int mpibind_snprint_mapping(mpibind_t *handle,
-                              char *str, size_t size);
+  int mpibind_mapping_snprint(char *str, size_t size,
+        mpibind_t *handle);
+  /*
+   * Set the type of GPU IDs. 
+   * The different types are above and include
+   * MPIBIND_ID_PCI and MPIBIND_ID_VISDEVS. 
+   * Call this function before mpibind_get_gpus_ptask() or
+   * mpibind_mapping*print() to get the updated IDs. 
+   */ 
+  int mpibind_set_gpu_ids(mpibind_t *handle, 
+        int id_type); 
   /*
    * Environment variables that need to be exported by the runtime. 
    * CUDA_VISIBLE_DEVICES --comma separated 
@@ -187,7 +204,7 @@ extern "C" {
    * mpibind_set_env_vars must be called before this function
    * is executed. 
    */
-  void mpibind_print_env_vars(mpibind_t *handle);  
+  void mpibind_env_vars_print(mpibind_t *handle);  
   /*
    * For each task, return the value of a given env 
    * variable (name). The output array has size 'ntasks'. 
