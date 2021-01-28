@@ -99,11 +99,17 @@ void check_mapping(mpibind_t *handle, mpibind_test_out_t *expected) {
   char thread_map_info[BUF_SIZE] = {'\0'};
   char cpu_map_info[BUF_SIZE] = {'\0'};
   char gpu_map_info[BUF_SIZE] = {'\0'};
+  char **gpus; int j, ngpus; 
 
   hwloc_bitmap_t* cpus = mpibind_get_cpus(handle);
-  hwloc_bitmap_t* gpus = mpibind_get_gpus(handle);
+  // This function uses mpibind-based GPU IDs and 
+  // check_mapping requires VISIBLE_DEVICES IDs. 
+  //hwloc_bitmap_t* gpus = mpibind_get_gpus(handle);
   int* threads = mpibind_get_nthreads(handle);
   int num_tasks = mpibind_get_ntasks(handle);
+
+  /* Use VISIBLE_DEVICES IDs for the GPU mapping */ 
+  mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS);
 
   // Concat string array into single string
   int i = 0;
@@ -112,8 +118,14 @@ void check_mapping(mpibind_t *handle, mpibind_test_out_t *expected) {
             threads[i]);
     hwloc_bitmap_list_snprintf(cpu_map_info + strlen(cpu_map_info),
                                sizeof(cpu_map_info), cpus[i]);
-    hwloc_bitmap_list_snprintf(gpu_map_info + strlen(gpu_map_info),
-                               sizeof(gpu_map_info), gpus[i]);
+    //hwloc_bitmap_list_snprintf(gpu_map_info + strlen(gpu_map_info),
+    //                           sizeof(gpu_map_info), gpus[i]);
+    gpus = mpibind_get_gpus_ptask(handle, i, &ngpus); 
+    for (j=0; j<ngpus; j++) {
+      strcat(gpu_map_info, gpus[j]);
+      if (j < ngpus-1)
+        strcat(gpu_map_info, ","); 
+    }
 
     // Separate entries with the specified separator
     if (++i != num_tasks) {
@@ -322,14 +334,17 @@ mpibind_test_in_t **generate_test_information(hwloc_topology_t topo) {
   return tests;
 }
 
-/** load an xml file into a topology **/
+/** Load an xml file into a topology **/
 void load_topology(hwloc_topology_t *topo, char *xml_file) {
   hwloc_topology_init(topo);
   if (hwloc_topology_set_xml(*topo, xml_file) < 0)
     perror("Failed to set topology");
-  hwloc_topology_set_all_types_filter(*topo, HWLOC_TYPE_FILTER_KEEP_STRUCTURE);
+  hwloc_topology_set_all_types_filter(*topo, 
+      HWLOC_TYPE_FILTER_KEEP_STRUCTURE);
   hwloc_topology_set_type_filter(*topo, HWLOC_OBJ_OS_DEVICE,
-                                 HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
+      HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
+  hwloc_topology_set_type_filter(*topo, HWLOC_OBJ_PCI_DEVICE,
+      HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
   hwloc_topology_load(*topo);
 }
 
