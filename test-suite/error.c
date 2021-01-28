@@ -45,8 +45,8 @@ int test_null_handle() {
      "mpibind_get_cpus returns NULL when handle == NULL");
   ok(mpibind_get_gpus(handle) == NULL,
      "mpibind_get_gpus returns NULL when handle == NULL");
-  ok(mpibind_get_gpu_type(handle) == -1,
-     "mpibind_get_gpu_type returns NULL when handle == NULL");
+  //ok(mpibind_get_gpu_type(handle) == -1,
+  //   "mpibind_get_gpu_type returns NULL when handle == NULL");
   ok(mpibind_get_topology(handle) == NULL,
      "mpibind_get_topology returns NULL when handle == NULL");
   ok(mpibind_get_env_var_values(handle, NULL) == NULL,
