@@ -5,6 +5,77 @@
 #include "mpibind.h"
 
 
+/* 
+ * Show the GPU mapping using various ID types. 
+ */ 
+void howto_gpu_ids(mpibind_t *handle)
+{
+  char **gpu_str; 
+  char str[128];
+  int i, j, k, ngpus;
+  int ids[] = {MPIBIND_ID_PCIBUS, MPIBIND_ID_UNIV,
+               MPIBIND_ID_VISDEVS, MPIBIND_ID_NAME}; 
+  char *desc[] = { "PCI", "UUID", "VISDEVS", "NAME"};
+  int ntasks = mpibind_get_ntasks(handle);
+
+  for (k=0; k<sizeof(ids)/sizeof(int); k++) {
+    /* Set the desired type of GPU ID */ 
+    mpibind_set_gpu_ids(handle, ids[k]); 
+    printf("GPU IDs using %s\n", desc[k]);
+    /* Get the IDs per task */ 
+    for (i=0; i<ntasks; i++) {
+      printf("\tTask %d: ", i);
+      gpu_str = mpibind_get_gpus_ptask(handle, i, &ngpus);
+      for (j=0; j<ngpus; j++) {
+        printf("%s", gpu_str[j]);
+        printf( (j == ngpus-1) ? "\n" : "," ); 
+      }
+    }
+  }
+
+  /* For reference, show mpibind device IDs */ 
+  hwloc_bitmap_t *gpus = mpibind_get_gpus(handle);
+  printf("GPU IDs using mpibind numbering\n");
+  for (i=0; i<ntasks; i++) {
+    hwloc_bitmap_list_snprintf(str, sizeof(str), gpus[i]); 
+    printf("\tTask %d: %s\n", i, str); 
+  }  
+}
+
+
+/* 
+ * Show how to extract and use certain environment 
+ * variables related to affinity. 
+ */ 
+void howto_env_vars(mpibind_t *handle)
+{
+  /* Set the environment variables first */ 
+  mpibind_set_env_vars(handle);
+
+#if 0
+  /* Take a comprehensive look */ 
+  mpibind_env_vars_print(handle);
+#else
+  int i, nvars; 
+  char **names;
+  char **values; 
+  int ntasks = mpibind_get_ntasks(handle);
+
+  /* Get the names of the environment variables */ 
+  names = mpibind_get_env_var_names(handle, &nvars);
+  printf("Environment variables:\n");
+  for (i=0; i<nvars; i++)
+    printf("\t%s\n", names[i]);
+
+  values = mpibind_get_env_var_values(handle, names[nvars-1]);
+  printf("%s:\n", names[nvars-1]);
+  for (i=0; i<ntasks; i++)
+    printf("\t[%d]: %s\n", i, values[i]); 
+#endif
+}
+
+
+
 int main(int argc, char *argv[])
 {
   mpibind_t *handle;
@@ -16,8 +87,8 @@ int main(int argc, char *argv[])
   int ntasks = 5; 
   mpibind_set_ntasks(handle, ntasks);
   //mpibind_set_nthreads(handle, 3);
-  mpibind_set_greedy(handle, 0);
-  mpibind_set_gpu_optim(handle, 0);
+  //mpibind_set_greedy(handle, 0);
+  //mpibind_set_gpu_optim(handle, 0);
   //mpibind_set_smt(handle, 4);
   //params.restr_type = MEM; 
   //  mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
@@ -31,26 +102,19 @@ int main(int argc, char *argv[])
   if ( mpibind(handle) )
     return 1;
   
-  /* Get the topology so I can use it to parse the hwloc_bitmaps */ 
+  /* Get the hwloc topology to parse the hwloc_bitmaps */ 
   topo = mpibind_get_topology(handle); 
-  
+
   /* Verbose mapping */ 
-  mpibind_print_mapping(handle); 
+  //Specify the type of GPU IDs to use
+  //mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS);
+  mpibind_mapping_print(handle); 
 
-  /* Play with the env vars I would set */ 
-  mpibind_set_env_vars(handle);
-
-  /* Take a quick look */ 
-  //mpibind_print_env_vars(handle);
-
-  /* Extract the values of the env vars */ 
-  int i, nvars; 
-  char **var_names = mpibind_get_env_var_names(handle, &nvars);
-  char **values = mpibind_get_env_var_values(handle, var_names[nvars-1]);
-  for (i=0; i<nvars; i++)
-    printf("var[%d]: %s\n", i, var_names[i]);
-  for (i=0; i<ntasks; i++)
-    printf("%s[%d]: %s\n", var_names[nvars-1], i, values[i]); 
+  /* Example using various GPU IDs */ 
+  howto_gpu_ids(handle);
+  
+  /* Example using affinity environment variables */ 
+  howto_env_vars(handle);
   
   /* Clean up */ 
   mpibind_finalize(handle);
