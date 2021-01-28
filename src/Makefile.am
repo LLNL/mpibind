@@ -8,6 +8,7 @@ lib_LTLIBRARIES       = libmpibind.la
 
 libmpibind_la_SOURCES = \
     mpibind.c  mpibind-priv.h \
+    internals.c \
     hwloc_utils.c hwloc_utils.h
 
 include_HEADERS       = mpibind.h
