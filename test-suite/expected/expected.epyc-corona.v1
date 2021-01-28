@@ -16,14 +16,14 @@ Map one task to every core
 Map 1 task greedily
 "96"
 "0-95"
-"0,1,2,3"
+"0-3"
 
 
 # 3: Map two tasks greedily
 Map two tasks greedily
 "48;48"
 "0-23,48-71;24-47,72-95"
-"0,1;2,3"
+"0-1;2-3"
 
 # 4:
 Mapping such that ntasks < #NUMA nodes but nworkers > #NUMA nodes
@@ -41,21 +41,21 @@ Restrict x tasks a single core (x == machine's smt level)
 Map two tasks at SMT 1
 "48;48"
 "0-23,48-71;24-47,72-95"
-"0,1;2,3"
+"0-1;2-3"
 
 
 # 7:
 Map 2 tasks at max smt (across all cores)
 "48;48"
 "0-23,48-71;24-47,72-95"
-"0,1;2,3"
+"0-1;2-3"
 
 
 # 8:
 Map tasks at max smt-1
 "48;48"
 "0-23,48-71;24-47,72-95"
-"0,1;2,3"
+"0-1;2-3"
 
 
 # 9:
