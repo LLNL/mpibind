@@ -19,6 +19,12 @@
  *   (verbose=1).
  *   mpibind_set_gpu_ids(hdl, MPIBIND_ID_VISDEVS);
  * 
+ * test-suite: 
+ *   On Mac, the test-suite does not run succesfully
+ *   because the full path of the libtap library 
+ *   is not present in the library dependencies 
+ *   of the binary. 
+ * 
  * github repo: 
  *   Tag mpibind versions. Look at the commit history
  *   to write the release notes. 
