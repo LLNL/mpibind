@@ -14,11 +14,6 @@
 /*
  * Todo list: 
  * 
- * Flux plugin:
- *   Use VISDEVS id for printing the mapping 
- *   (verbose=1).
- *   mpibind_set_gpu_ids(hdl, MPIBIND_ID_VISDEVS);
- * 
  * test-suite: 
  *   On Mac, the test-suite does not run succesfully
  *   because the full path of the libtap library 

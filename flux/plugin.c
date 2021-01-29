@@ -484,6 +484,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     /* Can't print to stdout within the Flux shell environment */ 
     //mpibind_print_mapping(mph);
     char outbuf[LONG_STR_SIZE]; 
+    /* Use VISIBLE_DEVICES IDs to enumerate the GPUs
+       since users are used to this enumeration 
+       (as opposed to mpibind's enumeration) */ 
+    mpibind_set_gpu_ids(mph, MPIBIND_ID_VISDEVS);
     mpibind_mapping_snprint(outbuf, LONG_STR_SIZE, mph);
     shell_log("\n%s", outbuf);
   }
