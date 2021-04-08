@@ -75,7 +75,7 @@ gpu.cpp: gpu.cu
 
 
 clean:
-	rm -f *.o *~ $(PROGS)
+	rm -f *.o *~ $(PROGS) gpu.cpp
 
 
 

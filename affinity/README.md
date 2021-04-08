@@ -92,13 +92,13 @@ information, the user needs to set an environment variable.
 
 ```
 # Build with CPU support
-$ make
+$ make -f makefile.mk
 
 # Build with support for AMD GPUs
-$ HAVE_AMD_GPUS=1 make 
+$ HAVE_AMD_GPUS=1 make -f makefile.mk 
 
 # Build with support for NVIDIA GPUs
-$ HAVE_NVIDIA_GPUS=1 make 
+$ HAVE_NVIDIA_GPUS=1 make -f makefile.mk
 ```
 
 To build with AMD GPU support, the ROCm environment must be
