@@ -1,7 +1,10 @@
-# Mpibind Tests
+# mpibind tests
 
-
-The current iteration of the test suite is designed to generate a set of tests based on a given topology, then compare the resultant mappings to a file that defines expected output. Generating the tests involving gathering basic information about a topology, and using that information to tweak each test to be suitable for the topology.
+The current iteration of the test suite is designed to generate a set of tests
+based on a given topology, then compare the resultant mappings to a file that
+defines expected output (see `expected` directory). Generating the tests
+involves gathering basic information about a topology, and using that
+information to tweak each test to be suitable for the topology.
 
 An example of the answers file is below:
 
@@ -31,9 +34,14 @@ Map two tasks greedily
 
 ```
 
-The first non-blank, non-commented line in the answer file is the number of tests in the file. After that, each answer consists of four line: a description, the expected thread mapping, the expected cpu mapping, and the expected gpu_mapping for the tasks of a given mpibind run. Each of the 4 lines are wrapped in quotes. These strings are directly compared to the output of mpibind when given the corresponding input parameters.
+The first non-blank, non-commented line in the answer file is the number of
+tests in the file. After that, each answer consists of four lines: a
+description, the expected number of threads, the expected CPU mapping, and
+the expected GPU mapping for the tasks of a given mpibind run. Each of the 4
+lines are wrapped in quotes. These strings are directly compared to the output
+of mpibind when given the corresponding input parameters.
 
-## Test Details
+## Test details
 
 1. Valid mpibind configurations
     * Map one task to every core
@@ -55,3 +63,16 @@ The first non-blank, non-commented line in the answer file is the number of test
 3. Environment Varibles
     * Check that AMD and NVIDIA gpus can be properly detected
     * Check that the OMP_PLACES variable is formatted correctly
+
+## Debugging 
+
+The tests are fired off by running `make check` from the top directory. One can
+use `V=1` to show the verbose compilation lines and `VERBOSE=1` to show any
+libtap error(s). 
+```
+make V=1 VERBOSE=1 check 
+```
+
+The <test>.t files are libtool scripts that call the `.libs/<test>.h` binaries. 
+
+The expected mappings are in the `expected` directory. 
