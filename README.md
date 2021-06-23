@@ -6,9 +6,9 @@ efficiently, and portably. Unlike other mappings, its primary design point
 is the memory system, including the cache hierarchy. Compute elements
 are selected based on a memory mapping and not vice versa. In
 addition, *mpibind* embodies a global awareness of hybrid programming
-abstractions as well as heterogeneous devices such as accelerators.
+abstractions as well as heterogeneous systems with accelerators.
 
-### Getting Started
+### Getting started
 
 This project uses GNU Autotools.
 
@@ -22,7 +22,20 @@ $ make
 $ make install
 ```
 
-The resulting library is `libmpibind` and a simple program using it is `src/main.c`
+The resulting library is `<install_dir>/lib/libmpibind` and a simple program using it is `src/main.c`
+
+### Test suite 
+
+```
+$ make check
+```
+
+### Dependencies 
+
+* The build system uses the `GNU Autotools`. 
+* mpibind relies on `hwloc` version 2 for topology discovery. 
+* `libtap` is required to build the test suite. 
+* `flux-core` is required to build the Flux plugin. 
 
 
 ### Contributing
