@@ -527,8 +527,108 @@ void fill_in_buckets_bitmap(hwloc_bitmap_t elems,
 }
 
 
+/*
+ * Given a number of objects (nobjs), their cpus (puset), and 
+ * a number of tasks, distribute the objects among the tasks. 
+ * Each task is assigned the number of cpus indicated by pus_per_obj. 
+ * 
+ * Updated this function to consider the special case when 
+ * nobjs < ntasks. Orignally, two or more tasks would be assigned 
+ * the same object, e.g., a core. But, since a core usually has 
+ * several PUs, then we can distribute the PUs among the tasks 
+ * rather than assigning the same PUs to both. For example, 
+ * Originally: 
+ *   task 0 -> 0,1 CPUs (core 0)
+ *   task 1 -> 0,1 CPUs (core 0)
+ *   task 2 -> 2,3 CPUs (core 1)
+ * New algorithm: 
+ *   task 0 -> 0 
+ *   task 1 -> 1
+ *   task 2 -> 2,3
+ */ 
 static
 void distrib_and_assign_pus(hwloc_bitmap_t *puset, int nobjs,
+			    int pus_per_obj,
+			    hwloc_bitmap_t *cpus, int ntasks)
+{
+  int i, j, curr; 
+  hwloc_bitmap_t puset_rev[nobjs]; 
+
+  /* First, create the revised subset of pus for each object
+     based on pus_per_obj */ 
+  for (j=0; j<nobjs; j++) {
+    puset_rev[j] = hwloc_bitmap_alloc();
+    curr=-1;
+    for (i=0; i<pus_per_obj; i++) {
+	    curr = hwloc_bitmap_next(puset[j], curr); 
+	    hwloc_bitmap_set(puset_rev[j], curr); 
+    }
+  }
+#if VERBOSE >=2
+  char str[100];
+  for (i=0; i<nobjs; i++) {
+    hwloc_bitmap_list_snprintf(str, sizeof(str), puset_rev[i]);
+    printf("puset_rev[%d]: %s\n", i, str);
+  }  
+#endif
+
+  if (nobjs < ntasks) {
+    /* Two or more tasks share an object (e.g., core). 
+       In this case, distribute the object's PUs over the tasks. */ 
+    int ntasks_per_obj[nobjs];
+    distrib(ntasks, nobjs, ntasks_per_obj);
+    // Print 
+#if VERBOSE >= 2
+    print_array(ntasks_per_obj, nobjs, "ntasks_per_obj");
+#endif 
+
+    // Distribute the pus over tasks 
+    j = 0; 
+    for (i=0; i<nobjs; i++) { 
+      fill_in_buckets_bitmap(puset_rev[i], cpus+j, ntasks_per_obj[i]);
+      j += ntasks_per_obj[i]; 
+    }
+#if VERBOSE >= 2
+    for (i=0; i<ntasks; i++) {
+      hwloc_bitmap_list_snprintf(str, sizeof(str), cpus[i]);
+      printf("cpus[%d]: %s\n", i, str);
+    }
+#endif 
+  } else {
+    // Original distrib_and_assign_pus 
+    hwloc_bitmap_t objs = hwloc_bitmap_alloc();
+    hwloc_bitmap_set_range(objs, 0, nobjs-1);
+
+    hwloc_bitmap_t objs_per_task[ntasks]; 
+    for (i=0; i<ntasks; i++)
+      objs_per_task[i] = hwloc_bitmap_alloc(); 
+
+    /* Distribute the objects among the tasks */ 
+    fill_in_buckets_bitmap(objs, objs_per_task, ntasks);
+    hwloc_bitmap_free(objs); 
+
+    /* Assign pus_per_obj pus to each task rather than 
+       all the pus of each object */ 
+    int obj, task;
+    for (task=0; task<ntasks; task++) {
+      /* Get the PU set for each object associated with this task */ 
+      hwloc_bitmap_foreach_begin(obj, objs_per_task[task]) {
+        hwloc_bitmap_or(cpus[task], puset_rev[obj], cpus[task]); 
+      } hwloc_bitmap_foreach_end();
+    
+      hwloc_bitmap_free(objs_per_task[task]); 
+    }
+  }
+
+  // Free up resources 
+  for (i=0; i<nobjs; i++)
+    hwloc_bitmap_free(puset_rev[i]);   
+}
+
+
+#if 0
+static
+void distrib_and_assign_pus_v1(hwloc_bitmap_t *puset, int nobjs,
 			    int pus_per_obj,
 			    hwloc_bitmap_t *cpus, int ntasks)
 {
@@ -542,22 +642,25 @@ void distrib_and_assign_pus(hwloc_bitmap_t *puset, int nobjs,
   for (i=0; i<ntasks; i++)
     bucket[i] = hwloc_bitmap_alloc(); 
 
+  /* Distribute the objects among the tasks */ 
   fill_in_buckets_bitmap(objs, bucket, ntasks);
 
+  /* Assign pus_per_obj cpus to each task rather than 
+     all the pus of each object */ 
   for (task=0; task<ntasks; task++) {
     /* Get the PU set for each object associated with this task */ 
     hwloc_bitmap_foreach_begin(obj, bucket[task]) {
       curr=-1;
       for (i=0; i<pus_per_obj; i++) {
-	curr = hwloc_bitmap_next(puset[obj], curr); 
-	hwloc_bitmap_set(cpus[task], curr); 
+	      curr = hwloc_bitmap_next(puset[obj], curr); 
+	      hwloc_bitmap_set(cpus[task], curr); 
       }
     } hwloc_bitmap_foreach_end();
     
     hwloc_bitmap_free(bucket[task]); 
   }
 }
-
+#endif 
 
 /* 
  * Get the Hardware SMT level. 
@@ -656,13 +759,13 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
       /* Get the cpu sets of each object in this level */
       cpuset = calloc(nobjs, sizeof(hwloc_bitmap_t));
       for (i=0; i<nobjs; i++) {
-	obj = hwloc_get_obj_inside_cpuset_by_depth(topo, root->cpuset,
+	      obj = hwloc_get_obj_inside_cpuset_by_depth(topo, root->cpuset,
 						   depth, i);
-	cpuset[i] = hwloc_bitmap_dup(obj->cpuset);
+	      cpuset[i] = hwloc_bitmap_dup(obj->cpuset);
 #if VERBOSE >= 1
 	/* Save the object type */ 
-	if (i == 0)
-	  hwloc_obj_type_snprintf(str, sizeof(str), obj, 1);
+	      if (i == 0)
+	        hwloc_obj_type_snprintf(str, sizeof(str), obj, 1);
 #endif
       }
       
@@ -670,15 +773,16 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
       pus_per_obj = 1;
       /* Determine SMT level */ 
       if (usr_smt)
-	pus_per_obj = usr_smt;
+	      pus_per_obj = usr_smt;
       else if (depth == core_depth)
-	for (i=1; i<=hw_smt; i++)
-	  if (nobjs*i >= nwks || i==hw_smt) {
-	    pus_per_obj = i;
-	    break;
-	  }
-
+	      for (i=1; i<=hw_smt; i++)
+	        if (nobjs*i >= nwks || i==hw_smt) {
+	          pus_per_obj = i;
+	          break;
+	        }
+ 
       distrib_and_assign_pus(cpuset, nobjs, pus_per_obj, cpus, ntasks);  
+      //distrib_and_assign_pus_v1(cpuset, nobjs, pus_per_obj, cpus, ntasks);  
 
       /* Verbose */
 #if VERBOSE >= 1
@@ -688,7 +792,7 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
       
       /* Clean up */ 
       for (i=0; i<nobjs; i++)
-	hwloc_bitmap_free(cpuset[i]);
+	      hwloc_bitmap_free(cpuset[i]);
       free(cpuset);
       
       break; 
