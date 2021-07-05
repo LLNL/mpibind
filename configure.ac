@@ -1,6 +1,6 @@
 ## Prologue
-# Todo: Derive version automatically from git stable release tag
-AC_INIT([mpibind], [0.1.0])
+AC_INIT([mpibind],
+	m4_esyscmd_s([git describe --tags | sed s/^v//]))
 AC_CONFIG_MACRO_DIRS([config])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADERS([config/config.h])
