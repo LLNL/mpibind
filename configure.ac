@@ -31,6 +31,17 @@ AC_PROG_AWK
 AC_PROG_LN_S
 AC_PROG_MKDIR_P
 
+# Define the host type variable: host
+# And its parts: host_cpu, host_vendor, and host_os.
+AC_CANONICAL_HOST
+#AC_MSG_NOTICE([$host: $host_cpu, $host_vendor, $host_os])
+
+case "${host_os}" in
+    darwin*) darwin_os=true ;;
+esac
+AM_CONDITIONAL([HAVE_DARWIN_OS], [test x$darwin_os = xtrue])
+
+
 # hwloc 
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
 

@@ -14,14 +14,15 @@ cts1_quartz_t_SOURCES = cts1-quartz.c test_utils.c test_utils.h
 error_t_SOURCES = error.c test_utils.c test_utils.h
 environment_t_SOURCES = environment.c test_utils.c test_utils.h
 
-# Fix to make tests work on macOS.
-# Todo: Make this conditional on 'darwin' platform. 
-# Must terminate with a semicolon. 
-#AM_TESTS_ENVIRONMENT = \
-#	echo "Executing dylib fix for `echo $@ | sed 's/\.log/\.t/'`"; \
-#	install_name_tool -change libtap.dylib \
-#	$(TAP_LIBDIR)/libtap.dylib .libs/`echo $@ | sed 's/\.log/\.t/'`;
-
+# Fix to make tests work on macOS:
+#  The tap library path is not set correctly in the executable. 
+# Statement must terminate with a semicolon.
+if HAVE_DARWIN_OS
+AM_TESTS_ENVIRONMENT = \
+	echo "Executing dylib fix for `echo $@ | sed 's/\.log/\.t/'`"; \
+	install_name_tool -change libtap.dylib \
+	$(TAP_LIBDIR)/libtap.dylib .libs/`echo $@ | sed 's/\.log/\.t/'`;
+endif
 
 if HAVE_LIBTAP
 TESTS = \
