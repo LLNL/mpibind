@@ -64,16 +64,18 @@ AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 #   [AC_MSG_NOTICE([TAP's libdir not found])]
 # )
 
+# No need to check for Flux anymore since Flux
+# should install the plugin rather than mpibind. 
 # flux-core
-PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
-  fluxcore=true
-  flux_shell_plugin_dir=`$PKG_CONFIG --variable=libdir flux-core`
-  flux_shell_plugin_dir+=/flux/shell/plugins
-  AC_SUBST(FLUX_SHELL_PLUGIN_DIR, $flux_shell_plugin_dir)
-  ],
-  [AC_MSG_NOTICE([Flux plugin will not be built])]
-)
-AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
+#PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
+#  fluxcore=true
+#  flux_shell_plugin_dir=`$PKG_CONFIG --variable=libdir flux-core`
+#  flux_shell_plugin_dir+=/flux/shell/plugins
+#  AC_SUBST(FLUX_SHELL_PLUGIN_DIR, $flux_shell_plugin_dir)
+#  ],
+#  [AC_MSG_NOTICE([Flux plugin will not be built])]
+#)
+#AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 
 # Notes 
 # AC_DEFINE([HAVE_LIBTAP], 1, [Define libtap to build the test suite])
