@@ -135,22 +135,6 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
   return 0;
 }
 
-
-/* 
- * Apply mpibind affinity for task `taskid`
- */
-static
-int mpibind_apply(mpibind_t *mph, int taskid)
-{
-  hwloc_bitmap_t *core_sets = mpibind_get_cpus(mph);
-  hwloc_topology_t topo = mpibind_get_topology(mph);
-  
-  if (hwloc_set_cpubind(topo, core_sets[taskid], 0) < 0)
-    shell_log_errno("hwloc_set_cpubind");
-  
-  return 0;
-}
-
 /*
  * Printing mpibind's mapping: 
  * To get rid of the shell_log() prefix, e.g., 
