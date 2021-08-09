@@ -1,39 +1,48 @@
 # Line that start with a pound are comments!
-# The first non-commented line should be the number of tests.
-# After the number of tests, each answer description consist of 4 lines:
-# The test description, the thread mapping, the cpu mapping, and the
-# gpu_mapping.The mapping for each task is separated by a defined character.
+# Each answer description consist of 6 lines:
+# 1. A comment with the test number
+# 2. A comment describing the parameters used for the test in JSON format
+# 3. The test description
+# 4. the thread mapping
+# 5. the cpu mapping
+# 6. the gpu_mapping
+# The mapping for each task is separated by a defined character.
 # This separator can be changed in test_utils.c::parse_answer()
 
 
-# 1: Map one task to every core
+# 1:
+# {"params": {"ntasks": 36, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": null, "restrict_type": 0}}
 Map one task to every core
 "1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1"
 "0;1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30;31;32;33;34;35"
 ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 
 
-# 2: Map 1 task greedily
-Map 1 task greedily
+# 2:
+# {"params": {"ntasks": 1, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": null, "restrict_type": 0}}
+Map one task greedily
 "36"
 "0-35"
 ""
 
 
-# 3: Map two tasks greedily
+# 3:
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": null, "restrict_type": 0}}
 Map two tasks greedily
 "18;18"
 "0-17;18-35"
 ";"
 
 # 4:
-Mapping such that ntasks < #NUMA nodes but nworkers > #NUMA nodes
+# {"params": {"ntasks": 1, "in_nthreads": 4, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": null, "restrict_type": 0}}
+Map such that ntasks < #NUMA nodes but nworkers > #NUMA nodes
 "36"
 "0-35"
 ""
 
 
 # 5:
+# {"params": {"ntasks": 1, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": "0", "restrict_type": 0}}
 Restrict x tasks a single core (x == machine's smt level)
 "1"
 "0"
@@ -41,6 +50,7 @@ Restrict x tasks a single core (x == machine's smt level)
 
 
 # 6:
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 1, "restr_set": null, "restrict_type": 0}}
 Map two tasks at SMT 1
 "18;18"
 "0-17;18-35"
@@ -48,20 +58,23 @@ Map two tasks at SMT 1
 
 
 # 7:
-Map 2 tasks at max smt (across all cores)
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 1, "restr_set": null, "restrict_type": 0}}
+Map two tasks at max smt (across all cores)
 "18;18"
 "0-17;18-35"
 ";"
 
 
 # 8:
-Map tasks at max smt-1
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 1, "restr_set": null, "restrict_type": 0}}
+Map two tasks at max smt-1
 "18;18"
 "0-17;18-35"
 ";"
 
 
 # 9:
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": "0", "restrict_type": 1}}
 Map two tasks, but restrict them to a single NUMA domain
 "9;9"
 "0-8;9-17"
@@ -69,19 +82,22 @@ Map two tasks, but restrict them to a single NUMA domain
 
 
 # 10:
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 0, "smt": 0, "restr_set": null, "restrict_type": 0}}
 Map num_numa tasks without GPU optimization
 "18;18"
 "0-17;18-35"
 ";"
 
 # 11:
+# {"params": {"ntasks": 2, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": null, "restrict_type": 0}}
 Map num_numa tasks with GPU optimization
 "18;18"
 "0-17;18-35"
 ";"
 
 # 12:
-Map 8 tasks to a single pu
+# {"params": {"ntasks": 8, "in_nthreads": 0, "greedy": 1, "gpu_optim": 0, "smt": 0, "restr_set": "0", "restrict_type": 0}}
+Map eight tasks to a single pu
 "1;1;1;1;1;1;1;1"
 "0;0;0;0;0;0;0;0"
 ";;;;;;;"
