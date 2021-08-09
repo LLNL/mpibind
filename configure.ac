@@ -77,6 +77,42 @@ AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 #)
 #AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 
+
+# python, used for the python bindings
+AM_PATH_PYTHON([3],, [:])
+AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
+
+AM_COND_IF(HAVE_PYTHON,
+  [
+    # cffi, used for the python bindings
+    AM_CHECK_PYMOD(cffi,
+                    [cffi.__version_info__ >= (1,14)],
+                    have_cffi=true
+                    ,
+                    [
+                      AC_MSG_NOTICE([could not find python module cffi, version 1.14+ required, python bindings will not be built])
+                      have_cffi=false
+                    ]
+                    )
+    # pycotap, used for the python test-suite
+    AM_CHECK_PYMOD(pycotap,
+                    ,
+                    have_pycotap=true
+                    ,
+                    [
+                      AC_MSG_NOTICE([could not find python module pycotap, test suite for python bindings will not be built])
+                      have_pycotap=false
+                    ]
+                    )
+  ],
+  [
+    AC_MSG_NOTICE([could not find python, python bindings will not be built])
+  ]
+)
+
+AM_CONDITIONAL(HAVE_CFFI, test x$have_cffi = xtrue)
+AM_CONDITIONAL(HAVE_PYCOTAP, test x$have_pycotap = xtrue)
+
 # Notes 
 # AC_DEFINE([HAVE_LIBTAP], 1, [Define libtap to build the test suite])
 # AC_CHECK_FUNC([hwloc_topology_set_all_types_filter])
@@ -101,6 +137,7 @@ AC_CONFIG_FILES([
  Makefile
  src/Makefile
  test-suite/Makefile
+ python/Makefile
  flux/Makefile
  etc/Makefile
  etc/mpibind.pc
