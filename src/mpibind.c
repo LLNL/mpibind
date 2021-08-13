@@ -85,7 +85,8 @@ int mpibind_init(mpibind_t **handle)
   hdl->ndevs = 0; 
   hdl->devs = NULL; 
   hdl->gpus_usr = NULL; 
-  
+  hdl->cpus_usr = NULL;
+
   *handle = hdl;
   
   return 0; 
@@ -111,6 +112,14 @@ int mpibind_finalize(mpibind_t *hdl)
       free(hdl->gpus_usr[i]); 
     }
     free(hdl->gpus_usr); 
+  }
+
+  /*Release cpu strings*/
+  if (hdl->cpus_usr != NULL) {
+    for (i=0; i<hdl->ntasks; i++) {
+      free(hdl->cpus_usr[i]);
+    }
+    free(hdl->cpus_usr);
   }
 
   /* Release mapping space */ 
@@ -386,6 +395,26 @@ char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid,
   return handle->gpus_usr[taskid]; 
 }
 
+char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid)
+{
+  int i;
+
+  if (handle == NULL || taskid >= handle->ntasks || taskid < 0)
+    return NULL; 
+  
+  if (handle->cpus_usr == NULL)
+  {
+    /* cpus_usr output variable not yet set. Set now.*/
+    handle->cpus_usr = calloc(handle->ntasks, sizeof(char *));
+    for (i=0; i<handle->ntasks; i++) 
+    {
+      handle->cpus_usr[i] = calloc(LONG_STR_SIZE, sizeof(char));
+      hwloc_bitmap_list_snprintf(handle->cpus_usr[i], LONG_STR_SIZE, handle->cpus[i]);
+    }
+  }
+
+  return handle->cpus_usr[taskid];
+}
 
 /*
  * Get the number of GPUs in the system/allocation.

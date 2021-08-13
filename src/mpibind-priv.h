@@ -77,6 +77,7 @@ struct mpibind_t {
   hwloc_bitmap_t *cpus; 
   hwloc_bitmap_t *gpus;
   char ***gpus_usr; 
+  char **cpus_usr;
 
   /* Environment variables */
   int nvars;
