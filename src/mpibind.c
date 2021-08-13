@@ -917,3 +917,14 @@ char** mpibind_get_env_var_names(mpibind_t *handle, int *count)
 }
 
 
+int mpibind_apply(mpibind_t *handle, int taskid)
+{
+  int rc;
+  hwloc_bitmap_t *core_sets = mpibind_get_cpus(handle);
+  hwloc_topology_t topo = mpibind_get_topology(handle);
+  
+  if ((rc = hwloc_set_cpubind(topo, core_sets[taskid], 0)) < 0)
+    return rc;
+  
+  return 0;
+}
