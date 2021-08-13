@@ -261,6 +261,10 @@ extern "C" {
    * mpibind handle.
    */
   int mpibind_get_restrict_type(mpibind_t *handle);
+  /* 
+   * Apply mpibind affinity for task `taskid`
+   */
+  int mpibind_apply(mpibind_t *handle, int taskid);
 
 #ifdef __cplusplus
 } /* extern "C" */
