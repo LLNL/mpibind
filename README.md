@@ -1,14 +1,31 @@
 ## A Memory-Driven Mapping Algorithm for Heterogeneous Systems
 
-**mpibind** is a memory-driven algorithm to map parallel hybrid
+`mpibind` is a memory-driven algorithm to map parallel hybrid
 applications to the underlying hardware resources transparently,
 efficiently, and portably. Unlike other mappings, its primary design point
 is the memory system, including the cache hierarchy. Compute elements
 are selected based on a memory mapping and not vice versa. In
-addition, *mpibind* embodies a global awareness of hybrid programming
+addition, mpibind embodies a global awareness of hybrid programming
 abstractions as well as heterogeneous systems with accelerators.
 
-### Getting started
+### Getting started 
+
+The easiest way to get `mpibind` is using
+[spack](https://github.com/spack/spack).  
+
+```
+spack install mpibind
+
+# On systems with NVIDIA GPUs
+spack install mpibind+cuda
+
+# On systems with AMD GPUs
+spack install mpibind+rocm
+```
+
+Alternatively, one can build the package manually as described below. 
+
+### Building and installing 
 
 This project uses GNU Autotools.
 
@@ -24,6 +41,7 @@ $ make install
 
 The resulting library is `<install_dir>/lib/libmpibind` and a simple program using it is `src/main.c`
 
+
 ### Test suite 
 
 ```
@@ -32,10 +50,23 @@ $ make check
 
 ### Dependencies 
 
-* The build system uses the `GNU Autotools`. 
-* mpibind relies on `hwloc` version 2 for topology discovery. 
-* `libtap` is required to build the test suite. 
-* `flux-core` is required to build the Flux plugin. 
+* `GNU Autotools` is the build system. 
+
+* `hwloc` version 2 is required to detect the machine topology.
+
+  Before building mpibind, make sure `hwloc` can be detected with `pkg-config`:
+```
+pkg-config --variable=libdir --modversion hwloc
+```
+If this fails, add hwloc's pkg-config directory to `PKG_CONFIG_PATH`, e.g.,
+```
+export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:<hwloc-prefix>/lib/pkgconfig
+```
+
+* `libtap` is required to build the test suite.
+
+  To verify `tap` can be detected with `pkg-config`, follow a
+  similar procedure as for `hwloc` above. 
 
 
 ### Contributing
@@ -62,11 +93,11 @@ outstanding *todo* items.
 
 ### Authors
 
-*mpibind* was created by Edgar A. León.
+`mpibind` was created by Edgar A. León.
 
-#### Citing *mpibind*
+### Citing mpibind
 
-To reference *mpibind* in a publication, please cite one of the
+To reference mpibind, please cite one of the
 following papers:
 
 * Edgar A. León and Matthieu Hautreux. *Achieving Transparency Mapping
@@ -93,15 +124,13 @@ Other references:
   Architectures: A Performance-Portable Approach*. In GPU Technology
   Conference, GTC'18, San Jose, CA, March 2018. 
   
-  
-
 
 [Bibtex file](doc/mpibind.bib). 
 
 
 ### License
 
-*mpibind* is distributed under the terms of the MIT license. All new
+`mpibind` is distributed under the terms of the MIT license. All new
 contributions must be made under this license. 
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
