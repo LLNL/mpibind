@@ -9,37 +9,27 @@ information to tweak each test to be suitable for the topology.
 An example of the answers file is below:
 
 ```
-
 # Line that start with a pound are comments!
-# The first non-commented line should be the number of tests.
-3
+# Each answer description consist of 6 lines:
+# 1. A comment with the test number
+# 2. A comment describing the parameters used for the test in JSON format
+# 3. The test description
+# 4. the thread mapping
+# 5. the cpu mapping
+# 6. the gpu_mapping
+# The mapping for each task is separated by a defined character.
+# This separator can be changed in test_utils.c::parse_answer()
 
-# 1: Map one task to every core
+# 1:
+# {"params": {"ntasks": 40, "in_nthreads": 0, "greedy": 1, "gpu_optim": 1, "smt": 0, "restr_set": null, "restrict_type": 0}}
 Map one task to every core
-"1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1"
-"6,54;6,54;7,55;7,55;8,56;8,56;9,57;9,57;10,58;10,58;11,59;11,59;12,60;12,60;13,61;13,61;14,62;14,62;15,63;15,63;16,64;16,64;17,65;17,65;30,78;30,78;31,79;31,79;32,80;32,80;33,81;33,81;34,82;34,82;35,83;35,83;42,90;42,90;43,91;43,91;44,92;44,92;45,93;45,93;46,94;46,94;47,95;47,95"
-"0;0;0;0;0;0;0;0;0;0;0;0;1;1;1;1;1;1;1;1;1;1;1;1;2;2;2;2;2;2;2;2;2;2;2;2;3;3;3;3;3;3;3;3;3;3;3;3"
-
-# 2: Map 1 task greedily
-Map 1 task greedily
-"96"
-"0-95"
-"0-3"
-
-# 3: Map two tasks greedily
-Map two tasks greedily
-"48;48"
-"0-23,48-71;24-47,72-95"
-"0-1;2-3"
+"1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1"
+"8;12;16;20;24;28;32;36;40;44;48;52;56;60;64;68;72;76;80;84;96;100;104;108;112;116;120;124;128;132;136;140;144;148;152;156;160;164;168;172"
+"0;0;0;0;0;0;0;0;0;0;1;1;1;1;1;1;1;1;1;1;2;2;2;2;2;2;2;2;2;2;3;3;3;3;3;3;3;3;3;3"
 
 ```
 
-The first non-blank, non-commented line in the answer file is the number of
-tests in the file. After that, each answer consists of four lines: a
-description, the expected number of threads, the expected CPU mapping, and
-the expected GPU mapping for the tasks of a given mpibind run. Each of the 4
-lines are wrapped in quotes. These strings are directly compared to the output
-of mpibind when given the corresponding input parameters.
+The Python tests parse the params comment to initialize mpibind handles correctly.
 
 ## Test details
 
