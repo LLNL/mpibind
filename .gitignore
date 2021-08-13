@@ -100,3 +100,5 @@ compile_flags.txt
 .idea
 .clangd
 
+# Python virtual environments
+.venv*/
