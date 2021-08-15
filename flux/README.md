@@ -22,13 +22,19 @@ plugin will not be built.
 
 The plugin is installed here:  
 ```
-<mpibind-prefix>/lib/mpibind/mpibind_flux.so
+<mpibind-prefix>/lib/mpibind/
+# which can be obtained with the command
+pkg-config --variable=plugindir mpibind
+
 ```
 
-To install the plugin into your Flux installation, copy it or link it
-to the Flux shell plugins directory:
+To install the plugin into your Flux installation, copy or link
+`mpibind_flux.so` to the Flux shell plugins directory:
 ```
-<flux-prefix>/lib/flux/shell/plugins/     
+<flux-prefix>/lib/flux/shell/plugins/
+# which can be obtained with the command
+pkg-config --variable=fluxshellpluginpath flux-core
+
 ```
 
 If you do not have write access to this directory, see **Manual
