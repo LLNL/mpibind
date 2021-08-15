@@ -21,6 +21,9 @@ spack install mpibind+cuda
 
 # On systems with AMD GPUs
 spack install mpibind+rocm
+
+# More details
+spack info mpibind
 ```
 
 Alternatively, one can build the package manually as described below. 
