@@ -55,13 +55,13 @@ $ make check
 * `hwloc` version 2 is required to detect the machine topology.
 
   Before building mpibind, make sure `hwloc` can be detected with `pkg-config`:
-```
-pkg-config --variable=libdir --modversion hwloc
-```
-If this fails, add hwloc's pkg-config directory to `PKG_CONFIG_PATH`, e.g.,
-```
-export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:<hwloc-prefix>/lib/pkgconfig
-```
+  ```
+  pkg-config --variable=libdir --modversion hwloc
+  ```
+  If this fails, add hwloc's pkg-config directory to `PKG_CONFIG_PATH`, e.g.,
+  ```
+  export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:<hwloc-prefix>/lib/pkgconfig
+  ```
 
 * `libtap` is required to build the test suite.
 
