@@ -42,10 +42,12 @@ esac
 AM_CONDITIONAL([HAVE_DARWIN_OS], [test x$darwin_os = xtrue])
 
 
-# hwloc 
-PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
+PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1], [
+  hwloc_dir=`$PKG_CONFIG --variable=libdir hwloc`
+  AC_MSG_NOTICE([$hwloc_dir])
+  ]
+)
 
-# libtap
 # In newer versions of pkgconf, I could use
 # PKG_HAVE_WITH_MODULES and PKG_CHECK_VAR.
 # I could also request min-version above with
@@ -55,6 +57,7 @@ PKG_CHECK_MODULES([TAP], [tap], [
   libtap_dir=`$PKG_CONFIG --variable=libdir tap`
   AC_SUBST(TAP_LIBDIR, $libtap_dir)
   AC_REQUIRE_AUX_FILE([tap-driver.sh])
+  AC_MSG_NOTICE([$libtap_dir])
   ],
   [AC_MSG_NOTICE([Test suite will not be built])]
 )
@@ -64,9 +67,15 @@ AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 #   [AC_MSG_NOTICE([TAP's libdir not found])]
 # )
 
-# No need to check for Flux anymore since Flux
-# should install the plugin rather than mpibind. 
-# flux-core
+PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
+  flux_core=true
+  flux_dir=`$PKG_CONFIG --variable=libdir flux-core`
+  AC_MSG_NOTICE([$flux_dir])
+  ],
+  [AC_MSG_NOTICE([Flux plugin will not be built])]
+)
+AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$flux_core = xtrue])
+# Flux should install the mpibind plugin rather than mpibind.
 #PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
 #  fluxcore=true
 #  flux_shell_plugin_dir=`$PKG_CONFIG --variable=libdir flux-core`

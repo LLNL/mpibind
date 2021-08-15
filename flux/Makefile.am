@@ -36,10 +36,13 @@
 # 	$(LN_S) $(mpibindmoddir)/$(plugin_name) . 
 #endif
 
+if HAVE_FLUX_CORE
 mpibindmod_LTLIBRARIES  = mpibind_flux.la
+endif
 
 mpibind_flux_la_SOURCES = plugin.c
-mpibind_flux_la_CFLAGS  = -Wall -Werror -I$(top_srcdir)/src $(HWLOC_CFLAGS)
+mpibind_flux_la_CFLAGS  = -Wall -Werror -I$(top_srcdir)/src
+mpibind_flux_la_CFLAGS += $(HWLOC_CFLAGS) $(FLUX_CORE_CFLAGS)
 mpibind_flux_la_LIBADD  = $(top_builddir)/src/libmpibind.la
 mpibind_flux_la_LDFLAGS = -module
 
