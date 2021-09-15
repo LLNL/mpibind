@@ -115,12 +115,11 @@ int mpibind_finalize(mpibind_t *hdl)
   }
 
   /*Release cpu strings*/
-  if (hdl->cpus_usr != NULL) {
-    for (i=0; i<hdl->ntasks; i++) {
-      free(hdl->cpus_usr[i]);
-    }
-    free(hdl->cpus_usr);
+  for (i=0; i<hdl->ntasks; i++) {
+    free(hdl->cpus_usr[i]);
   }
+  free(hdl->cpus_usr);
+  
 
   /* Release mapping space */ 
   for (i=0; i<hdl->ntasks; i++) {
@@ -397,22 +396,9 @@ char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid,
 
 char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid)
 {
-  int i;
-
   if (handle == NULL || taskid >= handle->ntasks || taskid < 0)
     return NULL; 
   
-  if (handle->cpus_usr == NULL)
-  {
-    /* cpus_usr output variable not yet set. Set now.*/
-    handle->cpus_usr = calloc(handle->ntasks, sizeof(char *));
-    for (i=0; i<handle->ntasks; i++) 
-    {
-      handle->cpus_usr[i] = calloc(LONG_STR_SIZE, sizeof(char));
-      hwloc_bitmap_list_snprintf(handle->cpus_usr[i], LONG_STR_SIZE, handle->cpus[i]);
-    }
-  }
-
   return handle->cpus_usr[taskid];
 }
 
@@ -672,6 +658,16 @@ int mpibind(mpibind_t *hdl)
           hdl->ntasks, hdl->in_nthreads,
 		      hdl->greedy, gpu_optim, hdl->smt, 
 		      hdl->nthreads, hdl->cpus, hdl->gpus);
+
+  /* Populate cpus_usr */  
+  /* cpus_usr output variable not yet set. Set now.*/
+  hdl->cpus_usr = calloc(hdl->ntasks, sizeof(char *));
+  for (i=0; i<hdl->ntasks; i++) 
+  {
+    hdl->cpus_usr[i] = calloc(LONG_STR_SIZE, sizeof(char));
+    hwloc_bitmap_list_snprintf(hdl->cpus_usr[i], LONG_STR_SIZE, hdl->cpus[i]);
+  }
+
   
   /* Don't destroy the topology, because the caller may 
      need it to parse the resulting cpu/gpu bitmaps */ 
