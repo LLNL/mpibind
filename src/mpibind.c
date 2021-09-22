@@ -34,7 +34,6 @@
  * Functions defined in internals.c
  ************************************************/
 int get_smt_level(hwloc_topology_t topo);
-void topology_load(hwloc_topology_t topology);
 int discover_devices(hwloc_topology_t topo, 
       struct device **devs, int size);
 int get_num_gpus(struct device **devs, int ndevs);
@@ -508,6 +507,43 @@ int mpibind_get_restrict_type(mpibind_t *handle)
 }
 
 
+/* 
+ * Make sure the topology includes important components
+ * like PCI devices and GPUs. 
+ * This call should be executed between hwloc_topology_init 
+ * and hwloc_topology_load. 
+ */ 
+int mpibind_filter_topology(hwloc_topology_t topology)
+{
+  int rc = 0;
+  
+  /* Remove objects that do not add structure. 
+     Warning: This function can collapse the Core and PU levels
+     into the PU level. Functions that look for the Core level 
+     may break or behave differently!  
+     Leaving it in for now, because I have my own 'get_core_*' 
+     functions rather than using HWLOC_OBJ_CORE directly */ 
+  if ( (rc = hwloc_topology_set_all_types_filter(topology,
+						HWLOC_TYPE_FILTER_KEEP_STRUCTURE)) != 0 )
+    return rc; 
+    
+  /* OS devices are filtered by default, enable to see GPUs */ 
+  if ( (rc = hwloc_topology_set_type_filter(topology,
+					   HWLOC_OBJ_OS_DEVICE,
+					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
+    return rc; 
+
+  /* Include PCI devices to determine whether two GPUs 
+     are the same device, i.e., opencl1d1 and cuda1 */ 
+  if ( (rc = hwloc_topology_set_type_filter(topology,
+					   HWLOC_OBJ_PCI_DEVICE,
+					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
+    return rc;
+
+  return rc; 
+}
+
+
 /*
  * Process the input and call the main mapping function. 
  * Input: 
@@ -557,7 +593,12 @@ int mpibind(mpibind_t *hdl)
 
   if (hdl->topo == NULL) { 
     hwloc_topology_init(&hdl->topo);
-    topology_load(hdl->topo);
+    /* Include important components like PCI devices */ 
+    if ( mpibind_filter_topology(hdl->topo) != 0 )
+      fprintf(stderr, "Warn: Could not filter the topology\n"); 
+    /* Detect the topology */ 
+    hwloc_topology_load(hdl->topo);
+    
   } else {
     /* Caller provides the hwloc topology */ 
     hwloc_topology_check(hdl->topo);

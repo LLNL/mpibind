@@ -113,6 +113,14 @@ extern "C" {
   int mpibind_set_topology(mpibind_t *handle,
 			   hwloc_topology_t topo);
   
+  /*
+   * When using the caller's topology, make sure that important 
+   * components are enabled such as PCI devices. 
+   * This call should be executed between hwloc_topology_init 
+   * and hwloc_topology_load. 
+   */
+  int mpibind_filter_topology(hwloc_topology_t topo); 
+  
   /* 
    * Main mapping function. 
    * The resulting mapping can be retrieved with the 

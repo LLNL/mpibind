@@ -1049,6 +1049,8 @@ int distrib_greedy(hwloc_topology_t topo,
  ************************************************/
 
 
+/* Replaced by mpibind_filter_topology */ 
+#if 0
 /*
  * Load the hwloc topology. 
  * This function makes sure GPU devices are visible and also 
@@ -1096,6 +1098,7 @@ void topology_load(hwloc_topology_t topology)
   /* Detect the topology */ 
   hwloc_topology_load(topology);
 }
+#endif
 
 
 /* 
