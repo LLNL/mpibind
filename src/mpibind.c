@@ -708,7 +708,6 @@ int mpibind(mpibind_t *hdl)
     hdl->cpus_usr[i] = calloc(LONG_STR_SIZE, sizeof(char));
     hwloc_bitmap_list_snprintf(hdl->cpus_usr[i], LONG_STR_SIZE, hdl->cpus[i]);
   }
-
   
   /* Don't destroy the topology, because the caller may 
      need it to parse the resulting cpu/gpu bitmaps */ 

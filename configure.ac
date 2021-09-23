@@ -105,7 +105,7 @@ PKG_INSTALLDIR
 AS_VAR_SET(mpibindmoddir, $libdir/mpibind)
 AC_SUBST(mpibindmoddir)
 
-## Epilogue 
+## Epilogue
 AC_CONFIG_FILES([
  Makefile
  src/Makefile
