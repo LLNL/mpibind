@@ -1,3 +1,5 @@
+#define FLUX_SHELL_PLUGIN_NAME "mpibind"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpibind.h>
@@ -60,7 +62,7 @@
  *   such as "mpibind". If you don't overwrite the affinity module, you'll 
  *   have to disable the module from within this plugin (see mpibind_init)
  */
-#define PLUGIN_NAME "mpibind"
+#define PLUGIN_NAME FLUX_SHELL_PLUGIN_NAME
 
 #define LONG_STR_SIZE 1024
 
