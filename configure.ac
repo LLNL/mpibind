@@ -18,7 +18,6 @@ AM_SILENT_RULES([yes])
 # Need to make sure that pkg.m4 is in ACLOCAL_PATH, e.g, 
 # ACLOCAL_PATH=$ACLOCAL_PATH:PKG_CONFIG_ROOT/share/aclocal
 # aclocal --print-ac-dir
-# Todo: Create pkg-config vars for mpibind
 PKG_PROG_PKG_CONFIG
 
 # libtool 
@@ -75,7 +74,6 @@ PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
   [AC_MSG_NOTICE([Flux plugin will not be built])]
 )
 AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$flux_core = xtrue])
-# Flux should install the mpibind plugin rather than mpibind.
 #PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
 #  fluxcore=true
 #  flux_shell_plugin_dir=`$PKG_CONFIG --variable=libdir flux-core`
@@ -104,6 +102,50 @@ PKG_INSTALLDIR
 # Path for mpibind modules, e.g., flux plugin
 AS_VAR_SET(mpibindmoddir, $libdir/mpibind)
 AC_SUBST(mpibindmoddir)
+
+
+## Dependencies for Python bindings
+# AC_CHECK_PYMOD(module, [action-if-found], [action-if-not-found])
+# ----------------------------------------------------------------
+# Didn't use AC_CACHE_CHECK because AC_CHECK_PYMOD
+# may be called multiple times, but with different arguments! 
+AC_DEFUN([AC_CHECK_PYMOD],
+[AC_REQUIRE([AM_PATH_PYTHON])
+AC_MSG_CHECKING([for $1 in python])
+have_pymod=no
+prog="
+import sys
+try:
+	import $1
+except ImportError:
+	sys.exit(1)
+except:
+	sys.exit(0)
+sys.exit(0)"
+($PYTHON -c "$prog") && have_pymod=yes
+AC_MSG_RESULT($have_pymod)
+if test "$have_pymod" = yes; then
+   ifelse([$2], [], true, [$2])
+else
+   ifelse([$3], [], true, [$3])
+fi])
+
+AM_PATH_PYTHON([3],, [:])
+AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
+
+AC_CHECK_PYMOD(cffi,
+	have_cffi=true,
+	AC_MSG_NOTICE([Python bindings will not be built]))
+AM_CONDITIONAL([HAVE_CFFI], [test x$have_cffi = xtrue])
+
+AC_CHECK_PYMOD(pycotap,
+	have_pycotap=true,
+	AC_MSG_NOTICE([Python bindings test suite will not be built]))
+AM_CONDITIONAL([HAVE_PYCOTAP], [test x$have_pycotap = xtrue])
+
+#AM_COND_IF(HAVE_CFFI, [echo "cffi yes!"], [echo "cffi no!"])
+#AM_COND_IF(HAVE_PYCOTAP, [echo "pycotap yes!"], [echo "pycotap no!"])
+
 
 ## Epilogue
 AC_CONFIG_FILES([
