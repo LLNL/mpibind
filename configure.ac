@@ -18,7 +18,6 @@ AM_SILENT_RULES([yes])
 # Need to make sure that pkg.m4 is in ACLOCAL_PATH, e.g, 
 # ACLOCAL_PATH=$ACLOCAL_PATH:PKG_CONFIG_ROOT/share/aclocal
 # aclocal --print-ac-dir
-# Todo: Create pkg-config vars for mpibind
 PKG_PROG_PKG_CONFIG
 
 # libtool 
@@ -42,10 +41,12 @@ esac
 AM_CONDITIONAL([HAVE_DARWIN_OS], [test x$darwin_os = xtrue])
 
 
-# hwloc 
-PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1])
+PKG_CHECK_MODULES([HWLOC], [hwloc >= 2.1], [
+  hwloc_dir=`$PKG_CONFIG --variable=libdir hwloc`
+  AC_MSG_NOTICE([$hwloc_dir])
+  ]
+)
 
-# libtap
 # In newer versions of pkgconf, I could use
 # PKG_HAVE_WITH_MODULES and PKG_CHECK_VAR.
 # I could also request min-version above with
@@ -55,6 +56,7 @@ PKG_CHECK_MODULES([TAP], [tap], [
   libtap_dir=`$PKG_CONFIG --variable=libdir tap`
   AC_SUBST(TAP_LIBDIR, $libtap_dir)
   AC_REQUIRE_AUX_FILE([tap-driver.sh])
+  AC_MSG_NOTICE([$libtap_dir])
   ],
   [AC_MSG_NOTICE([Test suite will not be built])]
 )
@@ -64,9 +66,14 @@ AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 #   [AC_MSG_NOTICE([TAP's libdir not found])]
 # )
 
-# No need to check for Flux anymore since Flux
-# should install the plugin rather than mpibind. 
-# flux-core
+PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
+  flux_core=true
+  flux_dir=`$PKG_CONFIG --variable=libdir flux-core`
+  AC_MSG_NOTICE([$flux_dir])
+  ],
+  [AC_MSG_NOTICE([Flux plugin will not be built])]
+)
+AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$flux_core = xtrue])
 #PKG_CHECK_MODULES([FLUX_CORE], [flux-core], [
 #  fluxcore=true
 #  flux_shell_plugin_dir=`$PKG_CONFIG --variable=libdir flux-core`
@@ -76,42 +83,6 @@ AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 #  [AC_MSG_NOTICE([Flux plugin will not be built])]
 #)
 #AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
-
-
-# python, used for the python bindings
-AM_PATH_PYTHON([3],, [:])
-AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
-
-AM_COND_IF(HAVE_PYTHON,
-  [
-    # cffi, used for the python bindings
-    AM_CHECK_PYMOD(cffi,
-                    [cffi.__version_info__ >= (1,14)],
-                    have_cffi=true
-                    ,
-                    [
-                      AC_MSG_NOTICE([could not find python module cffi, version 1.14+ required, python bindings will not be built])
-                      have_cffi=false
-                    ]
-                    )
-    # pycotap, used for the python test-suite
-    AM_CHECK_PYMOD(pycotap,
-                    ,
-                    have_pycotap=true
-                    ,
-                    [
-                      AC_MSG_NOTICE([could not find python module pycotap, test suite for python bindings will not be built])
-                      have_pycotap=false
-                    ]
-                    )
-  ],
-  [
-    AC_MSG_NOTICE([could not find python, python bindings will not be built])
-  ]
-)
-
-AM_CONDITIONAL(HAVE_CFFI, test x$have_cffi = xtrue)
-AM_CONDITIONAL(HAVE_PYCOTAP, test x$have_pycotap = xtrue)
 
 # Notes 
 # AC_DEFINE([HAVE_LIBTAP], 1, [Define libtap to build the test suite])
@@ -132,7 +103,51 @@ PKG_INSTALLDIR
 AS_VAR_SET(mpibindmoddir, $libdir/mpibind)
 AC_SUBST(mpibindmoddir)
 
-## Epilogue 
+
+## Dependencies for Python bindings
+# AC_CHECK_PYMOD(module, [action-if-found], [action-if-not-found])
+# ----------------------------------------------------------------
+# Didn't use AC_CACHE_CHECK because AC_CHECK_PYMOD
+# may be called multiple times, but with different arguments! 
+AC_DEFUN([AC_CHECK_PYMOD],
+[AC_REQUIRE([AM_PATH_PYTHON])
+AC_MSG_CHECKING([for $1 in python])
+have_pymod=no
+prog="
+import sys
+try:
+	import $1
+except ImportError:
+	sys.exit(1)
+except:
+	sys.exit(0)
+sys.exit(0)"
+($PYTHON -c "$prog") && have_pymod=yes
+AC_MSG_RESULT($have_pymod)
+if test "$have_pymod" = yes; then
+   ifelse([$2], [], true, [$2])
+else
+   ifelse([$3], [], true, [$3])
+fi])
+
+AM_PATH_PYTHON([3],, [:])
+AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
+
+AC_CHECK_PYMOD(cffi,
+	have_cffi=true,
+	AC_MSG_NOTICE([Python bindings will not be built]))
+AM_CONDITIONAL([HAVE_CFFI], [test x$have_cffi = xtrue])
+
+AC_CHECK_PYMOD(pycotap,
+	have_pycotap=true,
+	AC_MSG_NOTICE([Python bindings test suite will not be built]))
+AM_CONDITIONAL([HAVE_PYCOTAP], [test x$have_pycotap = xtrue])
+
+#AM_COND_IF(HAVE_CFFI, [echo "cffi yes!"], [echo "cffi no!"])
+#AM_COND_IF(HAVE_PYCOTAP, [echo "pycotap yes!"], [echo "pycotap no!"])
+
+
+## Epilogue
 AC_CONFIG_FILES([
  Makefile
  src/Makefile

@@ -2,6 +2,7 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
+plugindir=@libdir@/mpibind
 
 Name: mpibind
 Description: A memory-driven mapping algorithm for heterogeneous systems

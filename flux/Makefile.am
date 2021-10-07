@@ -8,14 +8,16 @@
 # Not installing the lua file anymore
 #mpibindmod_SCRIPTS = mpibind_flux.lua
 
-# It is now up to the Flux installation to get 
-# the mpibind plugin rather than mpibind installing
-# the plugin into the Flux installation.
-# 1. The model is to install Flux and specify that
-#    mpibind is a dependency. In Spack terms:
-#      spack install flux-core+mpibind
-# 2. mpibind would not be able to install the plugin
-#    in a system-wide flux installation. 
+# The mpibind plugin for Flux depends on a Flux header.
+# Therefore, when using Spack, Flux is a dependency
+# of mpibind. To install mpibind and Flux, one would use:
+#   spack install mpibind+flux
+# There's an issue though: mpibind may not be able
+# to install the plugin into the flux plugins directory,
+# e.g., when Flux is a system-wide distribution.
+# To work around this Flux has created an environment
+# variable that allows loading a plugin without writing
+# it to Flux's installation directory. 
 # 
 # Install mpibind_flux.so into the flux shell
 # plugin path so it is loaded by default with
@@ -36,12 +38,36 @@
 # 	$(LN_S) $(mpibindmoddir)/$(plugin_name) . 
 #endif
 
+# The build directory of the plugin 
+plugin_int_dir = $(abs_top_srcdir)/flux/.libs
+
+if HAVE_FLUX_CORE
+## The Flux plugin 
 mpibindmod_LTLIBRARIES  = mpibind_flux.la
 
+## Script to load the plugin--to be used by Flux
+pkgdata_SCRIPTS = mpibind-flux.lua
+CLEANFILES = $(pkgdata_SCRIPTS)
+
+# Script to load the Flux plugin 
+# from the installation directory
+install-data-hook:
+	sed -i 's|$(plugin_int_dir)|$(libdir)/mpibind|g' \
+	$(pkgdatadir)/mpibind-flux.lua
+endif
+
+# The Flux plugin 
 mpibind_flux_la_SOURCES = plugin.c
-mpibind_flux_la_CFLAGS  = -Wall -Werror -I$(top_srcdir)/src $(HWLOC_CFLAGS)
+mpibind_flux_la_CFLAGS  = -Wall -Werror -I$(top_srcdir)/src
+mpibind_flux_la_CFLAGS += $(HWLOC_CFLAGS) $(FLUX_CORE_CFLAGS)
 mpibind_flux_la_LIBADD  = $(top_builddir)/src/libmpibind.la
 mpibind_flux_la_LDFLAGS = -module
+
+# Script to load the Flux plugin 
+# from the '.libs' directory
+mpibind-flux.lua: mpibind-flux.lua.in Makefile
+	sed 's|[@]fluxplugindir[@]|$(plugin_int_dir)|g' \
+	mpibind-flux.lua.in > $@
 
 # If mpibind was already installed: 
 #mpibind_flux_la_CFLAGS  = -Wall -Werror $(MPIBIND_CFLAGS)
