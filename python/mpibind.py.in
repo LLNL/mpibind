@@ -1,0 +1,473 @@
+""" Implements an interface around the mpibind C library.
+
+This module implements a python interface around the mpibind C API.
+This documentation describes specifics about the python interface.
+
+Unsupported Functions:
+
+hwloc_topology_t mpibind_get_topology(mpibind_t *handle); 
+
+(comparable functionality supported through xml file)
+int mpibind_set_topology(mpibind_t *handle,
+			   hwloc_topology_t topo); 
+
+hwloc_bitmap_t* mpibind_get_gpus(mpibind_t *handle);
+hwloc_bitmap_t* mpibind_get_cpus(mpibind_t *handle);
+"""
+
+import os
+import re
+from cffi import FFI
+
+LONG_STR_SIZE = 1024
+
+_ffi = FFI()
+
+# data and function prototypes
+_ffi.cdef('''
+  enum { 
+    /* Caller can restrict the topology based on CPU or MEM */
+    MPIBIND_RESTRICT_CPU,
+    MPIBIND_RESTRICT_MEM,
+
+    /* Type of I/O ID */ 
+    MPIBIND_ID_UNIV, 
+    MPIBIND_ID_VISDEVS,
+    MPIBIND_ID_PCIBUS,
+    MPIBIND_ID_NAME,
+  }; 
+
+  struct mpibind_t; 
+  typedef struct mpibind_t mpibind_t;
+
+  int mpibind_init(mpibind_t **handle);
+  int mpibind_finalize(mpibind_t *handle); 
+  int mpibind(mpibind_t *handle);
+
+  int mpibind_set_ntasks(mpibind_t *handle,
+	      int ntasks);
+  int mpibind_set_nthreads(mpibind_t *handle,
+	      int nthreads);
+  int mpibind_set_greedy(mpibind_t *handle,
+	      int greedy);
+  int mpibind_set_gpu_optim(mpibind_t *handle,
+			  int gpu_optim);
+  int mpibind_set_smt(mpibind_t *handle,
+		    int smt);
+  int mpibind_set_restrict_ids(mpibind_t *handle,
+			  char *restr_set);
+  int mpibind_set_restrict_type(mpibind_t *handle,
+				int restr_type);
+
+  int mpibind_get_ntasks(mpibind_t *handle);
+  int* mpibind_get_nthreads(mpibind_t *handle);
+  int mpibind_get_greedy(mpibind_t *handle);
+  int mpibind_get_gpu_optim(mpibind_t *handle);
+  int mpibind_get_smt(mpibind_t *handle);
+  char* mpibind_get_restrict_ids(mpibind_t *handle);
+  int mpibind_get_restrict_type(mpibind_t *handle);
+
+  char** mpibind_get_gpus_ptask(mpibind_t *handle, 
+          int taskid, int *ngpus);
+  char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid);
+
+  void mpibind_mapping_print(mpibind_t *handle);
+  int mpibind_mapping_ptask_snprint(char *buf, size_t size, 
+        mpibind_t *handle, int taskid);
+  int mpibind_mapping_snprint(char *str, size_t size,
+        mpibind_t *handle);
+  int mpibind_set_gpu_ids(mpibind_t *handle, 
+        int id_type);
+
+  int mpibind_set_env_vars(mpibind_t *handle);
+  void mpibind_env_vars_print(mpibind_t *handle);  
+  char** mpibind_get_env_var_values(mpibind_t *handle,
+				    char *name);
+  char** mpibind_get_env_var_names(mpibind_t *handle, int *count);
+  int mpibind_apply(mpibind_t *handle, int taskid);
+  int mpibind_get_num_gpus(mpibind_t *handle);
+''')
+
+_libmpibind = _ffi.dlopen('@mpibindlib@')
+
+def topology_set_xml(topology_file_path):
+    """
+    Set the HWLOC_XMLFILE that mpibind uses for its topology
+
+    :param topology_file_path: The file path of a hwloc topology XML file
+    :type topology_file_path: string
+    """
+    os.environ["HWLOC_XMLFILE"] = topology_file_path
+
+class MpibindHandle():
+    def __init__(self, topology_file=None, ntasks=None, nthreads=None, 
+            greedy=None, gpu_optim=None, smt=None, 
+            restrict_ids=None, restrict_type=None):
+        """
+        Object-oriented wrapper for the mpibind handle struct. 
+        Calls mpibind_init.
+        Optionally set parameters here.
+
+        :param topology_file: the path to a file to use
+        :type topology_file: string
+        :param ntasks: the number of tasks to map
+        :type ntasks: integer
+        :param nthreads: the number of threads to map
+        :type nthreads: integer
+        :param greedy: value of greedy flag
+        :type greedy: integer, 0 or 1
+        :param gpu_optim: gpu optimization flag
+        :type gpu_optim: integer, must be 0 or 1
+        :param smt: smt_level
+        :type smt: integer
+        :param restrict_ids: the restrict set
+        :type restrict_ids: string
+        :param restrict_type: MPIBIND_RESTRICT_CPU or MPIBIND_RESTRICT_MEM
+        :type restrict_type: integer
+        """
+
+        # keep mpibind double pointer reference to avoid
+        # garbage collection
+        # array element 0 is used for dereference syntax in cffi
+        self.__phandle = _ffi.new("struct mpibind_t **")
+        if _libmpibind.mpibind_init(self.__phandle) != 0:
+            raise RuntimeError("mpibind_init failed")
+        self.__handle = self.__phandle[0]
+
+        if topology_file:
+            topology_set_xml(topology_file)
+        if ntasks:
+            self.ntasks = ntasks
+        if nthreads:
+            self.nthreads = nthreads
+        if greedy:
+            self.greedy = greedy
+        if gpu_optim:
+            self.gpu_optim = gpu_optim
+        if smt:
+            self.smt = smt
+        if restrict_ids:
+            self.restrict_ids = restrict_ids
+        if restrict_type:
+            self.restrict_type = restrict_type
+
+    def finalize(self):
+        """
+        Calls mpibind_finalize.
+        """
+        rc = _libmpibind.mpibind_finalize(self.__handle)
+        if rc != 0:
+            raise RuntimeError("mpibind_finalize failed")
+
+    def mpibind(self):
+        """
+        Calls mpibind. Computes the mapping between tasks
+        and the underlying hardware resources.
+        """
+        rc = _libmpibind.mpibind(self.__handle)
+        if rc != 0:
+            raise RuntimeError("mpibind failed")
+
+    def mapping_print(self):
+        """
+        Print the mapping computed by mpibind.
+        Must be called after mpibind.
+        """
+        _libmpibind.mpibind_mapping_print(self.__handle)
+
+    @property
+    def ntasks(self):
+        return _libmpibind.mpibind_get_ntasks(self.__handle)
+
+    @ntasks.setter
+    def ntasks(self, var):
+        """
+        Set the number of tasks
+
+        :param var: num tasks
+        :type var: integer
+        """
+        rc = _libmpibind.mpibind_set_ntasks(self.__handle, var)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_ntasks failed")
+
+    @property
+    def nthreads(self):
+        """
+        Get the value of nthreads
+
+        :return: the value of nthreads
+        :rtype: integer
+        """
+        raw = _libmpibind.mpibind_get_nthreads(self.__handle)
+        return [raw[i] for i in range(self.ntasks)]
+
+    @nthreads.setter
+    def nthreads(self, var):
+        """
+        Set the number of threads
+
+        :param var: num threads
+        :type var: integer
+        """
+        rc = _libmpibind.mpibind_set_nthreads(self.__handle, var)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_nthreads failed")
+
+    @property
+    def greedy(self):
+        """
+        Get the value of the greedy flag
+
+        :return: the value of the greedy flag
+        :rtype: integer
+        """
+        return _libmpibind.mpibind_get_greedy(self.__handle)
+
+    @greedy.setter
+    def greedy(self, var):
+        """
+        Toggle greedy mapping
+
+        :param var: num tasks
+        :type var: integer, must be 0 or 1
+        """
+        if var not in [0, 1]:
+            raise TypeError("greedy must be set to 0 or 1")
+
+        rc = _libmpibind.mpibind_set_greedy(self.__handle, var)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_greedy failed")
+
+    @property
+    def gpu_optim(self):
+        """
+        Get the value of gpu optimization
+
+        :return: the value of gpu optimization
+        :rtype: integer
+        """
+        return _libmpibind.mpibind_get_gpu_optim(self.__handle)
+
+    @gpu_optim.setter
+    def gpu_optim(self, var):
+        """
+        Toggle gpu optimization
+
+        :param var: gpu optimization flag
+        :type var: integer, must be 0 or 1
+        """
+        if var not in [0, 1]:
+            raise TypeError("greedy must be set to 0 or 1")
+
+        rc = _libmpibind.mpibind_set_gpu_optim(self.__handle, var)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_gpu_optim failed")
+
+    @property
+    def smt(self):
+        """
+        Get the smt level
+
+        :return: the smt level
+        :rtype: integer
+        """
+        return _libmpibind.mpibind_get_smt(self.__handle)
+
+    @smt.setter
+    def smt(self, var):
+        """
+        Set smt level
+
+        :param var: smt_level
+        :type var: integer
+        """
+        rc = _libmpibind.mpibind_set_smt(self.__handle, var)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_smt failed")
+
+    @property
+    def restrict_ids(self):
+        """
+        Get the restrict id set
+
+        :return: the restrict ids
+        :rtype: string
+        """
+        return _ffi.string(_libmpibind.mpibind_get_restrict_ids(self.__handle)).decode('utf-8')
+
+    @restrict_ids.setter
+    def restrict_ids(self, var):
+        """
+        Restrict the hardware topology to resources associated with the
+        given ranges
+
+        :param var: the restrict set
+        :type var: string
+        """
+        self.__retrict_ids_p = _ffi.new('char[]', var.encode('utf-8')) if var else _ffi.NULL
+        rc = _libmpibind.mpibind_set_restrict_ids(self.__handle, self.__retrict_ids_p)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_smt failed")
+
+    @property
+    def restrict_type(self):
+        """
+        Get the restrict type associated with an 
+        mpibind handle
+
+        :return: the restrict type
+        :rtype: integer
+        """
+        return _libmpibind.mpibind_get_restrict_type(self.__handle)
+
+    @restrict_type.setter
+    def restrict_type(self, var):
+        """
+        Specify the type of resource to use to restrict 
+        the hardware topology
+
+        :param var: MPIBIND_RESTRICT_CPU or MPIBIND_RESTRICT_MEM
+        :type var: integer
+        """
+        rc = _libmpibind.mpibind_set_restrict_type(self.__handle, var)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_restrict_type failed")
+
+    def get_gpus_ptask(self, taskid):
+        """
+        Return the gpus mapped to a given task
+
+        :param taskid: the target taskid
+        :type taskid: integer
+        :return: the gpus mapped to the given task
+        :rtype: list of strings
+        """
+        ngpus = _ffi.new('int *')
+        raw = _libmpibind.mpibind_get_gpus_ptask(self.__handle, taskid, ngpus)
+        return [_ffi.string(raw[i]).decode('utf-8') for i in range(ngpus[0])]
+
+    def get_cpus_ptask(self, taskid):
+        """
+        Return a string representing the mapping produced by mpibind for a given task
+
+        :param taskid: the target taskid
+        :type taskid: integer
+        :return: the cpus mapped to the given task
+        :rtype: string
+        """
+        raw = _libmpibind.mpibind_get_cpus_ptask(self.__handle, taskid)
+        return _ffi.string(raw).decode('utf-8')
+
+    def mapping_ptask_snprint(self, taskid, size=None):
+        """
+        Return a string representing the mapping produced by mpibind for a given task
+
+        :param taskid: the target taskid
+        :type taskid: integer
+        :param size: the size of the buffer that the c string will be placed into
+        :type size: integer
+        :return: a string representing the mapping produced by mpibind for taskid
+        :rtype: string
+        """
+        if size == None:
+            size = LONG_STR_SIZE
+        
+        buf = _ffi.new('char[]', size)
+        written = _libmpibind.mpibind_mapping_ptask_snprint(buf, size, self.__handle, taskid)
+        if written >= size:
+            raise RuntimeError("mpibind_mapping_ptask_snprint buffer may be too small")
+        return _ffi.string(buf).decode('utf-8')
+
+    def mapping_snprint(self, size=None):
+        """
+        Return a string representing the mapping produced by mpibind
+
+        :param size: the size of the buffer that the c string will be placed into
+        :type size: integer
+        :return: a string representing the mapping produced by mpibind 
+        :rtype: string
+        """
+        if size == None:
+            size = LONG_STR_SIZE
+        
+        buf = _ffi.new('char[]', size)
+        written = _libmpibind.mpibind_mapping_snprint(buf, size, self.__handle)
+        if written >= size:
+            raise RuntimeError("mpibind_mapping_snprint buffer may be too small")
+        return _ffi.string(buf).decode('utf-8')
+    
+    def set_gpu_ids(self, id_type=None):
+        """
+        Set the type of GPU IDs.
+
+        :param id_type: the id_type that gpus will be reported in
+        :type id_type: integer
+        """
+        if not id_type:
+            id_type = _libmpibind.MPIBIND_ID_VISDEVS
+        rc = _libmpibind.mpibind_set_gpu_ids(self.__handle, id_type)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_gpu_ids failed")
+
+    def set_env_vars(self):
+        """
+        Stores the following environment variables such that they are
+        usable by the handle.
+        """
+        rc = _libmpibind.mpibind_set_env_vars(self.__handle)
+        if rc != 0:
+            raise RuntimeError("mpibind_set_env_vars failed")
+
+    def env_vars_print(self):
+        """
+        Print the environment varibles.
+        """
+        _libmpibind.mpibind_env_vars_print(self.__handle)
+
+    def get_env_var_values(self, name):
+        """
+        For each task, return the value of a given env variable (name).
+        mpibind_set_env_vars must be called before this function. 
+
+        :param name: the name of the env variable
+        :type name: string
+        :return: the values of the env_variable referred to by name for each task
+        :rtype: list of strings
+        """
+        c_name = _ffi.new('char[]', name.encode('utf-8'))
+        raw = _libmpibind.mpibind_get_env_var_values(self.__handle, c_name)
+        return [_ffi.string(raw[i]).decode('utf-8') for i in range(self.ntasks)]
+
+    def get_env_var_names(self):
+        """
+        Return an array with the names of the env variables.
+        set_env_vars must be called before this function.
+
+        :return: a list of the names of the env variables
+        :rtype: list of strings
+        """
+        count = _ffi.new('int *')
+        raw = _libmpibind.mpibind_get_env_var_names(self.__handle, count)
+        return [_ffi.string(raw[i]).decode('utf-8') for i in range(count[0])]
+
+    def apply(self, taskid):
+        """
+        Apply the mapping calculated by this handle to the given taskid.
+        mpibind must be called before this function.
+
+        :param taskid: the target taskid to apply the mapping
+        :type taskid: integer
+        """
+        rc = _libmpibind.mpibind_apply(self.__handle, taskid)
+        if rc != 0:
+            raise RuntimeError("mpibind_apply failed")
+
+    def get_num_gpus(self):
+        """
+        Return the number of gpus that are part of mpibind's mapping
+
+        :return: the number of gpus that mpibind sees
+        :rtype: integer
+        """
+        return _libmpibind.mpibind_get_num_gpus(self.__handle)

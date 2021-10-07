@@ -114,11 +114,12 @@ int mpibind_finalize(mpibind_t *hdl)
   }
 
   /*Release cpu strings*/
-  for (i=0; i<hdl->ntasks; i++) {
-    free(hdl->cpus_usr[i]);
+  if (hdl->cpus_usr != NULL) {
+    for (i=0; i<hdl->ntasks; i++) {
+      free(hdl->cpus_usr[i]);
+    }
+    free(hdl->cpus_usr);
   }
-  free(hdl->cpus_usr);
-  
 
   /* Release mapping space */ 
   for (i=0; i<hdl->ntasks; i++) {
