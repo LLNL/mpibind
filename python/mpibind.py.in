@@ -100,9 +100,10 @@ def topology_set_xml(topology_file_path):
     os.environ["HWLOC_XMLFILE"] = topology_file_path
 
 class MpibindHandle():
-    def __init__(self, topology_file=None, ntasks=None, nthreads=None, 
-            greedy=None, gpu_optim=None, smt=None, 
-            restrict_ids=None, restrict_type=None):
+    def __init__(self, ntasks=None, nthreads=None,
+                 greedy=None, gpu_optim=None, smt=None,
+                 restrict_ids=None, restrict_type=None,
+                 topology_file=None):
         """
         Object-oriented wrapper for the mpibind handle struct. 
         Calls mpibind_init.
