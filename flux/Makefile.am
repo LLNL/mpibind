@@ -52,8 +52,9 @@ CLEANFILES = $(pkgdata_SCRIPTS)
 # Script to load the Flux plugin 
 # from the installation directory
 install-data-hook:
-	sed -i 's|$(plugin_int_dir)|$(libdir)/mpibind|g' \
-	$(pkgdatadir)/mpibind-flux.lua
+	sed -i.tmp 's|$(plugin_int_dir)|$(libdir)/mpibind|g' \
+	$(pkgdatadir)/mpibind-flux.lua && \
+	rm $(pkgdatadir)/mpibind-flux.lua.tmp
 endif
 
 # The Flux plugin 
