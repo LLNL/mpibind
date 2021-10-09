@@ -1,12 +1,6 @@
 
-# PYTHONPATH=$PYTHONPATH:/Users/leonborja1/work/repos/mpibind/install/share python test-simple.py
-
 import os
 import mpibind
-
-# Todo: Update python/README
-#       Use spack load ... instead of pip install,
-#       but pip install could also be used. 
 
 # This simple example does not use MPI, thus 
 # specify my rank and total number of tasks 
