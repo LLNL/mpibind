@@ -135,21 +135,21 @@ class MpibindHandle():
             raise RuntimeError("mpibind_init failed")
         self.__handle = self.__phandle[0]
 
-        if topology_file:
+        if not topology_file is None:
             topology_set_xml(topology_file)
-        if ntasks:
+        if not ntasks is None:
             self.ntasks = ntasks
-        if nthreads:
+        if not nthreads is None:
             self.nthreads = nthreads
-        if greedy:
+        if not greedy is None:
             self.greedy = greedy
-        if gpu_optim:
+        if not gpu_optim is None:
             self.gpu_optim = gpu_optim
-        if smt:
+        if not smt is None:
             self.smt = smt
-        if restrict_ids:
+        if not restrict_ids is None:
             self.restrict_ids = restrict_ids
-        if restrict_type:
+        if not restrict_type is None:
             self.restrict_type = restrict_type
 
     def finalize(self):
