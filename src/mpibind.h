@@ -150,7 +150,8 @@ extern "C" {
    * Return an array with the CPUs assigned to the 
    * given task. The size of the array is set in 'ncpus'. 
    */
-  char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid); 
+  int* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid,
+			      int *ncpus);
   /*
    * Return an array with the GPUs assigned to the 
    * given task. The size of the array is set in 'ngpus'. 

@@ -113,7 +113,7 @@ int mpibind_finalize(mpibind_t *hdl)
     free(hdl->gpus_usr); 
   }
 
-  /*Release cpu strings*/
+  /* Release CPU arrays */
   if (hdl->cpus_usr != NULL) {
     for (i=0; i<hdl->ntasks; i++) {
       free(hdl->cpus_usr[i]);
@@ -394,13 +394,17 @@ char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid,
   return handle->gpus_usr[taskid]; 
 }
 
-char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid)
+int* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid,
+			    int *ncpus)
 {
   if (handle == NULL || taskid >= handle->ntasks || taskid < 0)
-    return NULL; 
-  
+    return NULL;
+
+  *ncpus = hwloc_bitmap_weight(handle->cpus[taskid]);
+
   return handle->cpus_usr[taskid];
 }
+
 
 /*
  * Get the number of GPUs in the system/allocation.
@@ -570,7 +574,7 @@ int mpibind_filter_topology(hwloc_topology_t topology)
  */
 int mpibind(mpibind_t *hdl)
 {
-  int i, gpu_optim, rc=0;
+  int i, j, val, gpu_optim, rc=0;
   unsigned version, major;
   unsigned long flags;
   hwloc_bitmap_t set;
@@ -701,13 +705,14 @@ int mpibind(mpibind_t *hdl)
 		      hdl->greedy, gpu_optim, hdl->smt, 
 		      hdl->nthreads, hdl->cpus, hdl->gpus);
 
-  /* Populate cpus_usr */  
-  /* cpus_usr output variable not yet set. Set now.*/
-  hdl->cpus_usr = calloc(hdl->ntasks, sizeof(char *));
-  for (i=0; i<hdl->ntasks; i++) 
-  {
-    hdl->cpus_usr[i] = calloc(LONG_STR_SIZE, sizeof(char));
-    hwloc_bitmap_list_snprintf(hdl->cpus_usr[i], LONG_STR_SIZE, hdl->cpus[i]);
+  /* Finally, populate hdl->cpus_usr */
+  hdl->cpus_usr = calloc(hdl->ntasks, sizeof(int *));
+  for (i=0; i<hdl->ntasks; i++) {
+    hdl->cpus_usr[i] = calloc(MAX_CPUS_PER_TASK, sizeof(int));
+    j = 0;
+    hwloc_bitmap_foreach_begin(val, hdl->cpus[i]) {
+      hdl->cpus_usr[i][j++] = val;
+    } hwloc_bitmap_foreach_end();
   }
   
   /* Don't destroy the topology, because the caller may 

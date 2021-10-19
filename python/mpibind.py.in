@@ -69,7 +69,8 @@ _ffi.cdef('''
 
   char** mpibind_get_gpus_ptask(mpibind_t *handle, 
           int taskid, int *ngpus);
-  char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid);
+  int* mpibind_get_cpus_ptask(mpibind_t *handle,
+          int taskid, int *ncpus);
 
   void mpibind_mapping_print(mpibind_t *handle);
   int mpibind_mapping_ptask_snprint(char *buf, size_t size, 
@@ -357,8 +358,9 @@ class MpibindHandle():
         :return: the cpus mapped to the given task
         :rtype: string
         """
-        raw = _libmpibind.mpibind_get_cpus_ptask(self.__handle, taskid)
-        return _ffi.string(raw).decode('utf-8')
+        ncpus = _ffi.new('int *')
+        raw = _libmpibind.mpibind_get_cpus_ptask(self.__handle, taskid, ncpus)
+        return [raw[i] for i in range(ncpus[0])]
 
     def mapping_ptask_snprint(self, taskid, size=None):
         """
