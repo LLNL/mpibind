@@ -14,7 +14,8 @@ mpibind_lib_name = libmpibind$(mpibind_lib_ext)
 
 # Copy bindings, example, readme, and setup to the install tree
 if HAVE_CFFI
-data_DATA = mpibind.py mpibind_example.py setup.py README.md 
+data_DATA  = mpibind.py setup.py README.md
+data_DATA += mpibind_map.py test-simple.py test-mpi.py
 
 # Version of mpibind used for testing,
 # references the shared library in the build tree
