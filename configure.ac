@@ -58,7 +58,7 @@ PKG_CHECK_MODULES([TAP], [tap], [
   AC_REQUIRE_AUX_FILE([tap-driver.sh])
   AC_MSG_NOTICE([$libtap_dir])
   ],
-  [AC_MSG_NOTICE([Test suite will not be built])]
+  [AC_MSG_NOTICE([C test suite will not be built])]
 )
 AM_CONDITIONAL([HAVE_LIBTAP], [test x$libtap = xtrue])
 # PKG_CHECK_VAR([TAP_LIBDIR], [tap], [libdir],
@@ -135,12 +135,12 @@ AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
 
 AC_CHECK_PYMOD(cffi,
 	have_cffi=true,
-	AC_MSG_NOTICE([Python bindings will not be built]))
+	AC_MSG_NOTICE([Python bindings and test suite will not be built]))
 AM_CONDITIONAL([HAVE_CFFI], [test x$have_cffi = xtrue])
 
 AC_CHECK_PYMOD(pycotap,
 	have_pycotap=true,
-	AC_MSG_NOTICE([Python bindings test suite will not be built]))
+	AC_MSG_NOTICE([Python test suite will not be built]))
 AM_CONDITIONAL([HAVE_PYCOTAP], [test x$have_pycotap = xtrue])
 
 #AM_COND_IF(HAVE_CFFI, [echo "cffi yes!"], [echo "cffi no!"])
