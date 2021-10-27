@@ -34,7 +34,6 @@
  * Functions defined in internals.c
  ************************************************/
 int get_smt_level(hwloc_topology_t topo);
-void topology_load(hwloc_topology_t topology);
 int discover_devices(hwloc_topology_t topo, 
       struct device **devs, int size);
 int get_num_gpus(struct device **devs, int ndevs);
@@ -114,7 +113,7 @@ int mpibind_finalize(mpibind_t *hdl)
     free(hdl->gpus_usr); 
   }
 
-  /*Release cpu strings*/
+  /* Release CPU arrays */
   if (hdl->cpus_usr != NULL) {
     for (i=0; i<hdl->ntasks; i++) {
       free(hdl->cpus_usr[i]);
@@ -395,26 +394,17 @@ char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid,
   return handle->gpus_usr[taskid]; 
 }
 
-char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid)
+int* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid,
+			    int *ncpus)
 {
-  int i;
-
   if (handle == NULL || taskid >= handle->ntasks || taskid < 0)
-    return NULL; 
-  
-  if (handle->cpus_usr == NULL)
-  {
-    /* cpus_usr output variable not yet set. Set now.*/
-    handle->cpus_usr = calloc(handle->ntasks, sizeof(char *));
-    for (i=0; i<handle->ntasks; i++) 
-    {
-      handle->cpus_usr[i] = calloc(LONG_STR_SIZE, sizeof(char));
-      hwloc_bitmap_list_snprintf(handle->cpus_usr[i], LONG_STR_SIZE, handle->cpus[i]);
-    }
-  }
+    return NULL;
+
+  *ncpus = hwloc_bitmap_weight(handle->cpus[taskid]);
 
   return handle->cpus_usr[taskid];
 }
+
 
 /*
  * Get the number of GPUs in the system/allocation.
@@ -522,6 +512,43 @@ int mpibind_get_restrict_type(mpibind_t *handle)
 }
 
 
+/* 
+ * Make sure the topology includes important components
+ * like PCI devices and GPUs. 
+ * This call should be executed between hwloc_topology_init 
+ * and hwloc_topology_load. 
+ */ 
+int mpibind_filter_topology(hwloc_topology_t topology)
+{
+  int rc = 0;
+  
+  /* Remove objects that do not add structure. 
+     Warning: This function can collapse the Core and PU levels
+     into the PU level. Functions that look for the Core level 
+     may break or behave differently!  
+     Leaving it in for now, because I have my own 'get_core_*' 
+     functions rather than using HWLOC_OBJ_CORE directly */ 
+  if ( (rc = hwloc_topology_set_all_types_filter(topology,
+						HWLOC_TYPE_FILTER_KEEP_STRUCTURE)) != 0 )
+    return rc; 
+    
+  /* OS devices are filtered by default, enable to see GPUs */ 
+  if ( (rc = hwloc_topology_set_type_filter(topology,
+					   HWLOC_OBJ_OS_DEVICE,
+					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
+    return rc; 
+
+  /* Include PCI devices to determine whether two GPUs 
+     are the same device, i.e., opencl1d1 and cuda1 */ 
+  if ( (rc = hwloc_topology_set_type_filter(topology,
+					   HWLOC_OBJ_PCI_DEVICE,
+					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
+    return rc;
+
+  return rc; 
+}
+
+
 /*
  * Process the input and call the main mapping function. 
  * Input: 
@@ -547,7 +574,7 @@ int mpibind_get_restrict_type(mpibind_t *handle)
  */
 int mpibind(mpibind_t *hdl)
 {
-  int i, gpu_optim, rc=0;
+  int i, j, val, gpu_optim, rc=0;
   unsigned version, major;
   unsigned long flags;
   hwloc_bitmap_t set;
@@ -571,7 +598,12 @@ int mpibind(mpibind_t *hdl)
 
   if (hdl->topo == NULL) { 
     hwloc_topology_init(&hdl->topo);
-    topology_load(hdl->topo);
+    /* Include important components like PCI devices */ 
+    if ( mpibind_filter_topology(hdl->topo) != 0 )
+      fprintf(stderr, "Warn: Could not filter the topology\n"); 
+    /* Detect the topology */ 
+    hwloc_topology_load(hdl->topo);
+    
   } else {
     /* Caller provides the hwloc topology */ 
     hwloc_topology_check(hdl->topo);
@@ -672,6 +704,16 @@ int mpibind(mpibind_t *hdl)
           hdl->ntasks, hdl->in_nthreads,
 		      hdl->greedy, gpu_optim, hdl->smt, 
 		      hdl->nthreads, hdl->cpus, hdl->gpus);
+
+  /* Finally, populate hdl->cpus_usr */
+  hdl->cpus_usr = calloc(hdl->ntasks, sizeof(int *));
+  for (i=0; i<hdl->ntasks; i++) {
+    hdl->cpus_usr[i] = calloc(MAX_CPUS_PER_TASK, sizeof(int));
+    j = 0;
+    hwloc_bitmap_foreach_begin(val, hdl->cpus[i]) {
+      hdl->cpus_usr[i][j++] = val;
+    } hwloc_bitmap_foreach_end();
+  }
   
   /* Don't destroy the topology, because the caller may 
      need it to parse the resulting cpu/gpu bitmaps */ 
@@ -952,8 +994,10 @@ int mpibind_apply(mpibind_t *handle, int taskid)
   hwloc_bitmap_t *core_sets = mpibind_get_cpus(handle);
   hwloc_topology_t topo = mpibind_get_topology(handle);
   
-  if ((rc = hwloc_set_cpubind(topo, core_sets[taskid], 0)) < 0)
+  if ((rc = hwloc_set_cpubind(topo, core_sets[taskid], 0)) < 0) {
+    perror("hwloc_set_cpubind");
     return rc;
+  }
   
   return 0;
 }

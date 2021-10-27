@@ -2,6 +2,29 @@ import json
 import mpibind
 import unittest
 import re
+import itertools
+
+
+# Based on https://stackoverflow.com/questions/4628333/\
+# converting-a-list-of-integers-into-range-in-python
+# lst: [0, 1, 2, 3, 4, 7, 8, 9, 11]
+# key: 0 group: [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]
+# key: 2 group: [(5, 7), (6, 8), (7, 9)]
+# key: 3 group: [(8, 11)]
+def ints2ranges(lst):
+    '''Convert an integer list into a range generator'''
+    key_func = lambda pair: pair[1] - pair[0]
+    for key, grp in itertools.groupby(enumerate(lst), key_func):
+        grp = list(grp)
+        beg = grp[0][1]
+        end = grp[-1][1]
+
+        res = "{}".format(beg)
+        if beg != end:
+            res += "-{}".format(end)
+
+        yield res
+
 
 def parse_expected(answer_file):
     """
@@ -65,8 +88,20 @@ def get_actual(handle, single_test_info):
     handle.mpibind()
 
     thread_mapping = ';'.join([str(ele) for ele in handle.nthreads])
-    cpu_mapping = ';'.join([handle.get_cpus_ptask(i) for i in range(handle.ntasks)])
     gpu_mapping = ';'.join([','.join(handle.get_gpus_ptask(i)) for i in range(handle.ntasks)])
+    #cpu_mapping = ';'.join([handle.get_cpus_ptask(i)
+    #                        for i in range(handle.ntasks)])
+    # Since 'get_cpus_ptask' now returns a list of ints,
+    # convert the list into ranges as a string
+    cpu_mapping = []
+    for i in range(handle.ntasks):
+        # ints2ranges is a generator, thus make it a list
+        # and join the ranges with commas
+        cpu_lst = list(ints2ranges(handle.get_cpus_ptask(i)))
+        cpu_mapping.append(','.join(cpu_lst))
+    # The mapping of tasks is separated by semicolons
+    cpu_mapping = ';'.join(cpu_mapping)
+
     return thread_mapping, cpu_mapping, gpu_mapping
 
 def make_test_name(description):

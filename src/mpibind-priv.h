@@ -11,6 +11,7 @@
 #define PCI_BUSID_LEN 16
 #define UUID_LEN 64
 #define MAX_IO_DEVICES 128
+#define MAX_CPUS_PER_TASK 1024
 
 #define VERBOSE 0
 #define DEBUG 0
@@ -77,7 +78,7 @@ struct mpibind_t {
   hwloc_bitmap_t *cpus; 
   hwloc_bitmap_t *gpus;
   char ***gpus_usr; 
-  char **cpus_usr;
+  int **cpus_usr;
 
   /* Environment variables */
   int nvars;

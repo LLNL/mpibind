@@ -1,14 +1,8 @@
+#######################################################
+# File originally created by S. Herbein@LLNL and
+# included here with permission from M. Grondona@LLNL
+#######################################################
 #!/usr/bin/env python
-
-"""
- * Copyright 2019 Lawrence Livermore National Security, LLC
- * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
- *
- * This file is from of the Flux resource manager framework.
- * For details, see https://github.com/flux-framework.
- *
- * SPDX-License-Identifier: LGPL-3.0
-"""
 
 import sys
 import os

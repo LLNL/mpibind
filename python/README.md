@@ -1,77 +1,93 @@
-## mpibind for Python
+# The Python interface
 
-mpibind for Python enables the use of the mpibind algorithm in arbitrary python programs.
+`mpibind` for Python enables the use of the mpibind algorithm in
+arbitrary Python programs.  
 
-### Building and installing 
+## Building and installing 
 
-The python bindings will be built using the normal build process:
+### Spack 
 
+The easiest way to build and install the Python interface is through
+`spack`
 ```
-$ ./bootstrap
-
-$ ./configure --prefix=<install_dir>
-
-$ make
-
-$ make install
+spack install mpibind+python
+spack load mpibind 
 ```
 
-provided that python3 and CFFI are present at configure time.
+### Autotools
 
-Users of the bindings have 2 options when it comes to installation:
+Otherwise use the Autools process described at the top
+directory. Basically, the Python bindings are built provided 
+that Python 3 and CFFI are present at `configure` time. Let's assume
+that mpibind's installation directory is `install_dir`
 
-1. Add the bindings to the python path 
+Options available to install the Python interface: 
+
+* Add the bindings to the Python path 
 ```
-   export PYTHONPATH="${PYTHONPATH}:<install_dir>/share"
+   export PYTHONPATH=$PYTHONPATH:install_dir/share"
 ```
-2. Install the bindings
+* Use `setup.py`
 ```
-   cd <install_dir>/share
+   cd install_dir/share
    python setup.py install
 ```
 
-### Usage 
+### Dependencies 
 
-Here is a toy example that demonstrates the mpibind for Python interface
+* Python 3
+* The C Foreign Function Interface for Python
+ ([CFFI](https://cffi.readthedocs.io/en/latest/)) 
+
+## Usage 
+
+Here is a toy program that demonstrates the Python interface. This
+program uses `mpi4py` so make sure it is installed on your system,
+e.g., `pip install mpi4py`
+
 
 ```python
+##########
+## toy.py 
+##########
+import os
 from mpi4py import MPI
 import mpibind
-import os
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
 
-print(rank, "before affinity", os.sched_getaffinity(0))
+print(rank, ": running on cpus ", os.sched_getaffinity(0))
+
+# Create an mpibind handle, 'ntasks' is a required parameter
 handle = mpibind.MpibindHandle(ntasks=size, restrict_ids='0-7')
+# Create the mapping 
 handle.mpibind()
+
+print("Applying mpibind's mapping")
 handle.apply(rank)
-print(rank, "after affinity", os.sched_getaffinity(0))
+
+print(rank, ": running on cpus ", os.sched_getaffinity(0))
 
 if rank == 0:
-    print(handle.mapping_snprint())
+    handle.mapping_print()
     data = [(i+1)**2 for i in range(size)]
 else:
     data = None
-
 
 data = comm.scatter(data, root=0)
 assert data == (rank+1)**2
 ```
 
-Install dependencies (make sure to install mpibind too!)
-```
-pip install mpi4py
-```
 
-Run under slurm with
+Run under `slurm` with the following command: 
 
 ```
-srun -u -N1 -n4 python mpibind_example.py
+srun -N1 -n4 python toy.py
 ```
 
-Output (from a quartz debug node):
+Example output:
 ```
 0 before affinity {0, 1, 2, 3, 4, 5, 6, 7, 8}
 1 before affinity {9, 10, 11, 12, 13, 14, 15, 16, 17}
@@ -87,22 +103,31 @@ mpibind: task  2 nths  2 gpus  cpus 4-5
 mpibind: task  3 nths  2 gpus  cpus 6-7
 ```
 
-### Development and Testing
+## Tests
 
-We use the C Foreign Function Interface for Python or [CFFI](https://cffi.readthedocs.io/en/latest/) to build mpibind for Python.
-CFFI is a Python library that allows us to build python wrappers for c code. CFFI allows for several modes of interaction between C and Python (API vs ABI) and (out-of-line vs in-line). For mpibind, we use CFFI in in-line ABI mode.
+Tests are located in the `test-suite/python` directory. We use `pycotap`
+to emit the Test Anything Protocol (TAP) from Python unit
+tests. Install `pycotap` before configuration to use the Python test
+suite, e.g., `pip install pycotap`
 
-Exposing an mpibind function to python requires two modifications to the python/mpibind.py.in.
+Two modifications are required to add a Python test. 
+
+1. Create a new test file under test-suite/python
+2. Add the new test file to the `PYTHON_TESTS` variable in
+`test-suite/Makefile.am`
+
+
+## Development 
+
+We use CFFI to build mpibind for Python.
+CFFI is a Python library that allows building Python wrappers for C
+code. CFFI allows for several modes of interaction between C and
+Python: API vs ABI and out-of-line vs in-line. For mpibind, we use
+CFFI in ABI, in-line mode. 
+
+Exposing an mpibind C function to Python requires two modifications to
+`python/mpibind.py.in`
 
 1. Add the C function definition to the cdef argument
 2. Add a wrapper for the function to the class MpibindHandle
 
-Tests are located in the test-suite/python directory. We use pycotap to emit the Test Anything Protocol (TAP) from python unit tests. Install pycotap before configuration to use the python test suite.
-```
-pip install pycotap
-```
-
-Two modifications are required to add a python test.
-
-1. Create a new test file under test-suite/python
-2. Add the new test file to the PYTHON_TESTS variable in test-suite/Makefile.am

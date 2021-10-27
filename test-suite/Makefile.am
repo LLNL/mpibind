@@ -24,9 +24,10 @@ environment_t_SOURCES = environment.c test_utils.c test_utils.h
 # Statement must terminate with a semicolon.
 if HAVE_DARWIN_OS
 AM_TESTS_ENVIRONMENT += \
+	if [[ ! $@ =~ python ]]; then \
 	echo "Executing dylib fix for `echo $@ | sed 's/\.log/\.t/'`"; \
 	install_name_tool -change libtap.dylib \
-	$(TAP_LIBDIR)/libtap.dylib .libs/`echo $@ | sed 's/\.log/\.t/'`;
+	$(TAP_LIBDIR)/libtap.dylib .libs/`echo $@ | sed 's/\.log/\.t/'`; fi;
 endif
 
 C_TESTS = \

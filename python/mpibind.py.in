@@ -69,7 +69,8 @@ _ffi.cdef('''
 
   char** mpibind_get_gpus_ptask(mpibind_t *handle, 
           int taskid, int *ngpus);
-  char* mpibind_get_cpus_ptask(mpibind_t *handle, int taskid);
+  int* mpibind_get_cpus_ptask(mpibind_t *handle,
+          int taskid, int *ncpus);
 
   void mpibind_mapping_print(mpibind_t *handle);
   int mpibind_mapping_ptask_snprint(char *buf, size_t size, 
@@ -100,9 +101,10 @@ def topology_set_xml(topology_file_path):
     os.environ["HWLOC_XMLFILE"] = topology_file_path
 
 class MpibindHandle():
-    def __init__(self, topology_file=None, ntasks=None, nthreads=None, 
-            greedy=None, gpu_optim=None, smt=None, 
-            restrict_ids=None, restrict_type=None):
+    def __init__(self, ntasks=None, nthreads=None,
+                 greedy=None, gpu_optim=None, smt=None,
+                 restrict_ids=None, restrict_type=None,
+                 topology_file=None):
         """
         Object-oriented wrapper for the mpibind handle struct. 
         Calls mpibind_init.
@@ -134,21 +136,21 @@ class MpibindHandle():
             raise RuntimeError("mpibind_init failed")
         self.__handle = self.__phandle[0]
 
-        if topology_file:
+        if not topology_file is None:
             topology_set_xml(topology_file)
-        if ntasks:
+        if not ntasks is None:
             self.ntasks = ntasks
-        if nthreads:
+        if not nthreads is None:
             self.nthreads = nthreads
-        if greedy:
+        if not greedy is None:
             self.greedy = greedy
-        if gpu_optim:
+        if not gpu_optim is None:
             self.gpu_optim = gpu_optim
-        if smt:
+        if not smt is None:
             self.smt = smt
-        if restrict_ids:
+        if not restrict_ids is None:
             self.restrict_ids = restrict_ids
-        if restrict_type:
+        if not restrict_type is None:
             self.restrict_type = restrict_type
 
     def finalize(self):
@@ -356,8 +358,9 @@ class MpibindHandle():
         :return: the cpus mapped to the given task
         :rtype: string
         """
-        raw = _libmpibind.mpibind_get_cpus_ptask(self.__handle, taskid)
-        return _ffi.string(raw).decode('utf-8')
+        ncpus = _ffi.new('int *')
+        raw = _libmpibind.mpibind_get_cpus_ptask(self.__handle, taskid, ncpus)
+        return [raw[i] for i in range(ncpus[0])]
 
     def mapping_ptask_snprint(self, taskid, size=None):
         """

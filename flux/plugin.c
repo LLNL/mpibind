@@ -1,3 +1,5 @@
+#define FLUX_SHELL_PLUGIN_NAME "mpibind"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpibind.h>
@@ -60,7 +62,7 @@
  *   such as "mpibind". If you don't overwrite the affinity module, you'll 
  *   have to disable the module from within this plugin (see mpibind_init)
  */
-#define PLUGIN_NAME "mpibind"
+#define PLUGIN_NAME FLUX_SHELL_PLUGIN_NAME
 
 #define LONG_STR_SIZE 1024
 
@@ -405,14 +407,13 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   
   if (hwloc_topology_init(&topo) < 0)
     return shell_log_errno("hwloc_topology_init");
-  
-  /* OS devices are filtered by default, enable to see GPUs */ 
-  if (hwloc_topology_set_type_filter(topo, HWLOC_OBJ_OS_DEVICE,
-				      HWLOC_TYPE_FILTER_KEEP_IMPORTANT) < 0)
-    return shell_log_errno("hwloc_topology_set_type_filter"); 
+
+  /* Make sure OS and PCI devices are not filtered out */ 
+  if ( mpibind_filter_topology(topo) < 0 )
+    return shell_log_errno("mpibind_filter_topology");
   
   if (hwloc_topology_load(topo) < 0)
-    return shell_log_errno("hwloc_topology_init");
+    return shell_log_errno("hwloc_topology_load");
   
 
   /* Current model uses logical Cores to specify where this 

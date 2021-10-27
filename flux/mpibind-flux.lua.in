@@ -1,0 +1,3 @@
+
+-- Load the mpibind plugin for Flux
+plugin.load ("@fluxplugindir@/mpibind_flux.so")

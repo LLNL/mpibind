@@ -10,7 +10,6 @@ setup(
   name='mpibind',
   version='0.5.0',
   author='LLNL',
-  author_email='leonborja1@llnl.gov',
   url='https://github.com/LLNL/mpibind',
   description='Memory-First Affinity Scheduler',
   long_description=longtext,
