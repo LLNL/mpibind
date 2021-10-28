@@ -38,83 +38,97 @@ Options available to install the Python interface:
 * Python 3
 * The C Foreign Function Interface for Python
  ([CFFI](https://cffi.readthedocs.io/en/latest/)) 
+* [Pycotap](https://pypi.org/project/pycotap/) (for unit testing)
+
 
 ## Usage 
 
-Here is a toy program that demonstrates the Python interface. This
-program uses `mpi4py` so make sure it is installed on your system,
-e.g., `pip install mpi4py`
-
+Here is a simple [program](test-simple.py) that demonstrates the Python
+interface.
 
 ```python
-##########
-## toy.py 
-##########
 import os
-from mpi4py import MPI
 import mpibind
 
-comm = MPI.COMM_WORLD
-size = comm.Get_size()
-rank = comm.Get_rank()
+# This simple example does not use MPI, thus                                    
+# specify my rank and total number of tasks                                     
+rank = 2
+ntasks_per_node = 4
 
-print(rank, ": running on cpus ", os.sched_getaffinity(0))
+# Is sched_getaffinity supported?                                               
+affinity = True if hasattr(os, 'sched_getaffinity') else False
 
-# Create an mpibind handle, 'ntasks' is a required parameter
-handle = mpibind.MpibindHandle(ntasks=size, restrict_ids='0-7')
-# Create the mapping 
+if affinity:
+    cpus = sorted(os.sched_getaffinity(0))
+    affstr  = "\n>Before\n"
+    affstr += "Running on {:2d} cpus: {}\n".format(len(cpus), cpus)
+
+# Create a handle                                                               
+# Num tasks is a required parameter                                             
+handle = mpibind.MpibindHandle(ntasks=ntasks_per_node)
+
+# Create the mapping                                                            
 handle.mpibind()
 
-print("Applying mpibind's mapping")
-handle.apply(rank)
+# Print the mapping                                                             
+handle.mapping_print()
 
-print(rank, ": running on cpus ", os.sched_getaffinity(0))
-
-if rank == 0:
-    handle.mapping_print()
-    data = [(i+1)**2 for i in range(size)]
-else:
-    data = None
-
-data = comm.scatter(data, root=0)
-assert data == (rank+1)**2
+# Apply the mapping as if I am worker 'rank'                                    
+# This function is not supported on some platforms                              
+if affinity:
+    handle.apply(rank)
+    cpus = sorted(os.sched_getaffinity(0))
+    print(affstr + ">After\n" +
+        "Running on {:2d} cpus: {}".format(len(cpus), cpus))
 ```
 
+Running it on a dual-socket system with 18x2 SMT-2 cores results in the
+output below. Note that the resulting mapping uses only the first socket
+because `mpibind` optimizes placement for GPUs by default (configurable
+parameter) and both GPUs are located on the first socket.
 
-Run under `slurm` with the following command: 
+```bash
+$ python3 test-simple.py 
+mpibind: task  0 nths  4 gpus 0 cpus 0-4
+mpibind: task  1 nths  4 gpus 0 cpus 5-9
+mpibind: task  2 nths  4 gpus 1 cpus 10-13
+mpibind: task  3 nths  4 gpus 1 cpus 14-17
 
-```
-srun -N1 -n4 python toy.py
-```
-
-Example output:
-```
-0 before affinity {0, 1, 2, 3, 4, 5, 6, 7, 8}
-1 before affinity {9, 10, 11, 12, 13, 14, 15, 16, 17}
-3 before affinity {32, 33, 34, 35, 27, 28, 29, 30, 31}
-2 before affinity {18, 19, 20, 21, 22, 23, 24, 25, 26}
-3 after affinity {6, 7}
-2 after affinity {4, 5}
-0 after affinity {0, 1}
-1 after affinity {2, 3}
-mpibind: task  0 nths  2 gpus  cpus 0-1
-mpibind: task  1 nths  2 gpus  cpus 2-3
-mpibind: task  2 nths  2 gpus  cpus 4-5
-mpibind: task  3 nths  2 gpus  cpus 6-7
+>Before
+Task 2: Running on 72 cpus: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
+>After
+Task 2: Running on  4 cpus: [10, 11, 12, 13]
 ```
 
-## Tests
+A more realistic example that uses MPI is provided in
+[test-mpi.py](test-mpi.py). This program uses `mpi4py` so make sure it is
+installed on your system, e.g., `pip install mpi4py`. It can be run as follows:
 
-Tests are located in the `test-suite/python` directory. We use `pycotap`
-to emit the Test Anything Protocol (TAP) from Python unit
-tests. Install `pycotap` before configuration to use the Python test
-suite, e.g., `pip install pycotap`
+```bash
+$ srun -N2 -n8 python3 test-mpi.py
+pascal7 task 0/8: lrank 0/4 nths 4 gpus ['0'] cpus [0, 1, 2, 3, 4]
+pascal7 task 1/8: lrank 1/4 nths 4 gpus ['0'] cpus [5, 6, 7, 8, 9]
+pascal7 task 2/8: lrank 2/4 nths 4 gpus ['1'] cpus [10, 11, 12, 13]
+pascal7 task 3/8: lrank 3/4 nths 4 gpus ['1'] cpus [14, 15, 16, 17]
+pascal8 task 4/8: lrank 0/4 nths 4 gpus ['0'] cpus [0, 1, 2, 3, 4]
+pascal8 task 5/8: lrank 1/4 nths 4 gpus ['0'] cpus [5, 6, 7, 8, 9]
+pascal8 task 6/8: lrank 2/4 nths 4 gpus ['1'] cpus [10, 11, 12, 13]
+pascal8 task 7/8: lrank 3/4 nths 4 gpus ['1'] cpus [14, 15, 16, 17]
+```
+
+## Unit tests
+
+Unit tests are located in [test-suite/python](../test-suite/python) and can be
+launched from the top directory with `make check`. We use `pycotap` to emit the
+Test Anything Protocol (TAP) from the Python tests. Make sure `pycotap` is
+installed, e.g., `pip install pycotap` before running `configure` from the top
+directory.
 
 Two modifications are required to add a Python test. 
 
-1. Create a new test file under test-suite/python
+1. Create a new test file under [test-suite/python](../test-suite/python)
 2. Add the new test file to the `PYTHON_TESTS` variable in
-`test-suite/Makefile.am`
+[test-suite/Makefile.am](../test-suite/Makefile.am)
 
 
 ## Development 
@@ -126,8 +140,8 @@ Python: API vs ABI and out-of-line vs in-line. For mpibind, we use
 CFFI in ABI, in-line mode. 
 
 Exposing an mpibind C function to Python requires two modifications to
-`python/mpibind.py.in`
+[mpibind.py.in](mpibind.py.in)
 
-1. Add the C function definition to the cdef argument
-2. Add a wrapper for the function to the class MpibindHandle
+1. Add the C function definition to the `cdef` argument
+2. Add a wrapper for the function to the class `MpibindHandle`
 
