@@ -12,15 +12,17 @@ rank = 2
 ntasks_per_node = 4
 
 # Is sched_getaffinity supported? 
-getaffinity = True if hasattr(os, 'sched_getaffinity') else False 
+affinity = True if hasattr(os, 'sched_getaffinity') else False 
 
-if getaffinity:
+if affinity:
     cpus = sorted(os.sched_getaffinity(0))
-    print('Running on', len(cpus), 'cpus:', cpus)
+    affstr  = "\n>Before\n"
+    affstr += "{}: Running on {:2d} cpus: {}\n"\
+              .format(rank, len(cpus), cpus)
 
 # Create a handle
 # Num tasks is a required parameter
-handle = mpibind.MpibindHandle(ntasks_per_node)
+handle = mpibind.MpibindHandle(ntasks=ntasks_per_node)
 
 # Create the mapping 
 handle.mpibind()
@@ -30,8 +32,10 @@ handle.mapping_print()
 
 # Apply the mapping as if I am worker 'rank'
 # This function is not supported on some platforms
-if getaffinity:
+if affinity:
     handle.apply(rank)
     cpus = sorted(os.sched_getaffinity(0))
-    print('Running on', len(cpus), 'cpus:', cpus)
+    print(affstr + ">After\n" + 
+        "{}: Running on {:2d} cpus: {}"\
+          .format(rank, len(cpus), cpus))
 
