@@ -15,34 +15,34 @@ the `-h` option for help.
 
 ```
 $ srun -n4 ./mpi
-node173  Task   0/  4 runing on 4 CPUs: 0,3,6,9
+node173  Task   0/  4 running on 4 CPUs: 0,3,6,9
          Task   0/  4 has 2 GPUs: 0x63 0x43 
-node173  Task   1/  4 runing on 4 CPUs: 12,15,18,21
+node173  Task   1/  4 running on 4 CPUs: 12,15,18,21
          Task   1/  4 has 2 GPUs: 0x3 0x27 
-node173  Task   2/  4 runing on 4 CPUs: 24,27,30,33
+node173  Task   2/  4 running on 4 CPUs: 24,27,30,33
          Task   2/  4 has 2 GPUs: 0xe3 0xc3 
-node173  Task   3/  4 runing on 4 CPUs: 36,39,42,45
+node173  Task   3/  4 running on 4 CPUs: 36,39,42,45
          Task   3/  4 has 2 GPUs: 0x83 0xa3 
 ```
 
 ```
 $ srun -n4 ./mpi -v
-node173  Task   0/  4 runing on 4 CPUs: 0,3,6,9
+node173  Task   0/  4 running on 4 CPUs: 0,3,6,9
          Task   0/  4 has 2 GPUs: 0x63 0x43 
 	Default device: 0x63
 	0x63: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
 	0x43: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
-node173  Task   1/  4 runing on 4 CPUs: 12,15,18,21
+node173  Task   1/  4 running on 4 CPUs: 12,15,18,21
          Task   1/  4 has 2 GPUs: 0x3 0x27 
 	Default device: 0x3
 	0x03: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
 	0x27: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
-node173  Task   2/  4 runing on 4 CPUs: 24,27,30,33
+node173  Task   2/  4 running on 4 CPUs: 24,27,30,33
          Task   2/  4 has 2 GPUs: 0xe3 0xc3 
 	Default device: 0xe3
 	0xe3: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
 	0xc3: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
-node173  Task   3/  4 runing on 4 CPUs: 36,39,42,45
+node173  Task   3/  4 running on 4 CPUs: 36,39,42,45
          Task   3/  4 has 2 GPUs: 0x83 0xa3 
 	Default device: 0x83
 	0x83: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
@@ -51,7 +51,7 @@ node173  Task   3/  4 runing on 4 CPUs: 36,39,42,45
 
 ```
 $ OMP_NUM_THREADS=4 srun -n2 ./omp
-Process runing on 1 CPUs: 0
+Process running on 1 CPUs: 0
 Process has 4 GPUs: 0x63 0x43 0x3 0x27 
 	Default device: 0x63
 	0x63: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC
@@ -67,7 +67,7 @@ Thread   2/  4 assigned to GPU: 0x3
 Thread   3/  4 running on 1 CPUs: 18
 Thread   3/  4 assigned to GPU: 0x27
 
-Process runing on 1 CPUs: 24
+Process running on 1 CPUs: 24
 Process has 4 GPUs: 0xe3 0xc3 0x83 0xa3 
 	Default device: 0xe3
 	0xe3: Vega 20, 31 GB Mem, 60 Multiprocessors, 1.725 GHZ, 9.6 CC

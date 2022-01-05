@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 	verbose = 1; 
     }
 
-  nc += sprintf(buf+nc, "Process runing on %d CPUs: ", ncpus);
+  nc += sprintf(buf+nc, "Process running on %d CPUs: ", ncpus);
   nc += get_cpu_affinity(buf+nc);
 #ifdef HAVE_GPUS
   int ndevs = get_gpu_count();
