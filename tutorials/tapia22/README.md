@@ -11,6 +11,11 @@ Tech Workshop @[Tapia Conference](https://tapiaconference.cmd-it.org/)<br>
 Friday 9 September 2022<br>
 Washington, DC
 
+Short link for this module: [shorturl.at/boru4](shorturl.at/boru4)
+
+## AWS environment instructions
+
+Please see [our instructions](tapia-setup-instructions.md) for ssh'ing to AWS.
 
 ## Table of contents 
 
@@ -80,7 +85,7 @@ Once we throw memory into the picture, we need to consider not only what resourc
 
 In the image below, consider a scenario where we have two processors and two stores of memory. In the layout shown, processor 1 is closer to memory 1 than to memory 2; similarly, processor 2 is closer to memory 2 than memory 1. This means that processor 1 can more easily and *more quickly* access data stored in memory 1 than data stored in memory 2 and vice versus. In this case, the processors have Non-Uniform Memory Access (NUMA) and we say that memory 1 and processor 1 are in the same NUMA domain. Processor 2 shares the second NUMA domain with memory 2 and will access data in memory 1 with higher latency.
 
-<img src="../figures/numa.png" width="300"/>
+<img src="../figures/NUMA.png" width="300"/>
 
 We can imagine scenarios where memory is laid out to be equidistant from multiple processors and where multiple processors are in the same NUMA domain. In the architectures we'll consider, however, there will be a one-to-one mapping between NUMA domains and processors; all computing resources on a Silicon die will be in the same NUMA domain and different processors will have different "local" memory.
 
@@ -88,13 +93,13 @@ Our references to "memory" above refer to memory that's transmitted over a front
 
 In general, cache levels are denoted as `L<N>` where `<N>` denotes the cache level. Lower values of `N` denote smaller and faster levels of cache. In the figure below, we see an example of what the cache hierarchy and layout might look like on a single processor.
 
-<img src="../figures/cache.png" width="500"/>
+<img src="../figures/Cache.png" width="500"/>
 
 In this example cache layout, there are three levels of cache -- `L1`, `L2`, and `L3`. Each core has its own `L1` cache, every two cores share a `L2` cache, and sets of six cores each have a `L3` cache.
 
 ## 3. Example architectures
 
-The topologies of a few example architectures are summarized and diagramed [here](../common/archs.md).
+The topologies of a few example architectures are summarized and diagramed [here](archs.md).
 
 In examples throughout the coming modules, we'll be focusing on Pascal and sometimes Corona!
 
@@ -208,25 +213,244 @@ Machine (126GB total)
 
 By default, `lstopo` and `lstopo-no-graphics` show the topology of the machine you're logged into. Alternatively, you can pass an `.xml` file describing the topology of a *different* machine to see the topology of that machine.
 
+**Note**: on your AWS desktop, graphics are not configured so you will not be able to generate images with `lstopo`. `lstopo` will behave the same as `lstopo-no-graphics`.
+
 From your AWS desktop, try the following:
 
+<details>
+<summary>
 ```
-lstopo --input ~/pascal.xml
+lstopo --input /home/tutorial/topo-xml/pascal.xml
 ```
+</summary>
 
-and then try:
+```
+Machine (251GB total)
+  Package L#0
+    NUMANode L#0 (P#0 126GB)
+    L3 L#0 (45MB)
+      L2 L#0 (256KB) + L1d L#0 (32KB) + L1i L#0 (32KB) + Core L#0
+        PU L#0 (P#0)
+        PU L#1 (P#36)
+      L2 L#1 (256KB) + L1d L#1 (32KB) + L1i L#1 (32KB) + Core L#1
+        PU L#2 (P#1)
+        PU L#3 (P#37)
+      L2 L#2 (256KB) + L1d L#2 (32KB) + L1i L#2 (32KB) + Core L#2
+        PU L#4 (P#2)
+        PU L#5 (P#38)
+      L2 L#3 (256KB) + L1d L#3 (32KB) + L1i L#3 (32KB) + Core L#3
+        PU L#6 (P#3)
+        PU L#7 (P#39)
+      L2 L#4 (256KB) + L1d L#4 (32KB) + L1i L#4 (32KB) + Core L#4
+        PU L#8 (P#4)
+        PU L#9 (P#40)
+      L2 L#5 (256KB) + L1d L#5 (32KB) + L1i L#5 (32KB) + Core L#5
+        PU L#10 (P#5)
+        PU L#11 (P#41)
+      L2 L#6 (256KB) + L1d L#6 (32KB) + L1i L#6 (32KB) + Core L#6
+        PU L#12 (P#6)
+        PU L#13 (P#42)
+      L2 L#7 (256KB) + L1d L#7 (32KB) + L1i L#7 (32KB) + Core L#7
+        PU L#14 (P#7)
+        PU L#15 (P#43)
+      L2 L#8 (256KB) + L1d L#8 (32KB) + L1i L#8 (32KB) + Core L#8
+        PU L#16 (P#8)
+        PU L#17 (P#44)
+      L2 L#9 (256KB) + L1d L#9 (32KB) + L1i L#9 (32KB) + Core L#9
+        PU L#18 (P#9)
+        PU L#19 (P#45)
+      L2 L#10 (256KB) + L1d L#10 (32KB) + L1i L#10 (32KB) + Core L#10
+        PU L#20 (P#10)
+        PU L#21 (P#46)
+      L2 L#11 (256KB) + L1d L#11 (32KB) + L1i L#11 (32KB) + Core L#11
+        PU L#22 (P#11)
+        PU L#23 (P#47)
+      L2 L#12 (256KB) + L1d L#12 (32KB) + L1i L#12 (32KB) + Core L#12
+        PU L#24 (P#12)
+        PU L#25 (P#48)
+      L2 L#13 (256KB) + L1d L#13 (32KB) + L1i L#13 (32KB) + Core L#13
+        PU L#26 (P#13)
+        PU L#27 (P#49)
+      L2 L#14 (256KB) + L1d L#14 (32KB) + L1i L#14 (32KB) + Core L#14
+        PU L#28 (P#14)
+        PU L#29 (P#50)
+      L2 L#15 (256KB) + L1d L#15 (32KB) + L1i L#15 (32KB) + Core L#15
+        PU L#30 (P#15)
+        PU L#31 (P#51)
+      L2 L#16 (256KB) + L1d L#16 (32KB) + L1i L#16 (32KB) + Core L#16
+        PU L#32 (P#16)
+        PU L#33 (P#52)
+      L2 L#17 (256KB) + L1d L#17 (32KB) + L1i L#17 (32KB) + Core L#17
+        PU L#34 (P#17)
+        PU L#35 (P#53)
+    HostBridge
+      PCIBridge
+        PCIBridge
+          PCIBridge
+            PCI 04:00.0 (3D)
+              CoProc(OpenCL) "opencl0d0"
+              CoProc(CUDA) "cuda0"
+              GPU "nvml0"
+          PCIBridge
+            PCI 07:00.0 (3D)
+              CoProc(OpenCL) "opencl0d1"
+              CoProc(CUDA) "cuda1"
+              GPU "nvml1"
+          PCIBridge
+            PCI 08:00.0 (InfiniBand)
+              Net "hsi0"
+              OpenFabrics "mlx5_0"
+      PCIBridge
+        PCIBridge
+          PCI 0b:00.0 (VGA)
+      PCIBridge
+        PCI 0c:00.0 (Ethernet)
+          Net "enp12s0f0"
+        PCI 0c:00.1 (Ethernet)
+          Net "enp12s0f1"
+  Package L#1
+    NUMANode L#1 (P#1 126GB)
+    L3 L#1 (45MB)
+      L2 L#18 (256KB) + L1d L#18 (32KB) + L1i L#18 (32KB) + Core L#18
+        PU L#36 (P#18)
+        PU L#37 (P#54)
+      L2 L#19 (256KB) + L1d L#19 (32KB) + L1i L#19 (32KB) + Core L#19
+        PU L#38 (P#19)
+        PU L#39 (P#55)
+      L2 L#20 (256KB) + L1d L#20 (32KB) + L1i L#20 (32KB) + Core L#20
+        PU L#40 (P#20)
+        PU L#41 (P#56)
+      L2 L#21 (256KB) + L1d L#21 (32KB) + L1i L#21 (32KB) + Core L#21
+        PU L#42 (P#21)
+        PU L#43 (P#57)
+      L2 L#22 (256KB) + L1d L#22 (32KB) + L1i L#22 (32KB) + Core L#22
+        PU L#44 (P#22)
+        PU L#45 (P#58)
+      L2 L#23 (256KB) + L1d L#23 (32KB) + L1i L#23 (32KB) + Core L#23
+        PU L#46 (P#23)
+        PU L#47 (P#59)
+      L2 L#24 (256KB) + L1d L#24 (32KB) + L1i L#24 (32KB) + Core L#24
+        PU L#48 (P#24)
+        PU L#49 (P#60)
+      L2 L#25 (256KB) + L1d L#25 (32KB) + L1i L#25 (32KB) + Core L#25
+        PU L#50 (P#25)
+        PU L#51 (P#61)
+      L2 L#26 (256KB) + L1d L#26 (32KB) + L1i L#26 (32KB) + Core L#26
+        PU L#52 (P#26)
+        PU L#53 (P#62)
+      L2 L#27 (256KB) + L1d L#27 (32KB) + L1i L#27 (32KB) + Core L#27
+        PU L#54 (P#27)
+        PU L#55 (P#63)
+      L2 L#28 (256KB) + L1d L#28 (32KB) + L1i L#28 (32KB) + Core L#28
+        PU L#56 (P#28)
+        PU L#57 (P#64)
+      L2 L#29 (256KB) + L1d L#29 (32KB) + L1i L#29 (32KB) + Core L#29
+        PU L#58 (P#29)
+        PU L#59 (P#65)
+      L2 L#30 (256KB) + L1d L#30 (32KB) + L1i L#30 (32KB) + Core L#30
+        PU L#60 (P#30)
+        PU L#61 (P#66)
+      L2 L#31 (256KB) + L1d L#31 (32KB) + L1i L#31 (32KB) + Core L#31
+        PU L#62 (P#31)
+        PU L#63 (P#67)
+      L2 L#32 (256KB) + L1d L#32 (32KB) + L1i L#32 (32KB) + Core L#32
+        PU L#64 (P#32)
+        PU L#65 (P#68)
+      L2 L#33 (256KB) + L1d L#33 (32KB) + L1i L#33 (32KB) + Core L#33
+        PU L#66 (P#33)
+        PU L#67 (P#69)
+      L2 L#34 (256KB) + L1d L#34 (32KB) + L1i L#34 (32KB) + Core L#34
+        PU L#68 (P#34)
+        PU L#69 (P#70)
+      L2 L#35 (256KB) + L1d L#35 (32KB) + L1i L#35 (32KB) + Core L#35
+        PU L#70 (P#35)
+        PU L#71 (P#71)
+  Block(Disk) "sda"
+  ```
 
-```
-lstopo-no-graphics --input ~/pascal.xml
-```
+</details>
 
 #### Hands-on exercise B: Investigating AWS nodes with `lstopo`
 
 Let's use `lstopo` to show the topology of the nodes we can see through AWS. The node you see immediately after logging in doesn't have the most interesting topology, but the nodes waiting for you in the "queue" have more features. To see the topology of one of these nodes, use the following command:
 
+<details>
+<summary>
 ```
-srun -p<QUEUE> -t1 lstopo
+srun lstopo
 ```
+</summary>
+
+```
+Machine (240GB total)
+  Package L#0
+    NUMANode L#0 (P#0 240GB)
+    L3 L#0 (45MB)
+      L2 L#0 (256KB) + L1d L#0 (32KB) + L1i L#0 (32KB) + Core L#0
+        PU L#0 (P#0)
+        PU L#1 (P#16)
+      L2 L#1 (256KB) + L1d L#1 (32KB) + L1i L#1 (32KB) + Core L#1
+        PU L#2 (P#1)
+        PU L#3 (P#17)
+      L2 L#2 (256KB) + L1d L#2 (32KB) + L1i L#2 (32KB) + Core L#2
+        PU L#4 (P#2)
+        PU L#5 (P#18)
+      L2 L#3 (256KB) + L1d L#3 (32KB) + L1i L#3 (32KB) + Core L#3
+        PU L#6 (P#3)
+        PU L#7 (P#19)
+      L2 L#4 (256KB) + L1d L#4 (32KB) + L1i L#4 (32KB) + Core L#4
+        PU L#8 (P#4)
+        PU L#9 (P#20)
+      L2 L#5 (256KB) + L1d L#5 (32KB) + L1i L#5 (32KB) + Core L#5
+        PU L#10 (P#5)
+        PU L#11 (P#21)
+      L2 L#6 (256KB) + L1d L#6 (32KB) + L1i L#6 (32KB) + Core L#6
+        PU L#12 (P#6)
+        PU L#13 (P#22)
+      L2 L#7 (256KB) + L1d L#7 (32KB) + L1i L#7 (32KB) + Core L#7
+        PU L#14 (P#7)
+        PU L#15 (P#23)
+      L2 L#8 (256KB) + L1d L#8 (32KB) + L1i L#8 (32KB) + Core L#8
+        PU L#16 (P#8)
+        PU L#17 (P#24)
+      L2 L#9 (256KB) + L1d L#9 (32KB) + L1i L#9 (32KB) + Core L#9
+        PU L#18 (P#9)
+        PU L#19 (P#25)
+      L2 L#10 (256KB) + L1d L#10 (32KB) + L1i L#10 (32KB) + Core L#10
+        PU L#20 (P#10)
+        PU L#21 (P#26)
+      L2 L#11 (256KB) + L1d L#11 (32KB) + L1i L#11 (32KB) + Core L#11
+        PU L#22 (P#11)
+        PU L#23 (P#27)
+      L2 L#12 (256KB) + L1d L#12 (32KB) + L1i L#12 (32KB) + Core L#12
+        PU L#24 (P#12)
+        PU L#25 (P#28)
+      L2 L#13 (256KB) + L1d L#13 (32KB) + L1i L#13 (32KB) + Core L#13
+        PU L#26 (P#13)
+        PU L#27 (P#29)
+      L2 L#14 (256KB) + L1d L#14 (32KB) + L1i L#14 (32KB) + Core L#14
+        PU L#28 (P#14)
+        PU L#29 (P#30)
+      L2 L#15 (256KB) + L1d L#15 (32KB) + L1i L#15 (32KB) + Core L#15
+        PU L#30 (P#15)
+        PU L#31 (P#31)
+  HostBridge
+    PCI 00:01.1 (IDE)
+    PCI 00:02.0 (VGA)
+    PCI 00:03.0 (Ethernet)
+      Net "eth0"
+    PCI 00:1d.0 (VGA)
+      CoProc(CUDA) "cuda0"
+      GPU(NVML) "nvml0"
+    PCI 00:1e.0 (VGA)
+      CoProc(CUDA) "cuda1"
+      GPU(NVML) "nvml1"
+    CoProc(OpenCL) "opencl0d0"
+    CoProc(OpenCL) "opencl0d1"
+  Block "xvda"
+```
+
+</details>
 
 How are the features of the node described by `lstopo`'s output different than those of Pascal?
 
@@ -248,23 +472,82 @@ Possible options to pass to `only` include `NUMANode`, `core`, `PU`, and `OSDevi
 
 Run
 
+<details>
+<summary>
 ```
-lstopo-no-graphics  --input ~/pascal.xml --only core
+lstopo --input /home/tutorial/topo-xml/pascal.xml --only core
 ```
+</summary>
+
+```
+Core L#0
+Core L#1
+Core L#2
+Core L#3
+Core L#4
+Core L#5
+Core L#6
+Core L#7
+Core L#8
+Core L#9
+Core L#10
+Core L#11
+Core L#12
+Core L#13
+Core L#14
+Core L#15
+Core L#16
+Core L#17
+Core L#18
+Core L#19
+Core L#20
+Core L#21
+Core L#22
+Core L#23
+Core L#24
+Core L#25
+Core L#26
+Core L#27
+Core L#28
+Core L#29
+Core L#30
+Core L#31
+Core L#32
+Core L#33
+Core L#34
+Core L#35
+```
+
+</details>
 
 and
 
+<details>
+<summary>
 ```
-lstopo-no-graphics  --input ~/pascal.xml --only core | wc -l
+lstopo --input /home/tutorial/topo-xml/pascal.xml --only core | wc -l
 ```
+</summary>
+
+`36`
+
+</details>
 
 to see the first the full list of cores on Pascal and then to tally them.
 
 Now try
 
+<details>
+<summary>
 ```
-lstopo-no-graphics  --input ~/pascal.xml --only PU | wc -l
+lstopo --input /home/tutorial/topo-xml/pascal.xml --only PU | wc
 ```
+</summary>
+
+`72`
+
+</details>
+
 
 to see how many hardware threads there are on Pascal. How many hardware threads are there per core on Pascal?
 
@@ -288,20 +571,25 @@ janeh@pascal5:~$ lstopo-no-graphics --only PU | wc -l
 ```
 </details>
 
-#### Hands-on exercise C: Investigating AWS nodes with `--only`
+#### Hands-on exercise D: Investigating AWS nodes with `--only`
 
-Use the commands
-
-```
-srun -p<QUEUE> -t1 lstopo-no-graphics --only core | wc -l
-```
-and
+Use the following commands on your AWS desktop
 
 ```
-srun -p<QUEUE> -t1 lstopo-no-graphics --only PU | wc -l
+srun lstopo --only core | wc -l
+```
+
+```
+srun lstopo --only PU | wc -l
 ```
 
 to identify the number of cores and PUs on our AWS nodes. Do these nodes support Simultaneous Multi-Threading (SMT)? How many hardware threads exist per core?
+
+**Bonus:** On `Pascal` there are two sockets on each node. How many are there on our AWS nodes? Try running
+
+```
+srun lstopo --only socket | wc -l 
+```
 
 ## 5. Mapping, affinity, and binding 
 
@@ -376,33 +664,84 @@ A. Affinity: “Policy for one openMP thread per L3 on Corona”
 
 In Hands-On Exercises B & D, we used commands that began with `srun -p<QUEUE> -t1`. `srun` is a command that comes from a piece of software called Slurm and allows us to run parallel programs. In order to run parallel programs, we often need to request special resources. For example, if we want to run a program across several nodes, we first need to request access to use several nodes at once. Slurm helps manage requests like this, and figures out how to "schedule" jobs in environments where many users can make requests for the same resources. 
 
-#### Hands-on exercise D: Serial *Hello World*
+#### Hands-on exercise E: Serial *Hello World*
 
-First, let's try running a serial version of "Hello world". You should see the binary `hello` at `~/hello`. Run this binary by simply typing `hello` and **Enter** at the command prompt. You should receive a single greeting from a single node.
+First, let's try running a serial version of "Hello world". You should see the binary `hello` at `/home/tutorial/install/bin/hello`. Run this binary by simply typing `hello` and **Enter** at the command prompt. You should receive a single greeting from a single node.
 
-#### Hands-on exercise E: Parallel *Hello World*
+<details>
+<summary>
+```
+hello
+```
+</summary>
+
+```
+Hello from task 0 of 1.
+```
+
+</details>
+
+#### Hands-on exercise F: Parallel *Hello World*
 
 Now, try running 
 
 ```
-srun -ppdebug -t1 -N1 -n2 hello
+srun -n8 hello
 ```
 
 and then
 
 ```
-srun -ppdebug -t1 -N1 -n4 hello
+srun -n4 hello
 ```
 
 **How many greetings did you receive for each of these runs?**
 
-Note that `-n` specifies the number of tasks that will run your program.
+<details>
+<summary>
+You probably saw something like the following.
+</summary>
 
-`-N` specifies the number of nodes you want Slurm to use to run your program, `hello`.
+```
+[user1@ip-10-0-1-39 ~]$ srun -n8 ./hello
+Hello from task 2 of 8.
+Hello from task 1 of 8.
+Hello from task 4 of 8.
+Hello from task 7 of 8.
+Hello from task 0 of 8.
+Hello from task 6 of 8.
+Hello from task 3 of 8.
+Hello from task 5 of 8.
+[user1@ip-10-0-1-39 ~]$ srun -n4 ./hello
+Hello from task 0 of 4.
+Hello from task 1 of 4.
+Hello from task 3 of 4.
+Hello from task 2 of 4.
+```
 
-**If you leave the value passed to `-n` fixed, does changing the value passed to `-N` change the number of greetings?**
+</details>
 
-The flags `-ppdebug` and `-t1` tell Slurm which set of nodes to draw from and for how many minutes you expect your job to run.
+`-n` specifies the number of tasks that will run your program.
+
+If you're interested in seeing jobs that are either waiting or running in the queue, you can use the command `squeue`. You might see jobs like the following listed:
+
+```
+[user1@ip-10-0-1-39 ~]$ squeue
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+                13       gpu    hello    user1  R       0:01      1 gpu-st-g38xlarge-1
+```
+
+**Additional notes:**
+
+On these AWS desktops, `srun -pgpu -N1 -n4 -t1 hello` generates the same output as `srun -n4 hello`.
+
+The flags `-N`, `-p`, and `-t` are using reasonable defaults and so they don't need to be called explicitly here.
+
+In particular, `-N` specifies the number of nodes you want Slurm to use to run your program, `hello`.
+
+The flags `-pgpu` and `-t1` tell Slurm which set of nodes to draw from and for how many minutes you expect your job to run.
+
+*If you leave the value passed to `-n` fixed, does changing the value passed to `-N` change the number of greetings?*
 
 ### Reporting affinity
 
@@ -445,25 +784,66 @@ pascal7    Task   1/  4 running on 18 CPUs: 18-35
 
 The total number of tasks doesn't change, but the assignment of tasks to cores does. When we have two tasks and two nodes, each task gets its own node. 
 
+<details>
+<summary>
 If we ran `srun -ppvis -t1 -N2 -n8 ./mpi` on Pascal, how many tasks would run `mpi`? How many cores would each task have access to?
+</summary>
 
-#### Hands-on exercise F: Reporting affinity
+With `-n8`, we'd still have a total of 8 tasks. Because we'd be working with 2 nodes, each with 36 cores, each task would have access to **9** cores.
+
+</details>
+
+
+#### Hands-on exercise G: Reporting affinity
 
 From your AWS instance, run
 
 ```
-srun -ppdebug -t1 -N1 -n2 ./mpi
+srun -n2 mpi
 ```
 
 and then 
 
 ```
-srun -ppdebug -t1 -N2 -n8 ./mpi
+srun -n8 mpi
 ```
+
+<details>
+<summary>
+Hopefully you'll see output like the following.
+</summary>
+
+```
+[user1@ip-10-0-1-39 ~]$ srun -n2 mpi
+gpu-st-g38xlarge-1 Task   1/  2 running on 32 CPUs: 0-31
+           Task   1/  2 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   0/  2 running on 32 CPUs: 0-31
+           Task   0/  2 has 2 GPUs: 0x0 0x0
+
+[user1@ip-10-0-1-39 ~]$ srun -n8 mpi
+gpu-st-g38xlarge-1 Task   3/  8 running on 32 CPUs: 0-31
+           Task   3/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   5/  8 running on 32 CPUs: 0-31
+           Task   5/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   0/  8 running on 32 CPUs: 0-31
+           Task   0/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   7/  8 running on 32 CPUs: 0-31
+           Task   7/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  8 running on 32 CPUs: 0-31
+           Task   2/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   4/  8 running on 32 CPUs: 0-31
+           Task   4/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  8 running on 32 CPUs: 0-31
+           Task   1/  8 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   6/  8 running on 32 CPUs: 0-31
+           Task   6/  8 has 2 GPUs: 0x0 0x0
+```
+
+</details>
 
 How many cores are assigned to each task in each case?
 
-
+Note that the default assignment strategy -- *the affinity policy* -- is different here than on Pascal!
 
 ## 7. Setting Affinity
 
@@ -559,21 +939,87 @@ corona294  Task   3/  4 running on 96 CPUs: 0-95
 ```
 
 
-#### Hands-on exercise G: Setting affinity implicitly
+#### Hands-on exercise H: Setting affinity implicitly
 
 From your AWS instance, run
 
 ```
-srun -ppdebug -t1 -N1 -n4 -c2 --cpu-bind=thread ./mpi
+srun  -N1 -n4 -c1 --cpu-bind=thread mpi
 ```
 
 and then
 
 ```
-srun -ppdebug -t1 -N1 -n4 -c2 --cpu-bind=cores ./mpi
+srun  -N1 -n4 -c1 --cpu-bind=core mpi
 ```
 
-Are the CPUs assigned to each task the same in each case? Why? 
+*Are the CPUs assigned to each task the same in each case? Why?*
+
+Now try 
+
+```
+srun  -N1 -n4 -c2 --cpu-bind=thread ./mpi
+```
+
+and
+
+```
+srun  -N1 -n4 -c2 --cpu-bind=core ./mpi
+```
+
+to see if `core` and `thread` binding produce the same results in this case.
+
+<details>
+<summary>
+Example output
+</summary>
+
+```
+[user1@ip-10-0-1-39 ~]$ srun  -N1 -n4 -c1 --cpu-bind=thread mpi
+gpu-st-g38xlarge-1 Task   0/  4 running on 1 CPUs: 0
+           Task   0/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  4 running on 1 CPUs: 16
+           Task   1/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  4 running on 1 CPUs: 1
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  4 running on 1 CPUs: 17
+           Task   3/  4 has 2 GPUs: 0x0 0x0
+
+
+[user1@ip-10-0-1-39 ~]$ srun  -N1 -n4 -c1 --cpu-bind=core mpi
+gpu-st-g38xlarge-1 Task   1/  4 running on 2 CPUs: 1,17
+           Task   1/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   0/  4 running on 2 CPUs: 0,16
+           Task   0/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  4 running on 2 CPUs: 2,18
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  4 running on 2 CPUs: 3,19
+           Task   3/  4 has 2 GPUs: 0x0 0x0
+
+
+[user1@ip-10-0-1-39 ~]$ srun  -N1 -n4 -c2 --cpu-bind=thread mpi
+gpu-st-g38xlarge-1 Task   0/  4 running on 2 CPUs: 0,16
+           Task   0/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  4 running on 2 CPUs: 2,18
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  4 running on 2 CPUs: 3,19
+           Task   3/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  4 running on 2 CPUs: 1,17
+           Task   1/  4 has 2 GPUs: 0x0 0x0
+
+
+[user1@ip-10-0-1-39 ~]$ srun  -N1 -n4 -c2 --cpu-bind=core mpi
+gpu-st-g38xlarge-1 Task   0/  4 running on 2 CPUs: 0,16
+           Task   0/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  4 running on 2 CPUs: 2,18
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  4 running on 2 CPUs: 1,17
+           Task   1/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  4 running on 2 CPUs: 3,19
+           Task   3/  4 has 2 GPUs: 0x0 0x0
+```
+
+</details>
 
 
 ### More elaborate (explicit) binding 
@@ -639,16 +1085,25 @@ corona191  Task   5/  6 running on 1 CPUs: 26
 ```
 
 
-#### Hands-on exercise H: Setting affinity explicitly 
+#### Hands-on exercise I: Setting affinity explicitly 
 
-On your AWS instance, run the `mpi` program with 6 tasks so that the
-tasks round robin places between the first three cores and the
-last three cores. In other words, the first, third, and fifth task are
+On your AWS instance, run the `mpi` program with 6 tasks (`-n6`) so that the
+tasks run on the first three cores (`0,1,2`) and the
+last three cores (`13,14,15`). 
+
+Next, run `mpi` again with 6 tasks so that the tasks round robin between the first three and last three cores. In other words, the first, third, and fifth task are
 assigned to the first three cores, and the second, fourth, and sixth
 tasks are assigned to the last three cores. Make sure that tasks do
 not overlap places.  
 
 
+<details>
+<summary>
+
+</summary>
+
+
+</details>
 
 
 ## 8. Bibliography and references
