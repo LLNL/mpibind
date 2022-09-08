@@ -85,7 +85,7 @@ Once we throw memory into the picture, we need to consider not only what resourc
 
 In the image below, consider a scenario where we have two processors and two stores of memory. In the layout shown, processor 1 is closer to memory 1 than to memory 2; similarly, processor 2 is closer to memory 2 than memory 1. This means that processor 1 can more easily and *more quickly* access data stored in memory 1 than data stored in memory 2 and vice versus. In this case, the processors have Non-Uniform Memory Access (NUMA) and we say that memory 1 and processor 1 are in the same NUMA domain. Processor 2 shares the second NUMA domain with memory 2 and will access data in memory 1 with higher latency.
 
-<img src="../figures/NUMA.png" width="300"/>
+<img src="../figures/numa.png" width="300"/>
 
 We can imagine scenarios where memory is laid out to be equidistant from multiple processors and where multiple processors are in the same NUMA domain. In the architectures we'll consider, however, there will be a one-to-one mapping between NUMA domains and processors; all computing resources on a Silicon die will be in the same NUMA domain and different processors will have different "local" memory.
 
@@ -93,13 +93,13 @@ Our references to "memory" above refer to memory that's transmitted over a front
 
 In general, cache levels are denoted as `L<N>` where `<N>` denotes the cache level. Lower values of `N` denote smaller and faster levels of cache. In the figure below, we see an example of what the cache hierarchy and layout might look like on a single processor.
 
-<img src="../figures/Cache.png" width="500"/>
+<img src="../figures/cache.png" width="500"/>
 
 In this example cache layout, there are three levels of cache -- `L1`, `L2`, and `L3`. Each core has its own `L1` cache, every two cores share a `L2` cache, and sets of six cores each have a `L3` cache.
 
 ## 3. Example architectures
 
-The topologies of a few example architectures are summarized and diagramed [here](archs.md).
+The topologies of a few example architectures are summarized and diagramed [here](../common/archs.md).
 
 In examples throughout the coming modules, we'll be focusing on Pascal and sometimes Corona!
 
@@ -219,9 +219,11 @@ From your AWS desktop, try the following:
 
 <details>
 <summary>
+
 ```
 lstopo --input /home/tutorial/topo-xml/pascal.xml
 ```
+
 </summary>
 
 ```
@@ -376,9 +378,11 @@ Let's use `lstopo` to show the topology of the nodes we can see through AWS. The
 
 <details>
 <summary>
+
 ```
 srun lstopo
 ```
+
 </summary>
 
 ```
@@ -474,9 +478,11 @@ Run
 
 <details>
 <summary>
+
 ```
 lstopo --input /home/tutorial/topo-xml/pascal.xml --only core
 ```
+
 </summary>
 
 ```
@@ -524,9 +530,11 @@ and
 
 <details>
 <summary>
+
 ```
 lstopo --input /home/tutorial/topo-xml/pascal.xml --only core | wc -l
 ```
+
 </summary>
 
 `36`
@@ -539,9 +547,11 @@ Now try
 
 <details>
 <summary>
+
 ```
 lstopo --input /home/tutorial/topo-xml/pascal.xml --only PU | wc
 ```
+
 </summary>
 
 `72`
@@ -549,7 +559,8 @@ lstopo --input /home/tutorial/topo-xml/pascal.xml --only PU | wc
 </details>
 
 
-to see how many hardware threads there are on Pascal. How many hardware threads are there per core on Pascal?
+to see how many hardware threads there are on Pascal.<br>
+How many hardware threads are there per core on Pascal?
 
 **A)** 2
 
@@ -583,7 +594,9 @@ srun lstopo --only core | wc -l
 srun lstopo --only PU | wc -l
 ```
 
-to identify the number of cores and PUs on our AWS nodes. Do these nodes support Simultaneous Multi-Threading (SMT)? How many hardware threads exist per core?
+to identify the number of cores and PUs on our AWS nodes.<br>
+Do these nodes support Simultaneous Multi-Threading (SMT)?<br>
+How many hardware threads exist per core?
 
 **Bonus:** On `Pascal` there are two sockets on each node. How many are there on our AWS nodes? Try running
 
@@ -670,9 +683,11 @@ First, let's try running a serial version of "Hello world". You should see the b
 
 <details>
 <summary>
+
 ```
 hello
 ```
+
 </summary>
 
 ```
@@ -748,7 +763,7 @@ The flags `-pgpu` and `-t1` tell Slurm which set of nodes to draw from and for h
 Next, we'll run a few parallel jobs that use multiple tasks to execute a binary named `mpi` instead of `hello`. The program `mpi` reports affinity. In other words, the output of `mpi` will tell us where & with which resources the tasks executing `mpi` were run. For example, if we run `mpi` on a single node and with 2 tasks:
 
 ```
-$ srun -ppvis -t1 -N1 -n2 ./mpi
+$ srun -N1 -n2 ./mpi
 pascal5    Task   0/  2 running on 18 CPUs: 0-17
 pascal5    Task   1/  2 running on 18 CPUs: 18-35
 ```
@@ -758,7 +773,7 @@ Note that the CPUs on the node `pascal5` were split evenly between the two tasks
 Similarly, if we increase the number of tasks to 4 and other keep the command, we see 
 
 ```
-$ srun -ppvis -t1 -N1 -n4 ./mpi
+$ srun -N1 -n4 ./mpi
 pascal6    Task   0/  4 running on 9 CPUs: 0-8
 pascal6    Task   3/  4 running on 9 CPUs: 27-35
 pascal6    Task   1/  4 running on 9 CPUs: 9-17
@@ -772,10 +787,10 @@ A new node, `pascal6` was assigned to this job, and the cores on Pascal were spl
 Now let's throw a second node into the mix. We run the same two commands above but change `-N1` to `N2`:
 
 ```
-$ srun -ppvis -t1 -N2 -n2 ./mpi
+$ srun -N2 -n2 ./mpi
 pascal10   Task   1/  2 running on 72 CPUs: 0-71
 pascal9    Task   0/  2 running on 72 CPUs: 0-71
-$ srun -ppvis -t1 -N2 -n4 ./mpi
+$ srun -N2 -n4 ./mpi
 pascal8    Task   2/  4 running on 18 CPUs: 0-17
 pascal8    Task   3/  4 running on 18 CPUs: 18-35
 pascal7    Task   0/  4 running on 18 CPUs: 0-17
@@ -786,7 +801,9 @@ The total number of tasks doesn't change, but the assignment of tasks to cores d
 
 <details>
 <summary>
-If we ran `srun -ppvis -t1 -N2 -n8 ./mpi` on Pascal, how many tasks would run `mpi`? How many cores would each task have access to?
+
+If we ran `srun -N2 -n8 ./mpi` on Pascal, how many tasks would run `mpi`? How many cores would each task have access to?
+
 </summary>
 
 With `-n8`, we'd still have a total of 8 tasks. Because we'd be working with 2 nodes, each with 36 cores, each task would have access to **9** cores.
