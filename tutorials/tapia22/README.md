@@ -977,9 +977,9 @@ As in the example above, `-c3` means that we want each task to have at least 3 t
 On our AWS nodes, each core has two hardware threads, so each task will be assigned to 4 threads. For example, Task 3 is assigned to the threads `6-7` and `22-23`.
 
 ```
-# Bind each task to 6 cores
+# Bind each task to 3 threads
 # Remember that each core is comprised of 2 hardware threads
-# For example, the first core has CPUs 0,48
+# For example, the first core has CPUs 0,16
 $ srun  -N1 -n4 -c3 --cpu-bind=core ./mpi
 gpu-st-g38xlarge-1 Task   2/  4 running on 4 CPUs: 4-5,20-21
            Task   2/  4 has 2 GPUs: 0x0 0x0
