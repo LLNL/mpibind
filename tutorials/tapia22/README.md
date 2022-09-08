@@ -598,11 +598,48 @@ to identify the number of cores and PUs on our AWS nodes.<br>
 Do these nodes support Simultaneous Multi-Threading (SMT)?<br>
 How many hardware threads exist per core?
 
-**Bonus:** On `Pascal` there are two sockets on each node. How many are there on our AWS nodes? Try running
+<details>
+<summary>
+
+**Answer**  
+  
+</summary>
+
+```
+[user1@ip-10-0-1-39 ~]$ srun lstopo --only core | wc -l
+16
+[user1@ip-10-0-1-39 ~]$ srun lstopo --only PU | wc -l
+32
+```
+  
+Yes, SMT is supported on these nodes: there are twice as many hardware threads (PU) as cores (two per core).
+
+</details>
+
+**Bonus:** On `Pascal` there are two sockets on each node:
+
+```
+[user1@ip-10-0-1-39 ~]$ lstopo --input /home/tutorial/topo-xml/pascal.xml --only socket | wc -l
+2
+```
+
+How many are there on our AWS nodes? Try running
+
+<details>
+<summary>
 
 ```
 srun lstopo --only socket | wc -l 
 ```
+
+</summary>
+
+```
+[user1@ip-10-0-1-39 ~]$ srun lstopo --only socket | wc -l
+1  
+```
+
+</details>
 
 ## 5. Mapping, affinity, and binding 
 
@@ -675,7 +712,7 @@ A. Affinity: “Policy for one openMP thread per L3 on Corona”
 
 ### Using Slurm to run a parallel job
 
-In Hands-On Exercises B & D, we used commands that began with `srun -p<QUEUE> -t1`. `srun` is a command that comes from a piece of software called Slurm and allows us to run parallel programs. In order to run parallel programs, we often need to request special resources. For example, if we want to run a program across several nodes, we first need to request access to use several nodes at once. Slurm helps manage requests like this, and figures out how to "schedule" jobs in environments where many users can make requests for the same resources. 
+In Hands-On Exercises B & D, we used commands that began with `srun`. `srun` is a command that comes from a piece of software called Slurm and allows us to run parallel programs. In order to run parallel programs, we often need to request special resources. For example, if we want to run a program across several nodes, we first need to request access to use several nodes at once. Slurm helps manage requests like this, and figures out how to "schedule" jobs in environments where many users can make requests for the same resources. 
 
 #### Hands-on exercise E: Serial *Hello World*
 
@@ -912,47 +949,63 @@ Let's review a few examples.
 
 #### Binding to threads
 
-When `-c` is used with `--cpu-bind`, `-c` specifies the number of objects to be bound to each task and `-cpu-bind` specifies the type of object. 
+The flag `-c` specifies the minimum number of threads to be bound to each task. When `-c` is used with `--cpu-bind==thread`, tasks are bound to exactly as many threads as requested. 
 
-We see that below, where `--cpu-bind=thread` specifies thread as the object considered by `-c`. `-c6` therefore specifies that each task should be assigned to 6 threads. Contrast this with the behavior in the next example.
+We see that below, where `--cpu-bind=thread` specifies thread as the object considered by `-c`. `-c3` therefore specifies that each task should be assigned to 3 threads. For example, `Task 1` is bound to threads `2,17-18`.
+
+Contrast this with the behavior in the next example.
 
 ```
-# Bind each task to 6 hardware threads 
-$ srun  -N1 -n4 -c6 --cpu-bind=thread ./mpi  
-corona294  Task   0/  4 running on 6 CPUs: 0-5
-corona294  Task   1/  4 running on 6 CPUs: 6-11
-corona294  Task   2/  4 running on 6 CPUs: 12-17
-corona294  Task   3/  4 running on 6 CPUs: 18-23
+# Bind each task to 3 hardware threads 
+$ srun  -N1 -n4 -c3 --cpu-bind=thread ./mpi
+gpu-st-g38xlarge-1 Task   1/  4 running on 3 CPUs: 2,17-18
+           Task   1/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  4 running on 3 CPUs: 3-4,19
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  4 running on 3 CPUs: 5,20-21
+           Task   3/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   0/  4 running on 3 CPUs: 0-1,16
+           Task   0/  4 has 2 GPUs: 0x0 0x0
 ```
 
 #### Binding to cores
 
-As in the example above, `-c6` means that each task will be assigned to 6 objects. Here, `--cpu-bind=core` specifies `core` as the object type, so each task will be assigned to 6 cores.
+On the other hand, when `-c` is used with `--cpu-bind==core`, tasks are bound core-wise. This means that tasks will be assigned as many cores as necessary to provide the minimum requested number of threads; when there's SMT, sometimes our tasks will get extra threads as well!
 
-On `Corona`, each core has two hardware threads, so each task will be assigned to 12 threads. For example, Task 3 is assigned to the threads `18-23` and `66-71`.
+As in the example above, `-c3` means that we want each task to have at least 3 threads to work with. Since `--cpu-bind=core` specifies that tasks will be assigned to resources on a `core` basis, each task will be bound to 2 cores. (We can't assign partial cores and 1 core gives only 2 threads; 2 cores give us *at least* 3 threads!)
+
+On our AWS nodes, each core has two hardware threads, so each task will be assigned to 4 threads. For example, Task 3 is assigned to the threads `6-7` and `22-23`.
 
 ```
 # Bind each task to 6 cores
 # Remember that each core is comprised of 2 hardware threads
 # For example, the first core has CPUs 0,48
-$ srun  -N1 -n4 -c6 --cpu-bind=core ./mpi  
-corona294  Task   0/  4 running on 12 CPUs: 0-5,48-53
-corona294  Task   1/  4 running on 12 CPUs: 6-11,54-59
-corona294  Task   2/  4 running on 12 CPUs: 12-17,60-65
-corona294  Task   3/  4 running on 12 CPUs: 18-23,66-71
+$ srun  -N1 -n4 -c3 --cpu-bind=core ./mpi
+gpu-st-g38xlarge-1 Task   2/  4 running on 4 CPUs: 4-5,20-21
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   0/  4 running on 4 CPUs: 0-1,16-17
+           Task   0/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  4 running on 4 CPUs: 2-3,18-19
+           Task   1/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  4 running on 4 CPUs: 6-7,22-23
+           Task   3/  4 has 2 GPUs: 0x0 0x0
 ```
 
 #### No binding
 
-With `--cpu-bind=none`, no binding occurs and tasks are not bound to specific resources. Instead, all tasks are distributed across all threads. In this case, 4 threads are distributed across 96 threads.
+With `--cpu-bind=none`, no binding occurs and tasks are not bound to specific resources. Instead, all tasks are distributed across all threads. In this case, 4 tasks are distributed across 32 threads.
 
 ```
 # No binding, everybody runs wild! 
-$ srun  -N1 -n4 --cpu-bind=none ./mpi 
-corona294  Task   0/  4 running on 96 CPUs: 0-95
-corona294  Task   1/  4 running on 96 CPUs: 0-95
-corona294  Task   2/  4 running on 96 CPUs: 0-95
-corona294  Task   3/  4 running on 96 CPUs: 0-95
+$ srun  -N1 -n4 --cpu-bind=none ./mpi
+gpu-st-g38xlarge-1 Task   3/  4 running on 32 CPUs: 0-31
+           Task   3/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  4 running on 32 CPUs: 0-31
+           Task   2/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   0/  4 running on 32 CPUs: 0-31
+           Task   0/  4 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  4 running on 32 CPUs: 0-31
+           Task   1/  4 has 2 GPUs: 0x0 0x0
 ```
 
 
@@ -961,13 +1014,13 @@ corona294  Task   3/  4 running on 96 CPUs: 0-95
 From your AWS instance, run
 
 ```
-srun  -N1 -n4 -c1 --cpu-bind=thread mpi
+srun -N1 -n4 -c1 --cpu-bind=thread mpi
 ```
 
 and then
 
 ```
-srun  -N1 -n4 -c1 --cpu-bind=core mpi
+srun -N1 -n4 -c1 --cpu-bind=core mpi
 ```
 
 *Are the CPUs assigned to each task the same in each case? Why?*
@@ -975,13 +1028,13 @@ srun  -N1 -n4 -c1 --cpu-bind=core mpi
 Now try 
 
 ```
-srun  -N1 -n4 -c2 --cpu-bind=thread ./mpi
+srun -N1 -n4 -c2 --cpu-bind=thread ./mpi
 ```
 
 and
 
 ```
-srun  -N1 -n4 -c2 --cpu-bind=core ./mpi
+srun -N1 -n4 -c2 --cpu-bind=core ./mpi
 ```
 
 to see if `core` and `thread` binding produce the same results in this case.
@@ -1117,9 +1170,26 @@ not overlap places.
 <details>
 <summary>
 
+**Click for round robin results**  
+  
 </summary>
 
-
+```
+[user1@ip-10-0-1-39 ~]$ srun -n6 --cpu-bind=map_cpu:0,13,1,14,2,15 ./mpi
+gpu-st-g38xlarge-1 Task   0/  6 running on 1 CPUs: 0
+           Task   0/  6 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   1/  6 running on 1 CPUs: 13
+           Task   1/  6 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   2/  6 running on 1 CPUs: 1
+           Task   2/  6 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   4/  6 running on 1 CPUs: 2
+           Task   4/  6 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   5/  6 running on 1 CPUs: 15
+           Task   5/  6 has 2 GPUs: 0x0 0x0
+gpu-st-g38xlarge-1 Task   3/  6 running on 1 CPUs: 14
+           Task   3/  6 has 2 GPUs: 0x0 0x0
+```
+  
 </details>
 
 
