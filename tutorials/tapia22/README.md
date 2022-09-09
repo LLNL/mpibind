@@ -641,6 +641,12 @@ srun lstopo --only socket | wc -l
 
 </details>
 
+So that you can better understand the results of this exercise, below is a depiction of the architecture on our AWS nodes:
+
+<img src="../figures/AWS-architecture.png" width="600"/>
+
+Unlike Pascal and Corona, these nodes have only a single socket/a single processor, which has 16 cores (each with 2 PUs) and 2 GPUs.
+
 ## 5. Mapping, affinity, and binding 
 
 **Mapping**: A function from the worker set (our set of tasks and/or threads) to the hardware resource set. 
