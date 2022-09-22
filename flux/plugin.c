@@ -13,14 +13,19 @@
  *  OPTIONS
  *
  *  {
- *    "disable":int,
+ *    "on",
+ *    "off",
  *    "verbose":int,
  *    "smt":int,
  *    "greedy":int,
  *    "gpu_optim":int,
+ *    "master":int
  *  }
  *
- *  e.g. to disable mpibind plugin run with `-o mpibind.disable`
+ * Examples:  
+ *   Disable mpibind plugin: '-o mpibind=off'
+ *   Enable SMT2 and verbosity: '-o mpibind=smt:2,verbose:1'
+ *   Enable debugging messages: '-o verbose'
  *
  *  OPERATION
  *
@@ -195,8 +200,8 @@ int mpibind_task(flux_plugin_t *p, const char *topic,
  */ 
 static
 bool mpibind_getopt(flux_shell_t *shell,
-		     int *psmt, int *pgreedy, int *pgpu_optim,
-		     int *pverbose)
+		    int *psmt, int *pgreedy, int *pgpu_optim,
+		    int *pverbose, int *pmaster)
 {
   int rc;
   int disabled = 0;
@@ -217,11 +222,12 @@ bool mpibind_getopt(flux_shell_t *shell,
   if ( opts ) 
     /* Take parameters from json */
     json_unpack_ex(opts, &err, JSON_DECODE_ANY, 
-		   "{s?i s?i s?i s?i}",
+		   "{s?i s?i s?i s?i s?i}",
 		   "smt", psmt,
 		   "greedy", pgreedy,
 		   "gpu_optim", pgpu_optim,
-		   "verbose", pverbose);
+		   "verbose", pverbose,
+		   "master", pmaster);
   else
     /* Check if options were given to mpibind. 
        If no options, proceed with default parameters */ 
@@ -247,6 +253,8 @@ bool mpibind_getopt(flux_shell_t *shell,
 	  *pgpu_optim = atoi(value);
 	else if ( !strcmp(token, "verbose") )
 	  *pverbose = atoi(value);
+	else if ( !strcmp(token, "master") )
+	  *pmaster = atoi(value);
 	else if ( !strcmp(token, "off") )
 	  disabled = 1; 
 	else if ( !strcmp(token, "on") )
@@ -347,7 +355,8 @@ struct usr_opts {
   int smt;
   int greedy;
   int gpu_optim;
-  int verbose; 
+  int verbose;
+  int master; 
 }; 
 
 /* 
@@ -432,10 +441,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 	       hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE));
   shell_debug("# available pus: %d",
 	       hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU));
-  
+
   if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
        mpibind_set_topology(mph, topo) != 0 ||
-       mpibind_set_restrict_ids(mph, pus) != 0 ||
+       (opts->master <= 0 && mpibind_set_restrict_ids(mph, pus) != 0) ||
        (opts->smt >= 0 && mpibind_set_smt(mph, opts->smt) != 0) ||
        (opts->greedy >= 0 && mpibind_set_greedy(mph, opts->greedy) != 0) ||
        (opts->gpu_optim >= 0 && mpibind_set_gpu_optim(mph, opts->gpu_optim) != 0) ) {
@@ -444,9 +453,9 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   }
 
   shell_debug("user opts: ntasks=%d restrict=%s greedy=%d smt=%d "
-	      "gpu_optim=%d verbose=%d",
+	      "gpu_optim=%d verbose=%d master=%d",
 	      ntasks, pus, opts->greedy, opts->smt,
-	      opts->gpu_optim, opts->verbose);
+	      opts->gpu_optim, opts->verbose, opts->master);
     
   /* Set mpibind handle in shell aux data for auto-destruction */
   flux_shell_aux_set(shell, "mpibind", mph, (flux_free_f) mpibind_destroy);
@@ -510,7 +519,7 @@ void flux_plugin_init (flux_plugin_t *p)
  * Notes: 
  *   - Register the entry point: mpibind_shell_init 
  *   - Disable conflicting plugins, e.g., cpu-affinity, here. 
- *     Doing later would not have an effect. 
+ *     Doing it later would not have an effect. 
  *   - Do not disable conflicting plugins if mpibind was set to off. 
  *     This forces parsing the mpibind user options here. 
  */ 
@@ -532,10 +541,20 @@ void flux_plugin_init(flux_plugin_t *p)
   opts->greedy = -1;
   opts->gpu_optim = -1;
   opts->verbose = 0;
+  // master = 0: Stay within flux-given node resources.
+  // master = 1: mpibind takes all the resources of a node.
+  // 
+  // Default is master=0: Overwritting Flux behavior may
+  // have unexpected consequences.
+  // This option is actually not necessary, because Flux
+  // users should use '--exclusive' in their run commands
+  // if they want mpibind to apply to all of the resources
+  // of a node. But, I'm keeping this option just in case. 
+  opts->master = 0;
   
   /* Get mpibind user-specified options */ 
-  if ( !mpibind_getopt(shell, &opts->smt, &opts->greedy,
-		       &opts->gpu_optim, &opts->verbose) ) {
+  if ( !mpibind_getopt(shell, &opts->smt, &opts->greedy, &opts->gpu_optim,
+		       &opts->verbose, &opts->master) ) {
     shell_debug("mpibind disabled");
     return;
   }
@@ -543,13 +562,13 @@ void flux_plugin_init(flux_plugin_t *p)
   if ( flux_plugin_add_handler(p, "shell.init", mpibind_shell_init, opts) < 0 )
     shell_die(1, "failed to register shell.init handler");
   
-  /* Todo: Remove debug messages since the the built-in cpu and gpu 
+  /* I could remove debug messages since the built-in cpu and gpu 
      affinity plugins will log when they are disabled */ 
-  shell_debug("mpibind: disabling cpu-affinity");
+  shell_debug("disabling cpu-affinity");
   if (flux_shell_setopt_pack(shell, "cpu-affinity", "s", "off") < 0)
     shell_die_errno(1, "flux_shell_setopt_pack: cpu-affinity=off");
   
-  shell_debug("mpibind: disabling gpu-affinity");
+  shell_debug("disabling gpu-affinity");
   if (flux_shell_setopt_pack(shell, "gpu-affinity", "s", "off") < 0) 
     shell_die_errno(1, "flux_shell_setopt_pack: gpu-affinity=off");
 }
