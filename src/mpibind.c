@@ -673,7 +673,7 @@ int mpibind(mpibind_t *hdl)
            i, hdl->devs[i]->pci, hdl->devs[i]->smi, 
            hdl->devs[i]->visdevs, hdl->devs[i]->vendor, 
            hdl->devs[i]->name, hdl->devs[i]->univ,
-           hdl->devs[i]->ancestor);
+           hdl->devs[i]->ancestor->gp_index);
 #endif
 
   /* If there's no GPUs, mapping should be CPU-guided */

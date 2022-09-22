@@ -6,6 +6,7 @@
 #include <hwloc.h>
 #include "mpibind.h"
 #include "mpibind-priv.h"
+#include "hwloc_utils.h"
 
 
 /************************************************
@@ -331,7 +332,7 @@ int get_gpus(hwloc_obj_t root, hwloc_bitmap_t gpus)
      checking the PCI ID, which should be the same for a
      CUDA and an OpenCL device if they are the same GPU,
      e.g., PCI 04:00.0 or 07:00.0
-     Currently, I assume teach device has a unique id
+     Currently, I assume each device has a unique id
      as defined by 'get_device_id' */ 
   hwloc_bitmap_zero(gpus);
 
@@ -387,7 +388,12 @@ int get_num_gpus(hwloc_topology_t topo, int *gpu_type)
 #endif 
 
 
+#if 0
 /*
+ * Commenting out: This function only checks if the co-processor's
+ * non-I/O parent is the given root. I replaced this function
+ * with a function that indeed checks whether the coprocessors 
+ * are reachable from the root.  
  * Input: 
  *   root: A normal object (not numa, io, or misc object). 
  * Output: 
@@ -406,7 +412,30 @@ int get_gpus(struct device **devs, int ndevs,
 
   return hwloc_bitmap_weight(gpus);
 }
- 
+#endif 
+
+/*
+ * Input: 
+ *   root: A normal object (not numa, io, or misc object). 
+ * Output: 
+ *   gpus: The co-processors reachable from the root. 
+ */
+static
+int get_gpus(hwloc_topology_t topo,
+	     struct device **devs, int ndevs,
+	     hwloc_obj_t root, hwloc_bitmap_t gpus)
+{
+  int i;
+  hwloc_bitmap_zero(gpus);
+  
+  for (i=0; i<ndevs; i++)
+    if (devs[i]->type == DEV_GPU &&
+	hwloc_obj_is_in_subtree(topo, devs[i]->ancestor, root))
+      hwloc_bitmap_set(gpus, i);
+  
+  return hwloc_bitmap_weight(gpus);
+}
+
 
 
 /*
@@ -811,9 +840,10 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
  *            assigned to task i. 
  */ 
 static
-void gpu_match(struct device **devs, int ndevs, 
+void gpu_match(hwloc_topology_t topo,
+	       struct device **devs, int ndevs, 
                hwloc_obj_t root, int ntasks,
-	             hwloc_bitmap_t *gpus_pt)
+	       hwloc_bitmap_t *gpus_pt)
 {
   hwloc_bitmap_t gpus;
   int i, devid, num_gpus;
@@ -821,7 +851,7 @@ void gpu_match(struct device **devs, int ndevs,
   
   /* Get the GPUs of this NUMA */
   gpus = hwloc_bitmap_alloc();
-  num_gpus = get_gpus(devs, ndevs, root, gpus);
+  num_gpus = get_gpus(topo, devs, ndevs, root, gpus);
 #if VERBOSE >=2
   printf("Num GPUs for this NUMA domain: %d\n", num_gpus); 
 #endif
@@ -915,7 +945,7 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
       nthreads_pt[j+task_offset] = nt;
     
     /* Get the gpuset for each task assigned to this NUMA */
-    gpu_match(devs, ndevs, obj->parent, np, gpus_pt+task_offset);
+    gpu_match(topo, devs, ndevs, obj->parent, np, gpus_pt+task_offset);
     
     task_offset+=np; 
   }
@@ -1015,14 +1045,20 @@ int distrib_greedy(hwloc_topology_t topo,
     /* Get the CPUs */ 
     hwloc_bitmap_or(cpus_pt[task], cpus_pt[task], obj->parent->cpuset);
 
-    /* Get the GPUs */ 
-    get_gpus(devs, ndevs, obj->parent, gpus);
+    /* Get the GPUs */
+    /* The parent object to a NUMA domain may or may not have 
+       the GPUs. The GPUs, for example, may be associated with 
+       an L3 cache, which is one level down from the object that 
+       contains the NUMA domain (Group). get_gpus() now looks 
+       for the GPUs down the tree from the given root */
+    get_gpus(topo, devs, ndevs, obj->parent, gpus);
     hwloc_bitmap_or(gpus_pt[task], gpus_pt[task], gpus);
-
+    
 #if VERBOSE >= 2
     hwloc_bitmap_list_snprintf(str1, sizeof(str1), obj->parent->cpuset);
     hwloc_bitmap_list_snprintf(str2, sizeof(str2), gpus); 
     printf("task %d numa %d gpus %s cpus %s\n", task, i, str2, str1);
+    print_obj(obj->parent, 1);
 #endif
     
     if ( numas_per_task[task] == ++i ) {
@@ -1030,7 +1066,7 @@ int distrib_greedy(hwloc_topology_t topo,
       task++;
     }
   }
-
+  
   for (i=0; i<ntasks; i++)
     nthreads_pt[i] = hwloc_bitmap_weight(cpus_pt[i]); 
   
@@ -1179,8 +1215,8 @@ int discover_devices(hwloc_topology_t topo,
         devs[index]->type = -1; 
 
         devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
-        devs[index]->ancestor = 
-          hwloc_get_non_io_ancestor_obj(topo, obj)->gp_index; 
+	      devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj); 
+ 
         if (type == HWLOC_OBJ_OSDEV_COPROC)
           devs[index]->type = DEV_GPU;
         else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS) {

@@ -49,7 +49,7 @@ struct device {
   char name[SHORT_STR_SIZE]; // Device name 
   char pci[PCI_BUSID_LEN];   // PCI bus ID
   char univ[UUID_LEN];       // Universally unique ID 
-  hwloc_uint64_t ancestor;   // Smallest non-I/O ancestor (gp_index)
+  hwloc_obj_t ancestor;      // First (smallest) non-I/O ancestor object
   int type;                  // Type of I/O device, e.g., DEV_GPU
   int vendor;                // Device vendor
   /* GPU specific */ 
