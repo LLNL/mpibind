@@ -881,7 +881,7 @@ void gpu_match(hwloc_topology_t topo,
  */
 static
 int distrib_mem_hierarchy(hwloc_topology_t topo,
-        struct device **devs, int ndevs,
+			  struct device **devs, int ndevs,
 			  int ntasks, int nthreads,
 			  int gpu_optim, int smt, 
 			  int *nthreads_pt, 
@@ -1005,8 +1005,8 @@ void greedy_singleton(hwloc_topology_t topo,
 static
 int distrib_greedy(hwloc_topology_t topo, 
                    struct device **devs, int ndevs,
-                   int ntasks, int *nthreads_pt, 
-		               hwloc_bitmap_t *cpus_pt, hwloc_bitmap_t *gpus_pt)
+                   int ntasks, int nthreads, int *nthreads_pt, 
+		   hwloc_bitmap_t *cpus_pt, hwloc_bitmap_t *gpus_pt)
 {
   int i, task, num_numas; 
   int *numas_per_task;
@@ -1066,9 +1066,10 @@ int distrib_greedy(hwloc_topology_t topo,
       task++;
     }
   }
-  
+
   for (i=0; i<ntasks; i++)
-    nthreads_pt[i] = hwloc_bitmap_weight(cpus_pt[i]); 
+    nthreads_pt[i] =
+      (nthreads > 0) ? nthreads : hwloc_bitmap_weight(cpus_pt[i]); 
   
   /* Clean up */ 
   hwloc_bitmap_free(gpus); 
@@ -1299,7 +1300,7 @@ int get_gpu_vendor(struct device **devs, int ndevs)
  * The main mapping function. 
  */ 
 int mpibind_distrib(hwloc_topology_t topo,
-        struct device **devs, int ndevs,
+		    struct device **devs, int ndevs,
 		    int ntasks, int nthreads,
 		    int greedy, int gpu_optim, int smt, 
 		    int *nthreads_pt, 
@@ -1321,11 +1322,12 @@ int mpibind_distrib(hwloc_topology_t topo,
 
   if (greedy && ntasks < num_numas) 
     rc = distrib_greedy(topo, devs, ndevs, 
-              ntasks, nthreads_pt, cpus_pt, gpus_pt);
+			ntasks, nthreads,
+			nthreads_pt, cpus_pt, gpus_pt);
   else 
     rc = distrib_mem_hierarchy(topo, devs, ndevs, 
-              ntasks, nthreads, gpu_optim, smt, 
-			        nthreads_pt, cpus_pt, gpus_pt);
+			       ntasks, nthreads, gpu_optim, smt, 
+			       nthreads_pt, cpus_pt, gpus_pt);
   
   return rc; 
 }
