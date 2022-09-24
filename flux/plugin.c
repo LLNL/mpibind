@@ -367,7 +367,7 @@ static
 int mpibind_shell_init(flux_plugin_t *p, const char *s,
 		       flux_plugin_arg_t *arg, void *data)
 {
-  int ntasks; 
+  int ntasks;
   char *cores, *gpus, *pus;
   hwloc_topology_t topo;
   mpibind_t *mph = NULL;
@@ -412,7 +412,6 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     shell_die_errno(1, "flux_shell_rank_info_unpack");
     return -1;
   }
-
   
   if (hwloc_topology_init(&topo) < 0)
     return shell_log_errno("hwloc_topology_init");
@@ -452,11 +451,20 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     return -1;
   }
 
-  shell_debug("user opts: ntasks=%d restrict=%s greedy=%d smt=%d "
-	      "gpu_optim=%d verbose=%d master=%d",
-	      ntasks, pus, opts->greedy, opts->smt,
+  /* Tell mpibind the user set the number of threads */ 
+  int nthreads = 0; 
+  const char *str = flux_shell_getenv(shell, "OMP_NUM_THREADS");
+  if (str != NULL) {
+    nthreads = atoi(str);
+    if (nthreads > 0)
+      mpibind_set_nthreads(mph, nthreads); 
+  }
+  
+  shell_debug("user opts: ntasks=%d nthreads=%d restrict=%s "
+	      "greedy=%d smt=%d gpu_optim=%d verbose=%d master=%d",
+	      ntasks, nthreads, pus, opts->greedy, opts->smt,
 	      opts->gpu_optim, opts->verbose, opts->master);
-    
+  
   /* Set mpibind handle in shell aux data for auto-destruction */
   flux_shell_aux_set(shell, "mpibind", mph, (flux_free_f) mpibind_destroy);
   
@@ -473,11 +481,20 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     shell_die_errno(1, "mpibind");
     return -1;
   }
+
+  /* Debug: Print out the cpus assigned to each task */ 
+  int i;
+  char outbuf[LONG_STR_SIZE]; 
+  hwloc_bitmap_t *cpus = mpibind_get_cpus(mph);
+  for (i=0; i<ntasks; i++) {
+    hwloc_bitmap_list_snprintf(outbuf, LONG_STR_SIZE, cpus[i]);
+    shell_debug("task %2d: cpus %s", i, outbuf);
+  }
  
   if (opts->verbose) {
     /* Can't print to stdout within the Flux shell environment */ 
     //mpibind_print_mapping(mph);
-    char outbuf[LONG_STR_SIZE]; 
+
     /* Use VISIBLE_DEVICES IDs to enumerate the GPUs
        since users are used to this enumeration 
        (as opposed to mpibind's enumeration) */ 
@@ -536,10 +553,13 @@ void flux_plugin_init(flux_plugin_t *p)
   if ( !shell )
     shell_die_errno(1, "flux_plugin_get_shell");
 
-  struct usr_opts *opts = malloc(sizeof(struct usr_opts)); 
+  struct usr_opts *opts = malloc(sizeof(struct usr_opts));
+  /* mpibind parameters
+     When value is -1, use mpibind default value */ 
   opts->smt = -1;
   opts->greedy = -1;
   opts->gpu_optim = -1;
+  /* flux plugin parameters */ 
   opts->verbose = 0;
   // master = 0: Stay within flux-given node resources.
   // master = 1: mpibind takes all the resources of a node.
