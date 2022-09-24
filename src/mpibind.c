@@ -701,9 +701,9 @@ int mpibind(mpibind_t *hdl)
      I could pass the mpibind handle, but using explicit 
      parameters for now. */
   rc = mpibind_distrib(hdl->topo, hdl->devs, hdl->ndevs, 
-          hdl->ntasks, hdl->in_nthreads,
-		      hdl->greedy, gpu_optim, hdl->smt, 
-		      hdl->nthreads, hdl->cpus, hdl->gpus);
+		       hdl->ntasks, hdl->in_nthreads,
+		       hdl->greedy, gpu_optim, hdl->smt, 
+		       hdl->nthreads, hdl->cpus, hdl->gpus);
 
   /* Finally, populate hdl->cpus_usr */
   hdl->cpus_usr = calloc(hdl->ntasks, sizeof(int *));
@@ -866,12 +866,13 @@ int mpibind_set_env_vars(mpibind_t *handle)
   int i, v, nc, val, end, vendor;
   char *str;
   const char *vars[] = {
-      "OMP_NUM_THREADS",
-		  "OMP_PLACES",
-		  "OMP_PROC_BIND",
-		  "VISIBLE_DEVICES"};
+    "OMP_NUM_THREADS",
+    "OMP_PLACES",
+    "OMP_PROC_BIND",
+    "VISIBLE_DEVICES"
+  };
   int nvars = sizeof(vars) / sizeof(const char *);
-
+  
   if (handle == NULL)
     return 1; 
 
@@ -894,46 +895,67 @@ int mpibind_set_env_vars(mpibind_t *handle)
       (handle->env_vars[v].values)[i] = malloc(LONG_STR_SIZE); 
       str = (handle->env_vars[v].values)[i];
       str[0] = '\0';
-
+      
       if ( strncmp(vars[v], "OMP_NUM_THREADS", 8) == 0 )
-	      snprintf(str, LONG_STR_SIZE, "%d", handle->nthreads[i]);
-
+	snprintf(str, LONG_STR_SIZE, "%d", handle->nthreads[i]);
+      
       else if ( strncmp(vars[v], "OMP_PLACES", 8) == 0 ) {
-	      nc = 0;
-	      hwloc_bitmap_foreach_begin(val, handle->cpus[i]) {
-	        nc += snprintf(str+nc,
-			      (LONG_STR_SIZE-nc < 0) ? 0 : LONG_STR_SIZE-nc, 
-			      "{%d},", val);
-	      } hwloc_bitmap_foreach_end();
+	/* 
+	 * Simplifying the value of this variable from 
+	 * a list of PUs to 'threads'. 
+	 *
+	 * mpibind binds each process to a set of PUs already 
+	 * so it might be redundant to apply the thread 
+	 * binding to the same list of PUs as the process 
+	 * binding. 
+	 * While setting this env variable to a explicit 
+	 * list of places should not hurt, it can be problematic 
+	 * for some OpenMP compilers that interpret the list 
+	 * of places as relative IDs: An ID of 4 does not mean 
+	 * hardware thread 4, instead it means the forth place. 
+	 * This may result in errors when passing large IDs 
+	 * like 60 (hardware thread 60) since there may not be a
+	 * 60th place within this process. 
+	 */ 
+#if 0
+	nc = 0;
+	hwloc_bitmap_foreach_begin(val, handle->cpus[i]) {
+	  nc += snprintf(str+nc,
+			 (LONG_STR_SIZE-nc < 0) ? 0 : LONG_STR_SIZE-nc, 
+			 "{%d},", val);
+	} hwloc_bitmap_foreach_end();
+#else
+	snprintf(str, LONG_STR_SIZE, "threads");
+#endif
       }
       
       else if ( strncmp(vars[v], "OMP_PROC", 8) == 0 )  
-	      snprintf(str, LONG_STR_SIZE, "spread");
+	snprintf(str, LONG_STR_SIZE, "spread");
       
       else if ( strncmp(vars[v], "VISIBLE_DEVICES", 8) == 0 ) {
-	      if (vendor == 0x1002)
-	        snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
-		        "ROCR_VISIBLE_DEVICES");
-	      else if (vendor == 0x10de)
-	        snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
-		        "CUDA_VISIBLE_DEVICES");
-	      nc = 0; 
+	if (vendor == 0x1002)
+	  snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
+		   "ROCR_VISIBLE_DEVICES");
+	else if (vendor == 0x10de)
+	  snprintf(handle->env_vars[v].name, SHORT_STR_SIZE,
+		   "CUDA_VISIBLE_DEVICES");
+	nc = 0; 
         /* Use the GPU's visible devices ID (visdevs), 
            not the mpibind ID (val).
            Todo: When AMD supports UUIDs, use UUIDs instead */ 
-	      hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
-	        nc += snprintf(str+nc, LONG_STR_SIZE-nc, "%d,", 
-                  handle->devs[val]->visdevs); 
-	      } hwloc_bitmap_foreach_end();
+	hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
+	  nc += snprintf(str+nc, LONG_STR_SIZE-nc, "%d,", 
+			 handle->devs[val]->visdevs); 
+	} hwloc_bitmap_foreach_end();
       }
       
       /* Strip the last comma */
       end = strlen(str) - 1; 
       if (str[end] == ',')
-	      str[end] = '\0'; 
+	str[end] = '\0'; 
     } 
   }
-
+  
   /* Store the names of the vars in its own array
      so that callers can retrieve them easily */
   handle->names = calloc(nvars, sizeof(char *)); 
