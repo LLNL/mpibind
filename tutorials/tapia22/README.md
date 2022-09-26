@@ -643,7 +643,7 @@ srun lstopo --only socket | wc -l
 
 So that you can better understand the results of this exercise, below is a depiction of the architecture on our AWS nodes:
 
-<img src="../figures/AWS-architecture.png" width="600"/>
+<img src="../figures/aws-architecture.png" width="600"/>
 
 Unlike Pascal and Corona, these nodes have only a single socket/a single processor, which has 16 cores (each with 2 PUs) and 2 GPUs.
 
@@ -955,7 +955,7 @@ Let's review a few examples.
 
 #### Binding to threads
 
-The flag `-c` specifies the minimum number of threads to be bound to each task. When `-c` is used with `--cpu-bind==thread`, tasks are bound to exactly as many threads as requested. 
+The flag `-c` specifies the minimum number of threads to be bound to each task. When `-c` is used with `--cpu-bind=thread`, tasks are bound to exactly as many threads as requested. 
 
 We see that below, where `--cpu-bind=thread` specifies thread as the object considered by `-c`. `-c3` therefore specifies that each task should be assigned to 3 threads. For example, `Task 1` is bound to threads `2,17-18`.
 
@@ -976,7 +976,7 @@ gpu-st-g38xlarge-1 Task   0/  4 running on 3 CPUs: 0-1,16
 
 #### Binding to cores
 
-On the other hand, when `-c` is used with `--cpu-bind==core`, tasks are bound core-wise. This means that tasks will be assigned as many cores as necessary to provide the minimum requested number of threads; when there's SMT, sometimes our tasks will get extra threads as well!
+On the other hand, when `-c` is used with `--cpu-bind=core`, tasks are bound core-wise. This means that tasks will be assigned as many cores as necessary to provide the minimum requested number of threads; when there's SMT, sometimes our tasks will get extra threads as well!
 
 As in the example above, `-c3` means that we want each task to have at least 3 threads to work with. Since `--cpu-bind=core` specifies that tasks will be assigned to resources on a `core` basis, each task will be bound to 2 cores. (We can't assign partial cores and 1 core gives only 2 threads; 2 cores give us *at least* 3 threads!)
 
