@@ -415,14 +415,20 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   
   if (hwloc_topology_init(&topo) < 0)
     return shell_log_errno("hwloc_topology_init");
-
+  
+  /* If given, read topology file */ 
+  const char *xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE");
+  if (xml != NULL && xml[0] != '\0')
+    if (hwloc_topology_set_xml(topo, xml) < 0)
+      return shell_log_errno("hwloc_topology_set_xml(%s)\n", xml); 
+  
   /* Make sure OS and PCI devices are not filtered out */ 
   if ( mpibind_filter_topology(topo) < 0 )
     return shell_log_errno("mpibind_filter_topology");
   
   if (hwloc_topology_load(topo) < 0)
     return shell_log_errno("hwloc_topology_load");
-  
+
 
   /* Current model uses logical Cores to specify where this 
      job should run. Need to get the OS cpus (including all 
@@ -461,9 +467,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   }
   
   shell_debug("user opts: ntasks=%d nthreads=%d restrict=%s "
-	      "greedy=%d smt=%d gpu_optim=%d verbose=%d master=%d",
+	      "greedy=%d smt=%d gpu_optim=%d verbose=%d master=%d "
+	      "xml=%s ", 
 	      ntasks, nthreads, pus, opts->greedy, opts->smt,
-	      opts->gpu_optim, opts->verbose, opts->master);
+	      opts->gpu_optim, opts->verbose, opts->master, xml);
   
   /* Set mpibind handle in shell aux data for auto-destruction */
   flux_shell_aux_set(shell, "mpibind", mph, (flux_free_f) mpibind_destroy);
