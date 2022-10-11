@@ -416,20 +416,34 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   if (hwloc_topology_init(&topo) < 0)
     return shell_log_errno("hwloc_topology_init");
   
-  /* If given, read topology file */ 
+  /* If given, read topology file. 
+     Not using HWLOC_XMLFILE because that applies to 
+     all hwloc clients */ 
   const char *xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE");
-  if (xml != NULL && xml[0] != '\0')
+  if (xml != NULL && xml[0] != '\0') {
     if (hwloc_topology_set_xml(topo, xml) < 0)
-      return shell_log_errno("hwloc_topology_set_xml(%s)\n", xml); 
+      return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
+    
+    /* Make sure the OS binding functions are actually called */ 
+    /* Could also use HWLOC_THISSYSTEM=1, but that applies
+       globally to all hwloc clients */ 
+    if (hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
+      return shell_log_errno("hwloc_topology_set_flags"); 
+  }
   
   /* Make sure OS and PCI devices are not filtered out */ 
-  if ( mpibind_filter_topology(topo) < 0 )
+  if (mpibind_filter_topology(topo) < 0)
     return shell_log_errno("mpibind_filter_topology");
   
   if (hwloc_topology_load(topo) < 0)
     return shell_log_errno("hwloc_topology_load");
-
-
+  
+  if (hwloc_topology_is_thissystem(topo) == 0) {
+    shell_log_error("Binding is not enforced");
+    return 1;
+  }
+  
+  
   /* Current model uses logical Cores to specify where this 
      job should run. Need to get the OS cpus (including all 
      the CPUs of an SMT core) to tell mpibind what it can use. */ 
