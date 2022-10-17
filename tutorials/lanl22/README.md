@@ -3,7 +3,7 @@
 **Edgar A. Leon** and **Jane E. Herriman**<br>
 Lawrence Livermore National Laboratory
 
-Los Alamos Summer School<br>
+Los Alamos Parallel Computing Summer Lecture Series<br>
 23 June 2022<br>
 Virtual 
 
