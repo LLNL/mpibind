@@ -20,6 +20,8 @@
  *    "greedy":int,
  *    "gpu_optim":int,
  *    "master":int
+ *    "corespec_first":int
+ *    "corespec_numa":int
  *  }
  *
  * Examples:  
@@ -68,8 +70,8 @@
  *   have to disable the module from within this plugin (see mpibind_init)
  */
 #define PLUGIN_NAME FLUX_SHELL_PLUGIN_NAME
-
 #define LONG_STR_SIZE 1024
+#define MAX_NUMA_DOMAINS 32
 
 
 /*  Return task id for a shell task
@@ -192,8 +194,6 @@ int mpibind_task(flux_plugin_t *p, const char *topic,
   return 0;
 }
 
-
-
 /*
  * Parse mpibind options from the command line
  * either as JSON or a short syntax. 
@@ -201,7 +201,8 @@ int mpibind_task(flux_plugin_t *p, const char *topic,
 static
 bool mpibind_getopt(flux_shell_t *shell,
 		    int *psmt, int *pgreedy, int *pgpu_optim,
-		    int *pverbose, int *pmaster)
+		    int *pverbose, int *pmaster,
+		    int *pcs_first, int *pcs_numa)
 {
   int rc;
   int disabled = 0;
@@ -222,12 +223,14 @@ bool mpibind_getopt(flux_shell_t *shell,
   if ( opts ) 
     /* Take parameters from json */
     json_unpack_ex(opts, &err, JSON_DECODE_ANY, 
-		   "{s?i s?i s?i s?i s?i}",
+		   "{s?i s?i s?i s?i s?i s?i s?i}",
 		   "smt", psmt,
 		   "greedy", pgreedy,
 		   "gpu_optim", pgpu_optim,
 		   "verbose", pverbose,
-		   "master", pmaster);
+		   "master", pmaster,
+		   "corespec_numa", pcs_numa,
+		   "corespec_first", pcs_first);
   else
     /* Check if options were given to mpibind. 
        If no options, proceed with default parameters */ 
@@ -236,7 +239,7 @@ bool mpibind_getopt(flux_shell_t *shell,
       char *token, *value;
       char buf[LONG_STR_SIZE];
       strcpy(buf, json_str);
-
+      
       /* The json string starts with double quotes, e.g., "smt:2" */
       token = strtok(buf, "\":");
       
@@ -244,6 +247,7 @@ bool mpibind_getopt(flux_shell_t *shell,
 	 any other parameters */ 
       while ( token != NULL ) {
 	value = strtok(NULL, ",");
+	//shell_debug("token=%s value=%s\n", token, value); 
 	
 	if ( !strcmp(token, "smt") ) 
 	  *psmt = atoi(value);
@@ -255,6 +259,10 @@ bool mpibind_getopt(flux_shell_t *shell,
 	  *pverbose = atoi(value);
 	else if ( !strcmp(token, "master") )
 	  *pmaster = atoi(value);
+        else if ( !strcmp(token, "corespec_first") )
+          *pcs_first = atoi(value);
+	else if ( !strcmp(token, "corespec_numa") )
+	  *pcs_numa = atoi(value); 
 	else if ( !strcmp(token, "off") )
 	  disabled = 1; 
 	else if ( !strcmp(token, "on") )
@@ -289,13 +297,186 @@ void mpibind_destroy(void *arg)
 }
 
 /* 
+ * Distribute workers over domains 
+ * Input:
+ *   wks: number of workers
+ *  doms: number of domains
+ * Output: wk_arr of length doms 
+ */ 
+static
+void distrib(int wks, int doms, int *wk_arr) {
+  int i, avg, rem;
+  
+  avg = wks / doms; 
+  rem = wks % doms; 
+  
+  for (i=0; i<doms; i++)
+    if (i < rem)
+      wk_arr[i] = avg+1;
+    else
+      wk_arr[i] = avg;
+}
+
+#if 0
+static
+void print_array(int *arr, int size, char *label)
+{
+  int i, nc=0; 
+  char str[LONG_STR_SIZE];
+  
+  for (i=0; i<size; i++)
+    nc += snprintf(str+nc, sizeof(str)-nc, "[%d]=%d ", i, arr[i]);
+
+  shell_debug("%s: %s\n", label, str); 
+}
+#endif
+
+/* 
+ * Given a set of logical cores (core_set), 
+ * provide their cpuset (out) 
+ * without the first n cores (ncores)
+ * 
+ * When ncores <= 0, the output cpuset contains 
+ * all the PUs associated with the input cores
+ */ 
+static
+int exclude_cores_first(hwloc_topology_t topo,
+			hwloc_bitmap_t core_set,
+			int ncores,
+			hwloc_bitmap_t out)
+{
+  int i, n; 
+  hwloc_obj_t core;
+  
+  n = 0; 
+  i = hwloc_bitmap_first(core_set);
+  while (i >= 0) {
+    core = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, i);
+    
+    /* Exclude the first 'ncores' cores */ 
+    if (n++ >= ncores)
+      hwloc_bitmap_or(out, out, core->cpuset);
+    i = hwloc_bitmap_next(core_set, i);
+  }
+
+  return 0; 
+}
+
+/*
+ * Given a set of logical cores (core_set), 
+ * provide their cpuset (out) without n (ncores) cores 
+ * such that the n cores are taken out evenly from 
+ * the NUMA domains that contain the input cores. 
+ *
+ * Assumes ncores > 0
+ */
+static
+int exclude_cores_numa_aware(hwloc_topology_t topo,
+			     hwloc_bitmap_t core_set,
+			     int ncores,
+			     hwloc_bitmap_t out)
+{
+  int i, nnumas, numa_idx;
+  hwloc_obj_t core; 
+  hwloc_bitmap_t pu_set, numa_set; 
+  int ncores_per_numa[MAX_NUMA_DOMAINS];
+  int ncores_per_numa_idx[MAX_NUMA_DOMAINS]; 
+
+  
+  pu_set = hwloc_bitmap_alloc();
+  numa_set = hwloc_bitmap_alloc(); 
+  
+  /* Get the cores' cpuset and numaset*/
+  i = hwloc_bitmap_first(core_set);
+  while (i >= 0) {
+    core = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, i);
+    hwloc_bitmap_or(pu_set, pu_set, core->cpuset);
+    hwloc_bitmap_or(numa_set, numa_set, core->nodeset); 
+    i = hwloc_bitmap_next(core_set, i);
+  }
+#if 0
+  char str[100];
+  hwloc_bitmap_list_snprintf(str, sizeof(str), pu_set);
+  shell_debug("pu_set: %s\n", str);
+  hwloc_bitmap_list_snprintf(str, sizeof(str), numa_set);
+  shell_debug("numa_set: %s\n", str);
+#endif
+
+  /* The number of NUMAs the cores span */
+  if ( (nnumas = hwloc_bitmap_weight(numa_set)) <= 0 ) {
+    shell_log_error("Could not find NUMAs associated with Flux cores");
+    return 1;
+  }
+  //shell_debug("ncores=%d nnumas=%d\n", ncores, nnumas);
+  
+  /* The following function does not work reliably. On corona, 
+     when lcoreset is 45-47 (last 3 cores of second socket)
+     the function returns 0 rather than 1. 
+     This leads to a floating point exception from the 
+     'distrib' call. */  
+  // nnumas = hwloc_get_nbobjs_inside_cpuset_by_type(topo, pu_set, 
+  // HWLOC_OBJ_NUMANODE);
+  
+  /* Determine how many cores to exclude per NUMA 
+   * For example, 2 exclude cores on 4 NUMAs: 
+   * [0]=1 [1]=1 [2]=0 [3]=0 */
+  distrib(ncores, nnumas, ncores_per_numa);
+  //print_array(ncores_per_numa, nnumas, "ncores_per_numa");
+
+  /* Not necessary to zero the array, but just in case */ 
+  memset(ncores_per_numa_idx, 0, sizeof(ncores_per_numa_idx));
+
+  /* ncores_per_numa assumes numas are labeled sequentially 
+     from 0, while the actual NUMA IDs associated with the 
+     input cores may be arbitrary.
+     Create an array where the index corresponds to the 
+     NUMA ID and the value corresponds to the number
+     of cores for that NUMA domain */ 
+  i = 0; 
+  numa_idx = hwloc_bitmap_first(numa_set);
+  while (numa_idx >= 0) {
+    ncores_per_numa_idx[numa_idx] = ncores_per_numa[i++]; 
+    numa_idx = hwloc_bitmap_next(numa_set, numa_idx);
+  }
+  //print_array(ncores_per_numa_idx, MAX_NUMA_DOMAINS,
+  //	      "ncores_per_numa_idx");  
+  
+  /* Add PUs to the output cpuset after setting aside 
+     the number of cores per NUMA indicated for exclusion */ 
+  i = hwloc_bitmap_first(core_set);
+  while (i >= 0) {
+    core = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, i);
+    numa_idx = hwloc_bitmap_first(core->nodeset); 
+    
+    if (ncores_per_numa_idx[numa_idx] == 0)
+      /* No more cores to exclude */ 
+      hwloc_bitmap_or(out, out, core->cpuset);
+    else
+      /* Don't add core i to the cpuset */ 
+      ncores_per_numa_idx[numa_idx] -= 1; 
+    
+    i = hwloc_bitmap_next(core_set, i);
+  }
+  //print_array(ncores_per_numa_idx, MAX_NUMA_DOMAINS, "after");
+
+  if (hwloc_bitmap_weight(out) == 0) {
+    shell_log_error("Did not find any user cores"); 
+    return 1; 
+  }
+  
+  hwloc_bitmap_free(numa_set); 
+  hwloc_bitmap_free(pu_set);
+
+  return 0; 
+}
+
+/* 
  * Get the OS PU ids of a set of logical Core IDs. 
  */
 static
-int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus)
+int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus,
+		      int exclude_ncores, int exclude_numa_aware)
 {
-  int depth, i;
-  hwloc_obj_t core; 
   hwloc_bitmap_t lcore_set, pu_set;
   
   if ( !(lcore_set = hwloc_bitmap_alloc()) ||
@@ -304,46 +485,38 @@ int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus)
     return 1;
   }
   
-  /*  Parse cpus as bitmap list */
+  /*  Parse cpus into a bitmap list */
   if ( hwloc_bitmap_list_sscanf(lcore_set, lcores) < 0)  {
     shell_log_error("Failed to read core list: %s", lcores);
     return 1; 
   }
-
-  depth = hwloc_get_type_depth(topo, HWLOC_OBJ_CORE);
-  if ( depth == HWLOC_TYPE_DEPTH_UNKNOWN ) {
-    shell_log_error("Core depth is HWLOC_TYPE_DEPTH_UNKNOWN");
-    return 1; 
-  }
-  if ( depth == HWLOC_TYPE_DEPTH_MULTIPLE ) {
-    shell_log_error("Core depth is HWLOC_TYPE_DEPTH_MULTIPLE");
-    return 1; 
-  }
-
-  /* Find the logical Cores and aggregate their PUs */ 
-  i = hwloc_bitmap_first(lcore_set);
-  while (i >= 0) {
-    
-    core = hwloc_get_obj_by_depth(topo, depth, i);
-    if ( !core ) {
-      shell_log_error("Logical core %d not in topology", i);
+  
+  if (exclude_ncores > 0) 
+    if (hwloc_bitmap_weight(lcore_set) <= exclude_ncores) {
+      shell_log_error("Not enough cores to satisfy core spec (%d)",
+		      exclude_ncores); 
       return 1; 
     }
-    if ( !core->cpuset ) {
-      shell_log_error("Logical core %d cpuset is null", i);
-      return 1; 
-    }
-    
-    hwloc_bitmap_or(pu_set, pu_set, core->cpuset);
-    i = hwloc_bitmap_next(lcore_set, i);
-  }
 
+  /* Get the PUs of the logical cores, excluding 
+     the appropriate cores if core specialization 
+     was chosen */ 
+  if (exclude_numa_aware && exclude_ncores > 0) {
+    if (exclude_cores_numa_aware(topo, lcore_set,
+				 exclude_ncores, pu_set))
+      return 1; 
+  } else {
+    if (exclude_cores_first(topo, lcore_set,
+			    exclude_ncores, pu_set))
+      return 1;
+  }
+  
   /* Write result as a string */ 
   hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, pu_set);
-  
-  hwloc_bitmap_free(lcore_set);
+
   hwloc_bitmap_free(pu_set);
-  
+  hwloc_bitmap_free(lcore_set);
+
   return 0; 
 }
 
@@ -356,7 +529,9 @@ struct usr_opts {
   int greedy;
   int gpu_optim;
   int verbose;
-  int master; 
+  int master;
+  int corespec_first;
+  int corespec_numa; 
 }; 
 
 /* 
@@ -367,7 +542,7 @@ static
 int mpibind_shell_init(flux_plugin_t *p, const char *s,
 		       flux_plugin_arg_t *arg, void *data)
 {
-  int ntasks;
+  int ntasks, x_ncores, x_numa_aware;
   char *cores, *gpus, *pus;
   hwloc_topology_t topo;
   mpibind_t *mph = NULL;
@@ -443,12 +618,21 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     return 1;
   }
   
-  
   /* Current model uses logical Cores to specify where this 
      job should run. Need to get the OS cpus (including all 
      the CPUs of an SMT core) to tell mpibind what it can use. */ 
   pus = malloc(LONG_STR_SIZE);
-  if (get_pus_of_lcores(topo, cores, pus) != 0) {
+
+  /* Core specialization settings */ 
+  x_numa_aware = 0; 
+  x_ncores = opts->corespec_first; 
+  if (opts->corespec_numa > opts->corespec_first) {
+    x_numa_aware = 1; 
+    x_ncores = opts->corespec_numa;
+  }
+  
+  if (get_pus_of_lcores(topo, cores, pus,
+			x_ncores, x_numa_aware) != 0) {
     shell_log_error("get_pus_of_lcores failed\n");
     return -1; 
   }
@@ -482,9 +666,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   
   shell_debug("user opts: ntasks=%d nthreads=%d restrict=%s "
 	      "greedy=%d smt=%d gpu_optim=%d verbose=%d master=%d "
-	      "xml=%s ", 
+	      "corespec_first=%d corespec_numa=%d xml=%s ", 
 	      ntasks, nthreads, pus, opts->greedy, opts->smt,
-	      opts->gpu_optim, opts->verbose, opts->master, xml);
+	      opts->gpu_optim, opts->verbose, opts->master, 
+	      opts->corespec_first, opts->corespec_numa, xml);
   
   /* Set mpibind handle in shell aux data for auto-destruction */
   flux_shell_aux_set(shell, "mpibind", mph, (flux_free_f) mpibind_destroy);
@@ -592,10 +777,16 @@ void flux_plugin_init(flux_plugin_t *p)
   // if they want mpibind to apply to all of the resources
   // of a node. But, I'm keeping this option just in case. 
   opts->master = 0;
+  /* The number of cores to leave idle for system services, 
+     i.e., core specialization */
+  opts->corespec_first = 0;
+  opts->corespec_numa = 0; 
   
   /* Get mpibind user-specified options */ 
-  if ( !mpibind_getopt(shell, &opts->smt, &opts->greedy, &opts->gpu_optim,
-		       &opts->verbose, &opts->master) ) {
+  if ( !mpibind_getopt(shell, &opts->smt, &opts->greedy,
+		       &opts->gpu_optim, &opts->verbose,
+		       &opts->master,
+		       &opts->corespec_first, &opts->corespec_numa) ) {
     shell_debug("mpibind disabled");
     return;
   }
