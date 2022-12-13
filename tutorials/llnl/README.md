@@ -4,9 +4,7 @@
 Lawrence Livermore National Laboratory
 
 <!-- El Capitan Center of Excellence<br> -->
-Livermore Computing<br>
-19 October 2022
-
+<!-- Livermore Computing<br>19 October 2022 -->
 
 ## Table of contents
 
