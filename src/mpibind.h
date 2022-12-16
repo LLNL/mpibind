@@ -279,6 +279,19 @@ extern "C" {
    * Apply mpibind affinity for task `taskid`
    */
   int mpibind_apply(mpibind_t *handle, int taskid);
+  /* 
+   * Get the hwloc depth of a Core object. 
+   * mpibind relies on hwloc Core objects. If the topology
+   * doesn't have them, use an appropriate replacement. 
+   * Make sure to always use mpibind_get_core_type and 
+   * mpibind_get_core_depth instead of HWLOC_OBJ_CORE 
+   */
+  int mpibind_get_core_depth(hwloc_topology_t topo); 
+  /* 
+   * Get the hwloc type of a Core object 
+   */ 
+  hwloc_obj_type_t mpibind_get_core_type(hwloc_topology_t topo); 
+
 
 #ifdef __cplusplus
 } /* extern "C" */

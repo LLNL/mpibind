@@ -14,31 +14,6 @@
  * interface implemenation. 
  ************************************************/
 
-/* 
- * mpibind relies on Core objects. If the topology
- * doesn't have them, use an appropriate replacement. 
- * Make sure to always use get_core_type and get_core_depth
- * instead of HWLOC_OBJ_CORE and its depth.
- * Todo: In the future, I may need to have similar functions
- * for NUMA domains.  
- */
-static
-int get_core_depth(hwloc_topology_t topo)
-{
-  return hwloc_get_type_or_below_depth(topo, HWLOC_OBJ_CORE);
-}
-
-
-#if 0
-/* Commented out to avoid compiler errors (static function). 
-   But, I may use this function later. */ 
-static
-hwloc_obj_type_t get_core_type(hwloc_topology_t topo)
-{
-  return hwloc_get_depth_type(topo, get_core_depth(topo));
-}
-#endif 
-
 
 /* 
  * Distribute workers over domains 
@@ -700,7 +675,7 @@ int get_smt_level(hwloc_topology_t topo)
   int level = 1; 
   hwloc_obj_t obj = NULL;
   
-  if ( (obj = hwloc_get_next_obj_by_depth(topo, get_core_depth(topo),
+  if ( (obj = hwloc_get_next_obj_by_depth(topo, mpibind_get_core_depth(topo),
 					  obj)) ) {
     level = (obj->arity == 0) ? 1 : obj->arity; 
     /* Debug */ 
@@ -744,7 +719,7 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
   printf("hw_smt=%d usr_smt=%d, it_smt=%d\n", hw_smt, usr_smt, it_smt);
 #endif 
 
-  core_depth = get_core_depth(topo);
+  core_depth = mpibind_get_core_depth(topo);
   
   /* If need to calculate nthreads, match at Core or usr-SMT level */
   if (*nthreads_ptr <= 0) {

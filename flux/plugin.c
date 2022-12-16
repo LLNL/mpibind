@@ -345,13 +345,21 @@ int exclude_cores_first(hwloc_topology_t topo,
 			int ncores,
 			hwloc_bitmap_t out)
 {
-  int i, n; 
   hwloc_obj_t core;
   
-  n = 0; 
-  i = hwloc_bitmap_first(core_set);
+  /* Don't use HWLOC_OBJ_CORE directly:  
+     A flattened topology may not have objects of that type!  
+     Get the type or depth using mpibind functions */
+  int core_depth = mpibind_get_core_depth(topo); 
+
+  int n = 0; 
+  int i = hwloc_bitmap_first(core_set);
   while (i >= 0) {
-    core = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, i);
+    core = hwloc_get_obj_by_depth(topo, core_depth, i);
+    if ( !core ) {
+      shell_log_error("Logical core %d not in topology", i);
+      return 1; 
+    }
     
     /* Exclude the first 'ncores' cores */ 
     if (n++ >= ncores)
@@ -376,7 +384,7 @@ int exclude_cores_numa_aware(hwloc_topology_t topo,
 			     int ncores,
 			     hwloc_bitmap_t out)
 {
-  int i, nnumas, numa_idx;
+  int i, nnumas, numa_idx, core_depth;
   hwloc_obj_t core; 
   hwloc_bitmap_t pu_set, numa_set; 
   int ncores_per_numa[MAX_NUMA_DOMAINS];
@@ -385,11 +393,16 @@ int exclude_cores_numa_aware(hwloc_topology_t topo,
   
   pu_set = hwloc_bitmap_alloc();
   numa_set = hwloc_bitmap_alloc(); 
-  
+  core_depth = mpibind_get_core_depth(topo); 
+
   /* Get the cores' cpuset and numaset*/
   i = hwloc_bitmap_first(core_set);
   while (i >= 0) {
-    core = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, i);
+    core = hwloc_get_obj_by_depth(topo, core_depth, i);
+    if ( !core ) {
+      shell_log_error("Logical core %d not in topology", i);
+      return 1; 
+    }
     hwloc_bitmap_or(pu_set, pu_set, core->cpuset);
     hwloc_bitmap_or(numa_set, numa_set, core->nodeset); 
     i = hwloc_bitmap_next(core_set, i);
@@ -445,7 +458,11 @@ int exclude_cores_numa_aware(hwloc_topology_t topo,
      the number of cores per NUMA indicated for exclusion */ 
   i = hwloc_bitmap_first(core_set);
   while (i >= 0) {
-    core = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, i);
+    core = hwloc_get_obj_by_depth(topo, core_depth, i);
+    if ( !core ) {
+      shell_log_error("Logical core %d not in topology", i);
+      return 1; 
+    }
     numa_idx = hwloc_bitmap_first(core->nodeset); 
     
     if (ncores_per_numa_idx[numa_idx] == 0)
@@ -478,6 +495,7 @@ int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus,
 		      int exclude_ncores, int exclude_numa_aware)
 {
   hwloc_bitmap_t lcore_set, pu_set;
+
   
   if ( !(lcore_set = hwloc_bitmap_alloc()) ||
        !(pu_set = hwloc_bitmap_alloc()) ) { 
@@ -630,7 +648,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     x_numa_aware = 1; 
     x_ncores = opts->corespec_numa;
   }
-  
+
   if (get_pus_of_lcores(topo, cores, pus,
 			x_ncores, x_numa_aware) != 0) {
     shell_log_error("get_pus_of_lcores failed\n");
@@ -640,11 +658,13 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   shell_debug("flux given cores: %s\n", cores);
   shell_debug("\tderived pus: %s\n", pus); 
   shell_debug("flux given gpus: %s", gpus);
-  shell_debug("# available cores: %d",
-	       hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE));
-  shell_debug("# available pus: %d",
-	       hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU));
-
+  shell_debug("total #cores: %d",
+	      hwloc_get_nbobjs_by_depth(topo,
+					mpibind_get_core_depth(topo))); 
+  shell_debug("total #pus: %d",
+	      hwloc_get_nbobjs_by_type(topo,
+				       HWLOC_OBJ_PU));
+  
   if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
        mpibind_set_topology(mph, topo) != 0 ||
        (opts->master <= 0 && mpibind_set_restrict_ids(mph, pus) != 0) ||
