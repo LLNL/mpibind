@@ -236,44 +236,70 @@ bool mpibind_getopt(flux_shell_t *shell,
        If no options, proceed with default parameters */ 
     if ( strcmp(json_str, "1") != 0 ) {
       /* Options given to mpibind. Parse short syntax */ 
-      char *token, *value;
-      char buf[LONG_STR_SIZE];
-      strcpy(buf, json_str);
+      int len;
+      int *opt_ptr = NULL;
+      char str[LONG_STR_SIZE];
+      char *token, *token2, *end_str, *end_token;
+
+      /* The json string is encompased in quotes, 
+	 e.g., "verbose,smt:2" 
+	 Don't copy the quotes */
+      //strcpy(str, json_str);
+      len = strlen(json_str) - 2;
+      memcpy(str, json_str+1, len);
+      str[len] = '\0'; 
+      //shell_debug("str=%s str_len=%ld json_len=%ld",
+      //	  str, strlen(str), strlen(json_str)); 
+
+      /* Get the first comma-separated token */
+      token = strtok_r(str, ",", &end_str);
       
-      /* The json string starts with double quotes, e.g., "smt:2" */
-      token = strtok(buf, "\":");
-      
-      /* On/off parameters should not be used in conjuction with 
-	 any other parameters */ 
-      while ( token != NULL ) {
-	value = strtok(NULL, ",");
-	//shell_debug("token=%s value=%s\n", token, value); 
+      while (token != NULL) {
+	//shell_debug("token = %s", token);
+
+	/* Get the name of the option */ 
+	token2 = strtok_r(token, ":", &end_token);
+	shell_debug("option = %s", token2);
 	
-	if ( !strcmp(token, "smt") ) 
-	  *psmt = atoi(value);
-	else if ( !strcmp(token, "greedy") ) 
-	  *pgreedy = atoi(value);
-	else if ( !strcmp(token, "gpu_optim") ) 
-	  *pgpu_optim = atoi(value);
-	else if ( !strcmp(token, "verbose") )
-	  *pverbose = atoi(value);
-	else if ( !strcmp(token, "master") )
-	  *pmaster = atoi(value);
-        else if ( !strcmp(token, "corespec_first") )
-          *pcs_first = atoi(value);
-	else if ( !strcmp(token, "corespec_numa") )
-	  *pcs_numa = atoi(value); 
-	else if ( !strcmp(token, "off") )
+	if ( !strcmp(token2, "smt") )
+	  opt_ptr = psmt; 
+	else if ( !strcmp(token2, "greedy") )
+	  opt_ptr = pgreedy; 
+	else if ( !strcmp(token2, "gpu_optim") )
+	  opt_ptr = pgpu_optim;
+	else if ( !strcmp(token2, "verbose") )
+	  opt_ptr = pverbose; 
+	else if ( !strcmp(token2, "master") )
+	  opt_ptr = pmaster; 
+        else if ( !strcmp(token2, "corespec_first") )
+	  opt_ptr = pcs_first; 
+	else if ( !strcmp(token2, "corespec_numa") )
+	  opt_ptr = pcs_numa; 
+	else if ( !strcmp(token2, "off") )
 	  disabled = 1; 
-	else if ( !strcmp(token, "on") )
+	else if ( !strcmp(token2, "on") )
 	  disabled = 0;
 	else {
-	  shell_die(1, "Unknown mpibind parameter '%s'", token);
+	  shell_die(1, "Unknown mpibind parameter '%s'", token2);
 	  return false;
 	}
-	token = strtok(NULL, ":");
+
+	/* Get the value of the option.
+	   Currently, all options use an integer value.
+	   If not specified, the value of 1 is assigned */ 
+	*opt_ptr = ((token2 = strtok_r(NULL, ":", &end_token)) == NULL)
+	  ? 1 : atoi(token2);
+	//shell_debug("token2 = '%s' value = %d", token2, *opt_ptr);
+#if 0
+	while (token2 != NULL) {
+	  shell_debug("token2 = %s", token2);
+	  token2 = strtok_r(NULL, ":", &end_token);
+	}
+#endif
+	/* Get the next comma-separated token */ 
+	token = strtok_r(NULL, ",", &end_str);
       }
-    }
+    }  
   
   /* Clean up */ 
   json_decref(opts); 
