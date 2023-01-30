@@ -643,13 +643,28 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   if (xml != NULL && xml[0] != '\0') {
     if (hwloc_topology_set_xml(topo, xml) < 0)
       return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
-
-    /* Make sure the OS binding functions are actually called */
-    /* Could also use HWLOC_THISSYSTEM=1, but that applies
-       globally to all hwloc clients */
-    if (hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
-      return shell_log_errno("hwloc_topology_set_flags");
+    shell_debug ("loaded topology from %s", xml);
   }
+  else {
+    /* Otherwise, get hwloc topology xml from job shell to avoid heavyweight
+     * topology load duplicated by job shell.
+     */
+    if (flux_shell_get_hwloc_xml (shell, &xml) < 0)
+      return shell_log_errno("failed to get hwloc XML from job shell");
+
+    if (hwloc_topology_set_xmlbuffer (topo, xml, strlen (xml)) < 0)
+      return shell_log_errno ("hwloc_topology_set_xmlbuffer");
+
+    /* Update xml string since it is later used in debug output.
+     */
+    xml = "shell-provided";
+  }
+
+  /* Make sure the OS binding functions are actually called */
+  /* Could also use HWLOC_THISSYSTEM=1, but that applies
+     globally to all hwloc clients */
+  if (hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
+    return shell_log_errno("hwloc_topology_set_flags");
 
   /* Make sure OS and PCI devices are not filtered out */
   if (mpibind_filter_topology(topo) < 0)
