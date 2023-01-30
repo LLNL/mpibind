@@ -770,11 +770,16 @@ int mpibind_mapping_snprint(char *buf, size_t size,
   int i, nc=0;
   
   for (i=0; i<handle->ntasks; i++) {
-    nc += mpibind_mapping_ptask_snprint(buf+nc, size-nc, handle, i);
-    nc += snprintf(buf+nc, size-nc, "\n"); 
+    if (size > nc)
+      nc += mpibind_mapping_ptask_snprint(buf+nc, size-nc, handle, i);
+    if (size > nc)
+      nc += snprintf(buf+nc, size-nc, "\n"); 
   }
-  if (nc > 0)
-    buf[--nc] = '\0';
+  
+  // snprintf writes the terminating null byte '\0'
+  //   A return value of size or more means the output was truncated
+  // Debug: 
+  // printf("size=%lu nc=%d\n", size, nc); 
 
   return nc; 
 } 

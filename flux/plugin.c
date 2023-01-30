@@ -70,7 +70,7 @@
  *   have to disable the module from within this plugin (see mpibind_init)
  */
 #define PLUGIN_NAME FLUX_SHELL_PLUGIN_NAME
-#define LONG_STR_SIZE 1024
+#define LONG_STR_SIZE 2048
 #define MAX_NUMA_DOMAINS 32
 
 
