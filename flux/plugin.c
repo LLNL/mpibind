@@ -579,6 +579,29 @@ struct usr_opts {
   int corespec_numa;
 };
 
+/*  Restrict hwloc topology to the cpu affinity mask of the current
+ *  proces. This is required for handling nested jobs in Flux, since
+ *  the nested job will be bound to a subset of total resources, but
+ *  assigned cores are "reranked" to zero-origin (i.e. a Flux job
+ *  using logical cores 3,4 will remap these cores to 0-1 locally.
+ *
+ *  This function restricts the hwloc topology to cores 3,4 so that
+ *  logical cores 0,1 now correspond to OS logical cores 3,4.
+ */
+static int topo_restrict (hwloc_topology_t topo)
+{
+  hwloc_bitmap_t rset = NULL;
+  int rc = -1;
+  if (!(rset = hwloc_bitmap_alloc())
+      || hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0
+      || hwloc_topology_restrict (topo, rset, 0) < 0)
+    goto out;
+  rc = 0;
+out:
+  hwloc_bitmap_free (rset);
+  return rc;
+}
+
 /*
  * The entry function to the mpibind plugin.
  * This function initializes and calls mpibind.
@@ -592,6 +615,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   hwloc_topology_t topo;
   mpibind_t *mph = NULL;
   struct usr_opts *opts = data;
+  bool restrict_topo = true;
   flux_shell_t *shell = flux_plugin_get_shell(p);
 
 
@@ -655,9 +679,12 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     if (hwloc_topology_set_xmlbuffer (topo, xml, strlen (xml)) < 0)
       return shell_log_errno ("hwloc_topology_set_xmlbuffer");
 
-    /* Update xml string since it is later used in debug output.
-     */
     xml = "shell-provided";
+
+    /* No need to further restrict topology since this is already done
+     * in the topology XML fetched from the job shell.
+     */
+    restrict_topo = false;
   }
 
   /* Make sure the OS binding functions are actually called */
@@ -677,6 +704,9 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     shell_log_error("Binding is not enforced");
     return 1;
   }
+
+  if (restrict_topo && topo_restrict (topo) < 0)
+    return shell_log_errno ("failed to restrict topology");
 
   /* Current model uses logical Cores to specify where this
      job should run. Need to get the OS cpus (including all
