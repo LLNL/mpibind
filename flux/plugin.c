@@ -249,7 +249,7 @@ bool mpibind_getopt(flux_shell_t *shell,
       memcpy(str, json_str+1, len);
       str[len] = '\0'; 
       //shell_debug("str=%s str_len=%ld json_len=%ld",
-      //	  str, strlen(str), strlen(json_str)); 
+      //		str, strlen(str), strlen(json_str)); 
 
       /* Get the first comma-separated token */
       token = strtok_r(str, ",", &end_str);
@@ -286,9 +286,10 @@ bool mpibind_getopt(flux_shell_t *shell,
 
 	/* Get the value of the option.
 	   Currently, all options use an integer value.
-	   If not specified, the value of 1 is assigned */ 
-	*opt_ptr = ((token2 = strtok_r(NULL, ":", &end_token)) == NULL)
-	  ? 1 : atoi(token2);
+	   If not specified, the value of 1 is assigned */
+	if (opt_ptr)
+	  *opt_ptr = ((token2 = strtok_r(NULL, ":", &end_token)) == NULL)
+	    ? 1 : atoi(token2);
 	//shell_debug("token2 = '%s' value = %d", token2, *opt_ptr);
 #if 0
 	while (token2 != NULL) {
