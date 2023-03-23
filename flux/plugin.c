@@ -594,7 +594,8 @@ static int topo_restrict (hwloc_topology_t topo)
   int rc = -1;
   if (!(rset = hwloc_bitmap_alloc())
       || hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0
-      || hwloc_topology_restrict (topo, rset, 0) < 0)
+      || hwloc_topology_restrict (topo, rset,
+				  HWLOC_RESTRICT_FLAG_REMOVE_CPULESS) < 0)
     goto out;
   rc = 0;
 out:
