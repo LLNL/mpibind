@@ -1056,7 +1056,7 @@ int distrib_greedy(hwloc_topology_t topo,
 
 
 /************************************************
- * Non-staic functions. 
+ * Non-static functions. 
  * Used by mpibind.c
  ************************************************/
 
@@ -1327,4 +1327,26 @@ int device_key_snprint(char *buf, size_t size,
   default: 
     return -1; 
   }
+}
+
+
+/* 
+ * Given a PU id, provide the PU set of the core 
+ * that contains that PU. 
+ */
+const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu)
+{
+  int i, core_depth, ncores;
+  hwloc_obj_t core; 
+  
+  core_depth = mpibind_get_core_depth(topo); 
+  ncores = hwloc_get_nbobjs_by_depth(topo, core_depth); 
+  
+  for (i=0; i<ncores; i++) {
+    core = hwloc_get_obj_by_depth(topo, core_depth, i); 
+    if ( hwloc_bitmap_isset(core->cpuset, pu) )
+      return core->cpuset; 
+  }
+  
+  return NULL; 
 }

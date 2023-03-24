@@ -47,6 +47,7 @@ int mpibind_distrib(hwloc_topology_t topo,
 int device_key_snprint(char *buf, size_t size, 
       struct device *dev, int id_type);
 int get_gpu_vendor(struct device **devs, int ndevs);
+const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu);
 
 
 /*********************************************
@@ -720,6 +721,88 @@ int mpibind(mpibind_t *hdl)
   //hwloc_topology_destroy(topo);
   
   return rc; 
+}
+
+/* 
+ * Pop 'ncpus' CPUs from the assigned CPUs of a particular task. 
+ * The main 'mpibind' function has to be called before calling
+ * this function. 
+ */
+int mpibind_pop_cpus_ptask(mpibind_t *handle, int taskid, int ncpus)
+{
+  if (handle == NULL ||
+      taskid < 0 || taskid >= handle->ntasks ||
+      ncpus < 1)
+    return -1;
+  
+  int i, val; 
+  hwloc_bitmap_t cpuset = handle->cpus[taskid]; 
+  int weight = hwloc_bitmap_weight(cpuset);
+  
+  if (weight <= ncpus) {
+    fprintf(stderr, "mpibind_pop_cpus_ptask: "
+	    "Popping %d CPUs would leave task %d with no CPUs\n",
+	    ncpus, taskid);
+    return -1; 
+  }
+  
+  /* Update cpus */ 
+  for (i=0; i<ncpus; i++)
+    hwloc_bitmap_clr(cpuset, hwloc_bitmap_first(cpuset));
+  
+  /* Update cpus_usr */ 
+  i=0; 
+  hwloc_bitmap_foreach_begin(val, cpuset) {
+    handle->cpus_usr[taskid][i++] = val;
+  } hwloc_bitmap_foreach_end();
+  
+  /* Update nthreads */
+  handle->nthreads[taskid] = hwloc_bitmap_weight(cpuset);
+  
+  return 0;
+}
+
+		    
+/* 
+ * Pop 'ncpus' CPUs from the assigned CPUs of a particular task. 
+ * The main 'mpibind' function has to be called before calling
+ * this function. 
+ */
+int mpibind_pop_cores_ptask(mpibind_t *handle, int taskid, int ncores)
+{
+  if (handle == NULL ||
+      taskid < 0 || taskid >= handle->ntasks ||
+      ncores < 1)
+    return -1;
+  
+  int i, pu, val; 
+  hwloc_bitmap_t cpuset = handle->cpus[taskid]; 
+  int weight = hwloc_bitmap_weight(cpuset);
+  hwloc_topology_t topo = mpibind_get_topology(handle);
+  
+  if (weight <= ncores) {
+    fprintf(stderr, "mpibind_pop_cores_ptask: "
+	    "Popping %d CPUs would leave task %d with no CPUs\n",
+	    ncores, taskid);
+    return -1; 
+  }
+  
+  /* Update cpus */ 
+  for (i=0; i<ncores; i++) {
+    pu = hwloc_bitmap_first(cpuset);
+    hwloc_bitmap_andnot(cpuset, cpuset, get_core_cpuset(topo, pu));
+  }
+  
+  /* Update cpus_usr */ 
+  i=0; 
+  hwloc_bitmap_foreach_begin(val, cpuset) {
+    handle->cpus_usr[taskid][i++] = val;
+  } hwloc_bitmap_foreach_end();
+  
+  /* Update nthreads */
+  handle->nthreads[taskid] = hwloc_bitmap_weight(cpuset);
+  
+  return 0;
 }
 
 

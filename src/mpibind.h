@@ -291,8 +291,16 @@ extern "C" {
    * Get the hwloc type of a Core object 
    */ 
   hwloc_obj_type_t mpibind_get_core_type(hwloc_topology_t topo); 
+  /*
+   * Pop CPUs from the assigned CPUs of a task.
+   */
+  int mpibind_pop_cpus_ptask(mpibind_t *handle, int taskid, int ncpus);
+  /*
+   * Pop cores from the assigned CPUs of a task.
+   */
+  int mpibind_pop_cores_ptask(mpibind_t *handle, int taskid, int ncores);
 
-
+  
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
   //mpibind_set_nthreads(handle, 3);
   //mpibind_set_greedy(handle, 0);
   //mpibind_set_gpu_optim(handle, 0);
-  //mpibind_set_smt(handle, 1);
+  //mpibind_set_smt(handle, 2);
   //params.restr_type = MEM; 
   //  mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
   //params.restr_set = "24-29,72-77,36-41,84-89";
@@ -116,6 +116,11 @@ int main(int argc, char *argv[])
   mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS);
   mpibind_mapping_print(handle); 
 
+  /* Test popping CPUs/cores */ 
+  //mpibind_pop_cpus_ptask(handle, 2, 4);
+  //mpibind_pop_cores_ptask(handle, 1, 3); 
+  //mpibind_mapping_print(handle); 
+  
   int ngpus = mpibind_get_num_gpus(handle);
   printf("There are %d GPUs\n", ngpus);
   if (ngpus > 0)
