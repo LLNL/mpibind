@@ -202,7 +202,7 @@ static
 bool mpibind_getopt(flux_shell_t *shell,
 		    int *psmt, int *pgreedy, int *pgpu_optim,
 		    int *pverbose, int *pmaster,
-		    int *pcs_first, int *pcs_numa)
+		    int *pcs_first, int *pcs_numa, int *pcs_bal)
 {
   int rc;
   int disabled = 0;
@@ -223,14 +223,15 @@ bool mpibind_getopt(flux_shell_t *shell,
   if ( opts )
     /* Take parameters from json */
     json_unpack_ex(opts, &err, JSON_DECODE_ANY,
-		   "{s?i s?i s?i s?i s?i s?i s?i}",
+		   "{s?i s?i s?i s?i s?i s?i s?i s?i}",
 		   "smt", psmt,
 		   "greedy", pgreedy,
 		   "gpu_optim", pgpu_optim,
 		   "verbose", pverbose,
 		   "master", pmaster,
-		   "corespec_numa", pcs_numa,
-		   "corespec_first", pcs_first);
+		   "corespecnuma", pcs_numa,
+		   "corespecfirst", pcs_first,
+		   "corespecbal", pcs_bal);
   else
     /* Check if options were given to mpibind.
        If no options, proceed with default parameters */
@@ -271,10 +272,12 @@ bool mpibind_getopt(flux_shell_t *shell,
 	  opt_ptr = pverbose;
 	else if ( !strcmp(token2, "master") )
 	  opt_ptr = pmaster;
-        else if ( !strcmp(token2, "corespec_first") )
+        else if ( !strcmp(token2, "corespecfirst") )
 	  opt_ptr = pcs_first;
-	else if ( !strcmp(token2, "corespec_numa") )
+	else if ( !strcmp(token2, "corespecnuma") )
 	  opt_ptr = pcs_numa;
+	else if ( !strcmp(token2, "corespecbal") )
+	  opt_ptr = pcs_bal; 
 	else if ( !strcmp(token2, "off") )
 	  disabled = 1;
 	else if ( !strcmp(token2, "on") )
@@ -577,6 +580,7 @@ struct usr_opts {
   int master;
   int corespec_first;
   int corespec_numa;
+  int corespec_bal; 
 };
 
 /*  Restrict hwloc topology to the cpu affinity mask of the current
@@ -611,7 +615,7 @@ static
 int mpibind_shell_init(flux_plugin_t *p, const char *s,
 		       flux_plugin_arg_t *arg, void *data)
 {
-  int ntasks, x_ncores, x_numa_aware;
+  int i, ntasks, x_ncores, x_numa_aware;
   char *cores, *gpus, *pus;
   hwloc_topology_t topo;
   mpibind_t *mph = NULL;
@@ -721,7 +725,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     x_numa_aware = 1;
     x_ncores = opts->corespec_numa;
   }
-
+  
   if (get_pus_of_lcores(topo, cores, pus,
 			x_ncores, x_numa_aware) != 0) {
     shell_log_error("get_pus_of_lcores failed\n");
@@ -781,15 +785,22 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     return -1;
   }
 
+  /* Now that the mapping has been set on the mpibind handle,
+     remove the OS CPUs if corespec balanced has been set */
+  x_ncores = opts->corespec_bal; 
+  if (x_ncores > 0)
+    for (i=0; i<ntasks; i++)
+      mpibind_pop_cores_ptask(mph, i, x_ncores); 
+
+  
   /* Debug: Print out the cpus assigned to each task */
-  int i;
   char outbuf[LONG_STR_SIZE];
   hwloc_bitmap_t *cpus = mpibind_get_cpus(mph);
   for (i=0; i<ntasks; i++) {
     hwloc_bitmap_list_snprintf(outbuf, LONG_STR_SIZE, cpus[i]);
     shell_debug("task %2d: cpus %s", i, outbuf);
   }
-
+  
   if (opts->verbose) {
     /* Can't print to stdout within the Flux shell environment */
     //mpibind_print_mapping(mph);
@@ -801,7 +812,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     mpibind_mapping_snprint(outbuf, LONG_STR_SIZE, mph);
     shell_log("\n%s", outbuf);
   }
-
+  
   /* Set env variables now for the purposes of task.init */
   if (mpibind_set_env_vars(mph) != 0) {
     shell_die_errno(1, "mpibind_set_env_vars");
@@ -874,12 +885,18 @@ void flux_plugin_init(flux_plugin_t *p)
      i.e., core specialization */
   opts->corespec_first = 0;
   opts->corespec_numa = 0;
+  opts->corespec_bal = 0; 
 
   /* Get mpibind user-specified options */
-  if ( !mpibind_getopt(shell, &opts->smt, &opts->greedy,
-		       &opts->gpu_optim, &opts->verbose,
+  if ( !mpibind_getopt(shell,
+		       &opts->smt,
+		       &opts->greedy,
+		       &opts->gpu_optim,
+		       &opts->verbose,
 		       &opts->master,
-		       &opts->corespec_first, &opts->corespec_numa) ) {
+		       &opts->corespec_first,
+		       &opts->corespec_numa,
+		       &opts->corespec_bal) ) {
     shell_debug("mpibind disabled");
     return;
   }

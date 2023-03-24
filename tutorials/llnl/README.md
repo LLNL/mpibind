@@ -1042,8 +1042,8 @@ cores `56-63`!
 We will leverage the following options for this section:
 
 ```
--o mpibind=corespec_first:<n>
--o mpibind=corespec_numa:<n>
+-o mpibind=corespecfirst:<n>
+-o mpibind=corespecnuma:<n>
 ```
 
 *System noise*&#8212;any process, hardware or software, that delays an
@@ -1088,7 +1088,7 @@ Now, let's set aside 4 cores for system services:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=corespec_first:4 ./mpi-tioga 
+$ flux mini run -N1 -n4 --exclusive -o mpibind=corespecfirst:4 ./mpi-tioga 
 ```
 </summary>
 
@@ -1108,19 +1108,19 @@ tioga28    Task   0/  4 running on 12 CPUs: 4-15
 Task 0 is no longer running on 16 cores, instead it runs on Cores
 4-15, because Cores 0-3 are now the OS cores. 
 
-The `corespec_first` option takes the first `n` cores away from the
+The `corespecfirst` option takes the first `n` cores away from the
 application. This can create an imbalance in terms of how many cores
 are available to each task. In the example above, tasks 0-3 got 16
 cores, but task 0 got 12 cores.  
 
 To spread out the OS cores across the NUMA domains, `mpibind` provides
-the `corespec_numa` option:
+the `corespecnuma` option:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=corespec_numa:4 ./mpi-tioga 
+$ flux mini run -N1 -n4 --exclusive -o mpibind=corespecnuma:4 ./mpi-tioga 
 ```
 </summary>
 
