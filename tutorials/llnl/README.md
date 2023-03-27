@@ -9,10 +9,10 @@ use compatibility flags, e.g., march...)
 Lawrence Livermore National Laboratory
 
 <!-- Livermore Computing<br> 19 October 2022 -->
-<!-- Livermore Computing User Forum<br>13 December 2022 --> 
+<!-- Livermore Computing User Forum<br>13 December 2022 -->
 <!-- El Capitan Center of Excellence<br> -->
 
-
+*Updated March 27, 2023*
 
 ## Table of contents
 
@@ -34,7 +34,7 @@ Lawrence Livermore National Laboratory
 Before talking about binding and affinity, let's make sure we
 understand the machine topology. There are a few example
 architectures [here](../common/archs.md). In this document, we focus on the
-`Tioga` architecture.   
+`Tioga` architecture.
 
 Tioga has 4 NUMA domains, each with 16 cores, 2 `L3` caches and 2
 GPUs. Each GPU is closest (local) to the 8 cores with which it shares an `L3`
@@ -48,7 +48,7 @@ Each of the four panels represents a NUMA domain; the resources in each row are 
 
 Since the affinity programs used in this document use PCI IDs to
 identify GPUs, the following table provides the equivalent ordinal
-numbers and their associated NUMA domains.  
+numbers and their associated NUMA domains.
 
 
 <table style="text-align:center;margin-left:auto;margin-right:auto;">
@@ -66,7 +66,7 @@ numbers and their associated NUMA domains.
     <td>L3</td>
     <td>L3</td>
     <th>L3</th>
-    <td>L3</td>    
+    <td>L3</td>
   </tr>
   <tr>
     <td>Cores<br>0-7</td>
@@ -91,13 +91,13 @@ numbers and their associated NUMA domains.
 </table>
 
 
-      
+
 
 ## 2. Flux basics
 
 [Flux](#references) is a modern resource manager for heterogeneous
 supercomputers. While Flux has many features, we focus on
-the following simple and commonly used options: 
+the following simple and commonly used options:
 
 ```
 -N<nnodes>
@@ -120,10 +120,10 @@ $ module load rocm
 
 ```
 # For clusters with exclusive nodes
-$ flux mini alloc -N1
+$ flux alloc -N1
 
 # For clusters with shared nodes, use --exclusive the get the whole node
-$ flux mini alloc -N1 --exclusive
+$ flux alloc -N1 --exclusive
 ```
 
 Once a node has been allocated for us, let's launch a simple program:
@@ -132,19 +132,19 @@ Once a node has been allocated for us, let's launch a simple program:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 ./mpi-tioga
+$ flux run -N1 -n4 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga19    Task   2/  4 running on 8 CPUs: 60-63,124-127
-           Task   2/  4 has 0 GPUs: 
+           Task   2/  4 has 0 GPUs:
 tioga19    Task   1/  4 running on 8 CPUs: 60-63,124-127
-           Task   1/  4 has 0 GPUs: 
+           Task   1/  4 has 0 GPUs:
 tioga19    Task   3/  4 running on 8 CPUs: 60-63,124-127
-           Task   3/  4 has 0 GPUs: 
+           Task   3/  4 has 0 GPUs:
 tioga19    Task   0/  4 running on 8 CPUs: 60-63,124-127
-           Task   0/  4 has 0 GPUs: 
+           Task   0/  4 has 0 GPUs:
 ```
 
 <img src="../figures/tioga/figureB.png" width="550"/>
@@ -155,15 +155,15 @@ The `mpi-tioga` program shows the CPUs and GPUs assigned to each
 task. This is helpful to understand the affinity policies implemented
 by Flux and those by mpibind. By default Flux allocates one core per
 task (two hardware threads, or CPUs, per task). With 4 tasks we get `4 tasks = 4 cores = 4 cores x 2 CPU/core = 8 CPUs = 8 hardware threads`. But, note that
-each task can run on any of the assigned cores. 
+each task can run on any of the assigned cores.
 
-Let's change the number of cores per task with `-c`: 
+Let's change the number of cores per task with `-c`:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 -c2 ./mpi-tioga
+$ flux run -N1 -n4 -c2 ./mpi-tioga
 ```
 </summary>
 
@@ -187,17 +187,17 @@ Now let's ask for one GPU per task:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 -c2 -g1 ./mpi-tioga
+$ flux run -N1 -n4 -c2 -g1 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga19    Task   2/  4 running on 16 CPUs: 56-63,120-127
-           Task   2/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde 
+           Task   2/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde
 tioga19    Task   3/  4 running on 16 CPUs: 56-63,120-127
-           Task   3/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde 
+           Task   3/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde
 tioga19    Task   1/  4 running on 16 CPUs: 56-63,120-127
-           Task   1/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde 
+           Task   1/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde
 tioga19    Task   0/  4 running on 16 CPUs: 56-63,120-127
            Task   0/  4 has 4 GPUs: 0xd1 0xd6 0xd9 0xde
 ```
@@ -209,7 +209,7 @@ tioga19    Task   0/  4 running on 16 CPUs: 56-63,120-127
 Since we asked for 4 tasks, we got 4
 GPUs. But, note that each task is assigned to all four GPUs. And, if
 the user does not specify a GPU, the default GPU for all the tasks is
-GPU `0xd1`. 
+GPU `0xd1`.
 
 Finally, let's ask for all of the resources of the node with `--exclusive`:
 
@@ -217,17 +217,17 @@ Finally, let's ask for all of the resources of the node with `--exclusive`:
 <summary>
 
 ```
-flux mini run -N1 -n4 --exclusive ./mpi-tioga
+flux run -N1 -n4 --exclusive ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga19    Task   2/  4 running on 128 CPUs: 0-127
-           Task   2/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde 
+           Task   2/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 tioga19    Task   1/  4 running on 128 CPUs: 0-127
-           Task   1/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde 
+           Task   1/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 tioga19    Task   3/  4 running on 128 CPUs: 0-127
-           Task   3/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde 
+           Task   3/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 tioga19    Task   0/  4 running on 128 CPUs: 0-127
            Task   0/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 ```
@@ -240,38 +240,38 @@ We got 64 cores (64x2 CPUs) and all 8 GPUs.
 
 This is a dangerous configuration to run under, because each task can
 run on any CPUs and any GPUs. The Operating System (OS) may decide to
-migrate processes 
+migrate processes
 from one CPU to another, losing cache and main memory locality
 resulting in cache-to-cache transfers and remote memory accesses. For
 the GPUs, if processes do not specify a GPU, kernels from all the
-processes will run on a single GPU: `0xc1`. 
+processes will run on a single GPU: `0xc1`.
 
 When using `--exclusive`, make sure to also use `-N<nnodes>`,
-otherwise Flux will complain. 
+otherwise Flux will complain.
 
 
-## 3. Basic affinity with Flux 
+## 3. Basic affinity with Flux
 
 Now that we reviewed some basic Flux commands and pitfalls, let's see
 what type of affinity and binding we can use with the simple `flux
-mini` interface. Here are the options we will use: 
+run` interface. Here are the options we will use:
 
 ```
 -o cpu-affinity=per-task
--o gpu-affinity=per-task 
+-o gpu-affinity=per-task
 ```
 
 In the following example, we use `cpu-affinity` in conjuction with `-c`
 to ask Flux to bind each task to two cores. Note that if
 `cpu-affinity` is not used, each task is bound to all of the
-requested cores (4x2) as we saw above. 
+requested cores (4x2) as we saw above.
 
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 -c2 -o cpu-affinity=per-task ./mpi-tioga
+$ flux run -N1 -n4 -c2 -o cpu-affinity=per-task ./mpi-tioga
 ```
 </summary>
 
@@ -288,54 +288,54 @@ tioga19    Task   0/  4 running on 4 CPUs: 56-57,120-121
 
 
 Things are getting better! Each task has a unique set of
-2 cores to run under. 
+2 cores to run under.
 
-Let's apply a similar strategy for GPUs using `gpu-affinity`: 
+Let's apply a similar strategy for GPUs using `gpu-affinity`:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 -g1 -o gpu-affinity=per-task ./mpi-tioga
+$ flux run -N1 -n4 -g1 -o gpu-affinity=per-task ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga19    Task   1/  4 running on 8 CPUs: 60-63,124-127
-           Task   1/  4 has 1 GPUs: 0xd6 
+           Task   1/  4 has 1 GPUs: 0xd6
 tioga19    Task   3/  4 running on 8 CPUs: 60-63,124-127
-           Task   3/  4 has 1 GPUs: 0xde 
+           Task   3/  4 has 1 GPUs: 0xde
 tioga19    Task   0/  4 running on 8 CPUs: 60-63,124-127
-           Task   0/  4 has 1 GPUs: 0xd1 
+           Task   0/  4 has 1 GPUs: 0xd1
 tioga19    Task   2/  4 running on 8 CPUs: 60-63,124-127
-           Task   2/  4 has 1 GPUs: 0xd9 
+           Task   2/  4 has 1 GPUs: 0xd9
 ```
 
 <img src="../figures/tioga/figureG.png" width="550"/>
 
 </details>
 
-We asked for 1 GPU per task and each task got a unique GPU! 
+We asked for 1 GPU per task and each task got a unique GPU!
 
-Putting the CPU and GPU affinity options together: 
+Putting the CPU and GPU affinity options together:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 -c2 -g1 -o cpu-affinity=per-task -o gpu-affinity=per-task ./mpi-tioga 
+$ flux run -N1 -n4 -c2 -g1 -o cpu-affinity=per-task -o gpu-affinity=per-task ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga19    Task   2/  4 running on 4 CPUs: 60-61,124-125
-           Task   2/  4 has 1 GPUs: 0xd9 
+           Task   2/  4 has 1 GPUs: 0xd9
 tioga19    Task   1/  4 running on 4 CPUs: 58-59,122-123
-           Task   1/  4 has 1 GPUs: 0xd6 
+           Task   1/  4 has 1 GPUs: 0xd6
 tioga19    Task   3/  4 running on 4 CPUs: 62-63,126-127
-           Task   3/  4 has 1 GPUs: 0xde 
+           Task   3/  4 has 1 GPUs: 0xde
 tioga19    Task   0/  4 running on 4 CPUs: 56-57,120-121
-           Task   0/  4 has 1 GPUs: 0xd1 
+           Task   0/  4 has 1 GPUs: 0xd1
 ```
 
 <img src="../figures/tioga/figureH.png" width="550"/>
@@ -344,11 +344,11 @@ tioga19    Task   0/  4 running on 4 CPUs: 56-57,120-121
 </details>
 
 
-Nice. 
+Nice.
 
 Note, however, that *locality* is not a primary consideration here:
 None of the processes are using local GPUs: The only local GPU to
-cores 56-63 is 0xc6, which is not being used. Ay. 
+cores 56-63 is 0xc6, which is not being used. Ay.
 
 
 ## 4. Affinity with mpibind
@@ -367,16 +367,16 @@ elements are selected based on a memory mapping and not vice versa. In
 addition, mpibind embodies a global awareness of hybrid programming
 abstractions as well as heterogeneous systems with accelerators.
 
-Key design principles: 
+Key design principles:
 
-* Generate mappings automatically with minimum user input 
+* Generate mappings automatically with minimum user input
 * Maximize cache and memory per worker
 * Leverage resource locality based on node topology
 * Optimize mappings based on a given type of resource
 * Avoid remote memory accesses
 
 
-In this document, we focus on the following options: 
+In this document, we focus on the following options:
 
 ```
 -o mpibind=off|on
@@ -386,41 +386,41 @@ In this document, we focus on the following options:
 -o mpibind=corespec_(first|numa):<n>
 ```
 
-Multiple options can be specified by using commas, e.g.: 
+Multiple options can be specified by using commas, e.g.:
 
 ```
 -o mpibind=verbose:1,smt:2
 ```
 
-### 4.i. Is mpibind enabled? 
+### 4.i. Is mpibind enabled?
 
-If `mpibind` is enabled on your system, you should see the 
+If `mpibind` is enabled on your system, you should see the
 mappings when enabling verbosity:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -o mpibind=verbose:1 /bin/true
+$ flux run -N1 -n2 -o mpibind=verbose:1 /bin/true
 ```
 </summary>
 
 ```
-0.447s: flux-shell[0]: mpibind: 
+0.447s: flux-shell[0]: mpibind:
 mpibind: task  0 nths  1 gpus 1 cpus 62
 mpibind: task  1 nths  1 gpus 1 cpus 63
 ```
 </details>
 
 If, on the other hand, the output is empty, then you need to tell Flux
-to use mpibind. Here's one way to do it:  
+to use mpibind. Here's one way to do it:
 
 ```
 export FLUX_SHELL_RC_PATH=<mpibind-prefix-dir>/share/mpibind:$FLUX_SHELL_RC_PATH
 ```
 
 Where `<mpibind-prefix-dir>` is the top-level directory of your
-[mpibind installation](#references). 
+[mpibind installation](#references).
 
 For example:
 ```
@@ -430,12 +430,12 @@ export FLUX_SHELL_RC_PATH=/collab/usr/global/tools/mpi/mpibind/hwloc2.8-fluxcore
 Once `FLUX_SHELL_RC_PATH` is set in your environment, mpibind will be
 active by default. One thing to watch out for (on non Livermore
 Computing systems) is to turn off mpibind
-when allocating nodes, e.g., `flux mini alloc -N<nnodes> -o
+when allocating nodes, e.g., `flux alloc -N<nnodes> -o
 mpibind=off`. In other words, you want to use mpibind only on your
-Flux `run` commands. 
+Flux `run` commands.
 
 
-### 4.ii. If nothing else, ask for the whole node! 
+### 4.ii. If nothing else, ask for the whole node!
 
 mpibind has been running on production systems with Slurm for many
 years. There are distinct differences between Flux and Slurm,
@@ -451,19 +451,19 @@ processes and threads in a job:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive ./mpi-tioga 
+$ flux run -N1 -n4 --exclusive ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   2/  4 running on 16 CPUs: 32-47
-           Task   2/  4 has 2 GPUs: 0xd9 0xde 
+           Task   2/  4 has 2 GPUs: 0xd9 0xde
 tioga18    Task   3/  4 running on 16 CPUs: 48-63
-           Task   3/  4 has 2 GPUs: 0xc1 0xc6 
+           Task   3/  4 has 2 GPUs: 0xc1 0xc6
 tioga18    Task   1/  4 running on 16 CPUs: 16-31
-           Task   1/  4 has 2 GPUs: 0xc9 0xce 
+           Task   1/  4 has 2 GPUs: 0xc9 0xce
 tioga18    Task   0/  4 running on 16 CPUs: 0-15
-           Task   0/  4 has 2 GPUs: 0xd1 0xd6 
+           Task   0/  4 has 2 GPUs: 0xd1 0xd6
 
 ```
 
@@ -482,7 +482,7 @@ By default, mpibind assigns one hardware thread
 process system tasks and reduce their impact (OS noise) on application
 threads. The number of CPUs per core available for application work is
 a runtime parameter that can be changed, as we will show you later in
-this document.  
+this document.
 
 
 Let's now contrast this example with the behavior when we don't ask
@@ -492,19 +492,19 @@ for the whole node:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 ./mpi-tioga 
+$ flux run -N1 -n4 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   2/  4 running on 1 CPUs: 62
-           Task   2/  4 has 1 GPUs: 0xc6 
+           Task   2/  4 has 1 GPUs: 0xc6
 tioga18    Task   1/  4 running on 1 CPUs: 61
-           Task   1/  4 has 1 GPUs: 0xc6 
+           Task   1/  4 has 1 GPUs: 0xc6
 tioga18    Task   3/  4 running on 1 CPUs: 63
-           Task   3/  4 has 1 GPUs: 0xc6 
+           Task   3/  4 has 1 GPUs: 0xc6
 tioga18    Task   0/  4 running on 1 CPUs: 60
-           Task   0/  4 has 1 GPUs: 0xc6 
+           Task   0/  4 has 1 GPUs: 0xc6
 
 ```
 
@@ -517,29 +517,29 @@ Flux assigns four cores (60-63) to the job. mpibind uses those
 resources to assign CPUs and GPUs to each task. In this case, each
 task gets a CPU (remember one CPU per core by default) and a GPU. The
 reason each task gets the same GPU is because GPU `0xc6` is the only
-GPU local to cores 60-63. 
+GPU local to cores 60-63.
 
 In general, when a user asks for a subset of the resources of a node,
 e.g., using `-c<ncores-per-task>`, mpibind is limited to those
 resources allocated by Flux and, thus, it limits how much it can
-leverage locality of the hardware topology! 
+leverage locality of the hardware topology!
 
 
 The `mpi-tioga` program is nice, because it tells me where everything
 is running. However, if you want to know what the mapping is for a
-given program, then use the verbosity option: 
+given program, then use the verbosity option:
 
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=verbose:1 <prog>
+$ flux run -N1 -n4 --exclusive -o mpibind=verbose:1 <prog>
 ```
 </summary>
 
 ```
-0.450s: flux-shell[0]: mpibind: 
+0.450s: flux-shell[0]: mpibind:
 mpibind: task  0 nths 16 gpus 4,5 cpus 0-15
 mpibind: task  1 nths 16 gpus 2,3 cpus 16-31
 mpibind: task  2 nths 16 gpus 6,7 cpus 32-47
@@ -550,7 +550,7 @@ mpibind: task  3 nths 16 gpus 0,1 cpus 48-63
 
 The verbosity option shows the CPUs and GPUs each task is
 using. In addition, it shows the number of threads (`nths`) that
-would be used if this program has OpenMP in it. 
+would be used if this program has OpenMP in it.
 
 For users that want full control over how their tasks, threads, and
 GPU kernels are placed, then you can turn mpibind off and do your own
@@ -561,17 +561,17 @@ thing:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=off ./mpi-tioga 
+$ flux run -N1 -n4 --exclusive -o mpibind=off ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   1/  4 running on 128 CPUs: 0-127
-           Task   1/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde 
+           Task   1/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 tioga18    Task   2/  4 running on 128 CPUs: 0-127
-           Task   2/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde 
+           Task   2/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 tioga18    Task   0/  4 running on 128 CPUs: 0-127
-           Task   0/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde 
+           Task   0/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 tioga18    Task   3/  4 running on 128 CPUs: 0-127
            Task   3/  4 has 8 GPUs: 0xc1 0xc6 0xc9 0xce 0xd1 0xd6 0xd9 0xde
 ```
@@ -588,19 +588,19 @@ disabled mpibind:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=off -o gpu-affinity=per-task ./mpi-tioga
+$ flux run -N1 -n4 --exclusive -o mpibind=off -o gpu-affinity=per-task ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   2/  4 running on 128 CPUs: 0-127
-           Task   2/  4 has 2 GPUs: 0xd1 0xd6 
+           Task   2/  4 has 2 GPUs: 0xd1 0xd6
 tioga18    Task   3/  4 running on 128 CPUs: 0-127
-           Task   3/  4 has 2 GPUs: 0xd9 0xde 
+           Task   3/  4 has 2 GPUs: 0xd9 0xde
 tioga18    Task   0/  4 running on 128 CPUs: 0-127
-           Task   0/  4 has 2 GPUs: 0xc1 0xc6 
+           Task   0/  4 has 2 GPUs: 0xc1 0xc6
 tioga18    Task   1/  4 running on 128 CPUs: 0-127
-           Task   1/  4 has 2 GPUs: 0xc9 0xce 
+           Task   1/  4 has 2 GPUs: 0xc9 0xce
 
 ```
 
@@ -611,7 +611,7 @@ tioga18    Task   1/  4 running on 128 CPUs: 0-127
 
 
 
-### 4.iii. Remote memory accesses is a *no, no*, but... 
+### 4.iii. Remote memory accesses is a *no, no*, but...
 
 One of the design principles of mpibind is to avoid remote memory
 accesses. Remote accesses can happen when a process or task spans more
@@ -621,37 +621,37 @@ socket/package B (with local memory B). This results in longer latency
 fetching data from main memory. Therefore, mpibind limits the scope of
 a task to the scope associated with a NUMA domain and no
 more. Furthermore, mpibind will maximize the amount of cache per
-task. 
+task.
 
-For example, for an 8-task job, each task gets a full L3 
+For example, for an 8-task job, each task gets a full L3
 cache and its associated resources (one NUMA domain, one GPU, and 8
-cores): 
+cores):
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n8 --exclusive ./mpi-tioga 
+$ flux run -N1 -n8 --exclusive ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   4/  8 running on 8 CPUs: 32-39
-           Task   4/  8 has 1 GPUs: 0xd9 
+           Task   4/  8 has 1 GPUs: 0xd9
 tioga18    Task   1/  8 running on 8 CPUs: 8-15
-           Task   1/  8 has 1 GPUs: 0xd6 
+           Task   1/  8 has 1 GPUs: 0xd6
 tioga18    Task   5/  8 running on 8 CPUs: 40-47
-           Task   5/  8 has 1 GPUs: 0xde 
+           Task   5/  8 has 1 GPUs: 0xde
 tioga18    Task   3/  8 running on 8 CPUs: 24-31
-           Task   3/  8 has 1 GPUs: 0xce 
+           Task   3/  8 has 1 GPUs: 0xce
 tioga18    Task   2/  8 running on 8 CPUs: 16-23
-           Task   2/  8 has 1 GPUs: 0xc9 
+           Task   2/  8 has 1 GPUs: 0xc9
 tioga18    Task   7/  8 running on 8 CPUs: 56-63
-           Task   7/  8 has 1 GPUs: 0xc6 
+           Task   7/  8 has 1 GPUs: 0xc6
 tioga18    Task   0/  8 running on 8 CPUs: 0-7
-           Task   0/  8 has 1 GPUs: 0xd1 
+           Task   0/  8 has 1 GPUs: 0xd1
 tioga18    Task   6/  8 running on 8 CPUs: 48-55
-           Task   6/  8 has 1 GPUs: 0xc1 
+           Task   6/  8 has 1 GPUs: 0xc1
 ```
 </details>
 
@@ -667,15 +667,15 @@ nominal behavior is to assign a single NUMA to each task:
 <summary>
 
 ```
-$ flux mini run -N1 -n2 --exclusive -o mpibind=greedy:0 ./mpi-tioga 
+$ flux run -N1 -n2 --exclusive -o mpibind=greedy:0 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   1/  2 running on 16 CPUs: 16-31
-           Task   1/  2 has 2 GPUs: 0xc9 0xce 
+           Task   1/  2 has 2 GPUs: 0xc9 0xce
 tioga18    Task   0/  2 running on 16 CPUs: 0-15
-           Task   0/  2 has 2 GPUs: 0xd1 0xd6 
+           Task   0/  2 has 2 GPUs: 0xd1 0xd6
 ```
 
 <img src="../figures/tioga/figureM.png" width="550"/>
@@ -690,7 +690,7 @@ cannot span more than one NUMA domain. That's where the`greedy` option
 of mpibind comes in.
 
 There are times when users want to launch fewer tasks than NUMA
-domains, and still they would like to access all of the 
+domains, and still they would like to access all of the
 resources of a node. Most likely (hopefully), users will be managing the
 underlying resources themselves through other runtimes, perhaps
 Python.
@@ -698,7 +698,7 @@ Python.
 To account for this use case, mpibind provides the `greedy`
 option.
    * When `greedy` is `off` mpibind follows the *no remote memory accesses*
-rule. 
+rule.
    * When `greedy` is `on` and the number of tasks is less than the
 number of NUMA domains, mpibind will distribute the resouces evenly
 among the tasks: A task will undoubtely get more than one NUMA
@@ -712,15 +712,15 @@ Let's see what happens when `greedy` is `on`:
 <summary>
 
 ```
-$ flux mini run -N1 -n2 --exclusive -o mpibind=greedy:1 ./mpi-tioga 
+$ flux run -N1 -n2 --exclusive -o mpibind=greedy:1 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   0/  2 running on 64 CPUs: 0-31,64-95
-           Task   0/  2 has 4 GPUs: 0xd1 0xd6 0xc9 0xce 
+           Task   0/  2 has 4 GPUs: 0xd1 0xd6 0xc9 0xce
 tioga18    Task   1/  2 running on 64 CPUs: 32-63,96-127
-           Task   1/  2 has 4 GPUs: 0xd9 0xde 0xc1 0xc6 
+           Task   1/  2 has 4 GPUs: 0xd9 0xde 0xc1 0xc6
 ```
 
 <img src="../figures/tioga/figureN.png" width="550"/>
@@ -730,11 +730,11 @@ tioga18    Task   1/  2 running on 64 CPUs: 32-63,96-127
 
 
 As expected, each task gets all the resources associated with 2 NUMA
-domains. 
+domains.
 
 By default `greedy` is `on` on Tioga. That's the reason we had to turn
 off `greedy` above to get mpibind's nominal behavior when the number
-of tasks is less than the number of NUMA domains.  
+of tasks is less than the number of NUMA domains.
 
 
 
@@ -757,68 +757,68 @@ following example shows mpibind is using only one hardware thread per core.
 <summary>
 
 ```
-$ flux mini run -N1 -n8 --exclusive ./mpi-tioga 
+$ flux run -N1 -n8 --exclusive ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga18    Task   4/  8 running on 8 CPUs: 32-39
-           Task   4/  8 has 1 GPUs: 0xd9 
+           Task   4/  8 has 1 GPUs: 0xd9
 tioga18    Task   1/  8 running on 8 CPUs: 8-15
-           Task   1/  8 has 1 GPUs: 0xd6 
+           Task   1/  8 has 1 GPUs: 0xd6
 tioga18    Task   5/  8 running on 8 CPUs: 40-47
-           Task   5/  8 has 1 GPUs: 0xde 
+           Task   5/  8 has 1 GPUs: 0xde
 tioga18    Task   3/  8 running on 8 CPUs: 24-31
-           Task   3/  8 has 1 GPUs: 0xce 
+           Task   3/  8 has 1 GPUs: 0xce
 tioga18    Task   2/  8 running on 8 CPUs: 16-23
-           Task   2/  8 has 1 GPUs: 0xc9 
+           Task   2/  8 has 1 GPUs: 0xc9
 tioga18    Task   7/  8 running on 8 CPUs: 56-63
-           Task   7/  8 has 1 GPUs: 0xc6 
+           Task   7/  8 has 1 GPUs: 0xc6
 tioga18    Task   0/  8 running on 8 CPUs: 0-7
-           Task   0/  8 has 1 GPUs: 0xd1 
+           Task   0/  8 has 1 GPUs: 0xd1
 tioga18    Task   6/  8 running on 8 CPUs: 48-55
-           Task   6/  8 has 1 GPUs: 0xc1 
+           Task   6/  8 has 1 GPUs: 0xc1
 ```
 </details>
 
-As expected only CPUs 0-63 are used. 
+As expected only CPUs 0-63 are used.
 
 
 Let's use the `smt` option to use two hardware threads. Since this is an
-SMT-2 architecture, we only have two options: 1 or 2 threads. 
+SMT-2 architecture, we only have two options: 1 or 2 threads.
 
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n8 --exclusive -o mpibind=smt:2 ./mpi-tioga 
+$ flux run -N1 -n8 --exclusive -o mpibind=smt:2 ./mpi-tioga
 ```
 </summary>
 
 ```
-$ flux mini run -N1 -n8 --exclusive -o mpibind=smt:2 ./mpi-tioga
+$ flux run -N1 -n8 --exclusive -o mpibind=smt:2 ./mpi-tioga
 tioga18    Task   5/  8 running on 16 CPUs: 40-47,104-111
-           Task   5/  8 has 1 GPUs: 0xde 
+           Task   5/  8 has 1 GPUs: 0xde
 tioga18    Task   6/  8 running on 16 CPUs: 48-55,112-119
-           Task   6/  8 has 1 GPUs: 0xc1 
+           Task   6/  8 has 1 GPUs: 0xc1
 tioga18    Task   4/  8 running on 16 CPUs: 32-39,96-103
-           Task   4/  8 has 1 GPUs: 0xd9 
+           Task   4/  8 has 1 GPUs: 0xd9
 tioga18    Task   3/  8 running on 16 CPUs: 24-31,88-95
-           Task   3/  8 has 1 GPUs: 0xce 
+           Task   3/  8 has 1 GPUs: 0xce
 tioga18    Task   2/  8 running on 16 CPUs: 16-23,80-87
-           Task   2/  8 has 1 GPUs: 0xc9 
+           Task   2/  8 has 1 GPUs: 0xc9
 tioga18    Task   1/  8 running on 16 CPUs: 8-15,72-79
-           Task   1/  8 has 1 GPUs: 0xd6 
+           Task   1/  8 has 1 GPUs: 0xd6
 tioga18    Task   7/  8 running on 16 CPUs: 56-63,120-127
-           Task   7/  8 has 1 GPUs: 0xc6 
+           Task   7/  8 has 1 GPUs: 0xc6
 tioga18    Task   0/  8 running on 16 CPUs: 0-7,64-71
-           Task   0/  8 has 1 GPUs: 0xd1 
+           Task   0/  8 has 1 GPUs: 0xd1
 
 ```
 </details>
 
-Voilà, each task is using full cores! 
+Voilà, each task is using full cores!
 
 
 ### 4.v. Let me drive (your OpenMP)
@@ -826,7 +826,7 @@ Voilà, each task is using full cores!
 When using OpenMP in a hybrid program, users usually need to
 determine the number of threads to run based on the underlying
 hardware available to each process. While OpenMP runtimes have a
-default, its value may or may not be sensible. 
+default, its value may or may not be sensible.
 
 With mpibind, users are encouraged to **not** set the number of OpenMP
 threads (`OMP_NUM_THREADS`). mpibind calculates this number for you
@@ -834,17 +834,17 @@ based on the resources that have been allocated to each process and
 binds each OpenMP thread to the hardware. If a user sets the number of
 threads, mpibind honors the request, but it may not be the optimal number. In other
 words, do not set the number of OpenMP threads unless you know what
-you are doing. 
+you are doing.
 
 Let's review some examples starting with the default behavior in Flux
-and moving to mpibind. 
+and moving to mpibind.
 
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -o mpibind=off ./mpi+omp-tioga
+$ flux run -N1 -n2 -o mpibind=off ./mpi+omp-tioga
 ```
 </summary>
 
@@ -870,7 +870,7 @@ To improve this case, let's use Flux's affinity:
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -o mpibind=off -o cpu-affinity=per-task ./mpi+omp-tioga
+$ flux run -N1 -n2 -o mpibind=off -o cpu-affinity=per-task ./mpi+omp-tioga
 ```
 </summary>
 
@@ -886,13 +886,13 @@ Much better, resource are not oversubscribed anymore: 2 OpenMP threads
 and 1 core (2 CPUs) per process. However, the OS may migrate the two
 threads of each process within the core's hardware threads.
 
-Let's see what mpibind does: 
+Let's see what mpibind does:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n2 ./mpi+omp-tioga
+$ flux run -N1 -n2 ./mpi+omp-tioga
 ```
 </summary>
 
@@ -911,7 +911,7 @@ use the `smt` option as explained above:
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -o mpibind=smt:2 ./mpi+omp-tioga
+$ flux run -N1 -n2 -o mpibind=smt:2 ./mpi+omp-tioga
 ```
 </summary>
 
@@ -925,54 +925,54 @@ tioga18 Task   1/  2 Thread   1/  2 with  1 cpus: 127
 
 
 Nice: The OS cannot migrate threads because each thread is bound to a
-hardware thread. 
+hardware thread.
 
 To complete this section, let's see what happens when we ask for
-GPUs. Let's start with Flux affinity again: 
+GPUs. Let's start with Flux affinity again:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -g1 -o mpibind=off -o cpu-affinity=per-task -o gpu-affinity=per-task ./mpi+omp-tioga 
+$ flux run -N1 -n2 -g1 -o mpibind=off -o cpu-affinity=per-task -o gpu-affinity=per-task ./mpi+omp-tioga
 ```
 </summary>
 
 ```
-tioga18 Task   0/  2 Thread   0/  2 with  1 gpus: 0xd9 
+tioga18 Task   0/  2 Thread   0/  2 with  1 gpus: 0xd9
 tioga18 Task   0/  2 Thread   0/  2 with  2 cpus: 62,126
-tioga18 Task   0/  2 Thread   1/  2 with  1 gpus: 0xd9 
+tioga18 Task   0/  2 Thread   1/  2 with  1 gpus: 0xd9
 tioga18 Task   0/  2 Thread   1/  2 with  2 cpus: 62,126
-tioga18 Task   1/  2 Thread   0/  2 with  1 gpus: 0xde 
+tioga18 Task   1/  2 Thread   0/  2 with  1 gpus: 0xde
 tioga18 Task   1/  2 Thread   0/  2 with  2 cpus: 63,127
-tioga18 Task   1/  2 Thread   1/  2 with  1 gpus: 0xde 
+tioga18 Task   1/  2 Thread   1/  2 with  1 gpus: 0xde
 tioga18 Task   1/  2 Thread   1/  2 with  2 cpus: 63,127
 ```
 </details>
 
 In this case, we asked Flux for 1 GPU per task. Indeed, each task got
 a GPU. Note, however, that both GPUs are remote to cores 62 and 63. As
-mentioned above, locality is not a primary consideration here. 
+mentioned above, locality is not a primary consideration here.
 
-Let's look at mpibind: 
+Let's look at mpibind:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -g1 -o mpibind=smt:2 ./mpi+omp-tioga
+$ flux run -N1 -n2 -g1 -o mpibind=smt:2 ./mpi+omp-tioga
 ```
 </summary>
 
 ```
 tioga18 Task   0/  2 Thread   0/  2 with  1 cpus: 62
-tioga18 Task   0/  2 Thread   0/  2 with  1 gpus: 0xc6 
+tioga18 Task   0/  2 Thread   0/  2 with  1 gpus: 0xc6
 tioga18 Task   0/  2 Thread   1/  2 with  1 cpus: 126
-tioga18 Task   0/  2 Thread   1/  2 with  1 gpus: 0xc6 
+tioga18 Task   0/  2 Thread   1/  2 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   0/  2 with  1 cpus: 63
-tioga18 Task   1/  2 Thread   0/  2 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   0/  2 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   1/  2 with  1 cpus: 127
-tioga18 Task   1/  2 Thread   1/  2 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   1/  2 with  1 gpus: 0xc6
 ```
 </details>
 
@@ -993,48 +993,48 @@ which has 8 cores.
 <summary>
 
 ```
-$ flux mini run -N1 -n2 -c8 ./mpi+omp-tioga 
+$ flux run -N1 -n2 -c8 ./mpi+omp-tioga
 ```
 </summary>
 
 ```
 tioga18 Task   0/  2 Thread   0/  8 with  1 cpus: 48
-tioga18 Task   0/  2 Thread   0/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   0/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   1/  8 with  1 cpus: 49
-tioga18 Task   0/  2 Thread   1/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   1/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   2/  8 with  1 cpus: 50
-tioga18 Task   0/  2 Thread   2/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   2/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   3/  8 with  1 cpus: 51
-tioga18 Task   0/  2 Thread   3/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   3/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   4/  8 with  1 cpus: 52
-tioga18 Task   0/  2 Thread   4/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   4/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   5/  8 with  1 cpus: 53
-tioga18 Task   0/  2 Thread   5/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   5/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   6/  8 with  1 cpus: 54
-tioga18 Task   0/  2 Thread   6/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   6/  8 with  1 gpus: 0xc1
 tioga18 Task   0/  2 Thread   7/  8 with  1 cpus: 55
-tioga18 Task   0/  2 Thread   7/  8 with  1 gpus: 0xc1 
+tioga18 Task   0/  2 Thread   7/  8 with  1 gpus: 0xc1
 tioga18 Task   1/  2 Thread   0/  8 with  1 cpus: 56
-tioga18 Task   1/  2 Thread   0/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   0/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   1/  8 with  1 cpus: 57
-tioga18 Task   1/  2 Thread   1/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   1/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   2/  8 with  1 cpus: 58
-tioga18 Task   1/  2 Thread   2/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   2/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   3/  8 with  1 cpus: 59
-tioga18 Task   1/  2 Thread   3/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   3/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   4/  8 with  1 cpus: 60
-tioga18 Task   1/  2 Thread   4/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   4/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   5/  8 with  1 cpus: 61
-tioga18 Task   1/  2 Thread   5/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   5/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   6/  8 with  1 cpus: 62
-tioga18 Task   1/  2 Thread   6/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   6/  8 with  1 gpus: 0xc6
 tioga18 Task   1/  2 Thread   7/  8 with  1 cpus: 63
-tioga18 Task   1/  2 Thread   7/  8 with  1 gpus: 0xc6 
+tioga18 Task   1/  2 Thread   7/  8 with  1 gpus: 0xc6
 ```
 </details>
 
 `0xc1` is the local GPU of cores `48-55`, while `0xc6` is the local GPU of
-cores `56-63`! 
+cores `56-63`!
 
 
 ### 4.vi. How about system noise?
@@ -1060,58 +1060,58 @@ available cores into two categories: *OS cores* and *Application
 cores*. With `mpibind`, one can specify the number of OS cores. Here
 are a few examples.
 
-Let's start with the default behavior: 
+Let's start with the default behavior:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive ./mpi-tioga 
+$ flux run -N1 -n4 --exclusive ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga28    Task   0/  4 running on 16 CPUs: 0-15
-           Task   0/  4 has 2 GPUs: 0xd1 0xd6 
+           Task   0/  4 has 2 GPUs: 0xd1 0xd6
 tioga28    Task   3/  4 running on 16 CPUs: 48-63
-           Task   3/  4 has 2 GPUs: 0xc1 0xc6 
+           Task   3/  4 has 2 GPUs: 0xc1 0xc6
 tioga28    Task   2/  4 running on 16 CPUs: 32-47
-           Task   2/  4 has 2 GPUs: 0xd9 0xde 
+           Task   2/  4 has 2 GPUs: 0xd9 0xde
 tioga28    Task   1/  4 running on 16 CPUs: 16-31
-           Task   1/  4 has 2 GPUs: 0xc9 0xce 
+           Task   1/  4 has 2 GPUs: 0xc9 0xce
 ```
 </details>
 
-Now, let's set aside 4 cores for system services: 
+Now, let's set aside 4 cores for system services:
 
 <details>
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=corespecfirst:4 ./mpi-tioga 
+$ flux run -N1 -n4 --exclusive -o mpibind=corespecfirst:4 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga28    Task   3/  4 running on 16 CPUs: 48-63
-           Task   3/  4 has 2 GPUs: 0xc1 0xc6 
+           Task   3/  4 has 2 GPUs: 0xc1 0xc6
 tioga28    Task   1/  4 running on 16 CPUs: 16-31
-           Task   1/  4 has 2 GPUs: 0xc9 0xce 
+           Task   1/  4 has 2 GPUs: 0xc9 0xce
 tioga28    Task   2/  4 running on 16 CPUs: 32-47
-           Task   2/  4 has 2 GPUs: 0xd9 0xde 
+           Task   2/  4 has 2 GPUs: 0xd9 0xde
 tioga28    Task   0/  4 running on 12 CPUs: 4-15
-           Task   0/  4 has 2 GPUs: 0xd1 0xd6 
+           Task   0/  4 has 2 GPUs: 0xd1 0xd6
 ```
 </details>
 
 
 Task 0 is no longer running on 16 cores, instead it runs on Cores
-4-15, because Cores 0-3 are now the OS cores. 
+4-15, because Cores 0-3 are now the OS cores.
 
 The `corespecfirst` option takes the first `n` cores away from the
 application. This can create an imbalance in terms of how many cores
 are available to each task. In the example above, tasks 0-3 got 16
-cores, but task 0 got 12 cores.  
+cores, but task 0 got 12 cores.
 
 To spread out the OS cores across the NUMA domains, `mpibind` provides
 the `corespecnuma` option:
@@ -1120,19 +1120,19 @@ the `corespecnuma` option:
 <summary>
 
 ```
-$ flux mini run -N1 -n4 --exclusive -o mpibind=corespecnuma:4 ./mpi-tioga 
+$ flux run -N1 -n4 --exclusive -o mpibind=corespecnuma:4 ./mpi-tioga
 ```
 </summary>
 
 ```
 tioga28    Task   0/  4 running on 15 CPUs: 1-15
-           Task   0/  4 has 2 GPUs: 0xd1 0xd6 
+           Task   0/  4 has 2 GPUs: 0xd1 0xd6
 tioga28    Task   2/  4 running on 15 CPUs: 33-47
-           Task   2/  4 has 2 GPUs: 0xd9 0xde 
+           Task   2/  4 has 2 GPUs: 0xd9 0xde
 tioga28    Task   3/  4 running on 15 CPUs: 49-63
-           Task   3/  4 has 2 GPUs: 0xc1 0xc6 
+           Task   3/  4 has 2 GPUs: 0xc1 0xc6
 tioga28    Task   1/  4 running on 15 CPUs: 17-31
-           Task   1/  4 has 2 GPUs: 0xc9 0xce 
+           Task   1/  4 has 2 GPUs: 0xc9 0xce
 ```
 </details>
 
@@ -1158,7 +1158,7 @@ the OS and system services to these cores.
 
 * The `Flux` resource manager
    * [Intro to Flux](https://hpc-tutorials.llnl.gov/flux/)
-   * [flux-mini](https://flux-framework.readthedocs.io/projects/flux-core/en/latest/man1/flux-mini.html)
+   * [flux-run](https://flux-framework.readthedocs.io/projects/flux-core/en/latest/man1/flux-run.html)
    * [Documentation](https://flux-framework.readthedocs.io/en/latest/)
    * [Tutorials](https://github.com/flux-framework/Tutorials)
 
