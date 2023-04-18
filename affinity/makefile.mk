@@ -65,7 +65,8 @@ mpi.o: mpi.c affinity.h
 	mpicc $(CFLAGS) $(GPU_FLAGS) -c $<
 
 mpi+omp.o: mpi+omp.c affinity.h
-	mpicc $(CFLAGS) $(GPU_FLAGS) -fopenmp -c $<
+#	mpicc $(CFLAGS) $(GPU_FLAGS) -fopenmp -c $<
+	mpicc -Wall $(GPU_FLAGS) -fopenmp -c $<
 
 cpu.o: cpu.c
 	$(CC) $(CFLAGS) -c $< 
