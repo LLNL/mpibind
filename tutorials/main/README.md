@@ -1,11 +1,9 @@
-# ISC 2023: Supercomputer Affinity 
+# Supercomputer Affinity 
 
 *Edgar A. León* and *Jane E. Herriman*<br>
 Lawrence Livermore National Laboratory
 
-## Preliminary Tutorial Notebook 
-
-Click on the links below to see each module's content.
+## Tutorial Notebook 
 
 <br>
 <p align="center">
