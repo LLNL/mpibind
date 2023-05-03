@@ -285,13 +285,13 @@ srun -N1 -n16 -t1 --cpu-bind=rank mpi
 ```
 
 ```
-srun -N1 -n96 -t1 --cpu-bind=rank mpi
+srun -N1 -n48 -t1 --cpu-bind=rank mpi
 ```
 
 and then
 
 ```
-srun -N1 -n97 -t1 --cpu-bind=rank mpi
+srun -N1 -n49 -t1 --cpu-bind=rank mpi
 ```
 
 Do they all work?
@@ -820,23 +820,25 @@ gpu-st-g4dnmetal-1 Task   0/  1 running on 48 CPUs: 24-47,72-95
 ```
 
 
-### 2. Using explicit binding, map one task per core on the first socket and a single task on the second socket.
+### 2. Using explicit binding, map one task per each of the first yhtrr cores on the first socket and a single task using all cores on the second socket.
 
 *Note:* Specifying the CPUs where you want to run tasks via `--cpu-bind=map_cpu` creates a one-to-one mapping of tasks to CPUs. If you want to map a single task to multiple CPUs, you will need to create a CPU mask.
 
-1. Use `hwloc-calc` as in the above exercise to create a mask for each of the cores on the first NUMA domain (NUMA `0`).
+1. Use `hwloc-calc` as in the above exercise to create a mask for each of the first three cores on the first NUMA domain (NUMA `0`).
 2. Grab the mask that you created for the second socket from the above exercise.
-3. Use the masks from steps 1 and 2 to map one task per core on the first socket and a single task on the second socket. Use the `--cpu-bind=mask_cpu...` flag as in Example 11. Your command should be of the form 
+3. Use the masks from steps 1 and 2 to map one task per each of the first three cores on the first socket and a single task on the second socket. Use the `--cpu-bind=mask_cpu...` flag as in Example 11. Your command should be of the form 
 
 ```
-srun -N1 -n2 -t1 --cpu-bind=<edit with CPU info!> mpi
+srun -N1 -n4 -t1 --cpu-bind=<edit with CPU info!> mpi
 ```
 
 You want your output to look something like
 
 ```
-gpu-st-g4dnmetal-1 Task   0/  2 running on 48 CPUs: 0-23,48-71
-gpu-st-g4dnmetal-1 Task   1/  2 running on 48 CPUs: 24-47,72-95
+gpu-st-g4dnmetal-1 Task   3/  4 running on 48 CPUs: 24-47,72-95
+gpu-st-g4dnmetal-1 Task   0/  4 running on 2 CPUs: 0,48
+gpu-st-g4dnmetal-1 Task   1/  4 running on 2 CPUs: 1,49
+gpu-st-g4dnmetal-1 Task   2/  4 running on 2 CPUs: 2,50
 ```
 
 ### 3. Round robin 8 processes to the last two cores of each NUMA. 
