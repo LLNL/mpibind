@@ -39,7 +39,7 @@ Lawrence Livermore National Laboratory
    will identify local hardware resources, and will select resources
    using affinity masks.  
 
-2. Exerting resource manger affinity: [Process affinity with Slurm](module2.md)
+2. Exerting resource manager affinity: [Process affinity with Slurm](module2.md)
 
    Learn how to use Slurm’s affinity to map a parallel program to the
    hardware at runtime when submitting a job. Attendees will learn to
@@ -50,8 +50,8 @@ Lawrence Livermore National Laboratory
 3. Putting it all together: [Adding in GPUs](module3.md)
 
    Learn how to assign GPUs to MPI processes to leverage
-   locality. Learn how to apply combined process, thread, and GPU
-   affinity policies to hybrid applications. Attendees will learn to
+   locality. Learn how to apply combined process and GPU
+   affinity policies. Attendees will learn to
    manage CPU and GPU affinity concurrently to take advantage of local
    resources and reduce data movement.
 
