@@ -820,7 +820,7 @@ gpu-st-g4dnmetal-1 Task   0/  1 running on 48 CPUs: 24-47,72-95
 ```
 
 
-### 2. Using explicit binding, map one task per each of the first yhtrr cores on the first socket and a single task using all cores on the second socket.
+### 2. Using explicit binding, map one task per each of the first 3 cores on the first socket and a single task using all cores on the second socket.
 
 *Note:* Specifying the CPUs where you want to run tasks via `--cpu-bind=map_cpu` creates a one-to-one mapping of tasks to CPUs. If you want to map a single task to multiple CPUs, you will need to create a CPU mask.
 
