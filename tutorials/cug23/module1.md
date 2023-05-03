@@ -495,10 +495,10 @@ lstopo
 The node you see immediately after logging in doesn't have the most interesting topology, but the nodes waiting for you in the "queue" have more features. To see the topology of one of these nodes, use the following command:
 
 ```
-srun -ppdebug -t1 lstopo
+srun -t1 lstopo
 ```
 
-Identify at least one way the features of the node described by `lstopo`'s output differ from those described by `srun -ppdebug -t1 lstopo`.
+Identify at least one way the features of the node described by `lstopo`'s output differ from those described by `srun -t1 lstopo`.
 
 ### Customizing `lstopo` output
 
@@ -1042,9 +1042,9 @@ in which case no tasks would run on the second NUMAnode or any of its 18 cores.
 
 Match the following:
 
-bTask 8 b> PUs 24-26 and 72-74b
+*Task 8 will run on PUs 24-26 and 72-74*
 
-bPolicy for one openMP thread per L3 on Tiogab
+*Policy for one openMP thread per L3 on Tioga*
 
 **A)** Affinity
 
@@ -1055,9 +1055,9 @@ bPolicy for one openMP thread per L3 on Tiogab
 Answer
 </summary>
 
-B. Mapping: bTask 8 b> PUs 24-26 and 72-74b
+B. Mapping: Task 8 will run on PUs 24-26 and 72-74
 
-A. Affinity: bPolicy for one openMP thread per L3 on Tiogab
+A. Affinity: Policy for one openMP thread per L3 on Tioga
 </details>
 
 
