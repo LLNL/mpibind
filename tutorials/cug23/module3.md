@@ -1017,16 +1017,16 @@ gpu-st-g4dnmetal-1 Task   1/  2 running on 6 CPUs: 6-11
 
    * Our AWS nodes have 48 cores, so you'll want to specify 24 tasks.
    * You can use the [image](../figures/aws-g4dn-metal.png) of our AWS nodes to understand which GPUs & CPUs are on each NUMA domain.
-   * While we have 8 GPUs, we have only four "devices", each containing two GPUs. One peculiar result is that you may have to specify 2 GPUs for each task rather than 1, in order to get a distinct device.
 
-<details>
-  <summary>
+    <br>
+    <details>
+    <summary>
     Hint
-  </summary>
+    </summary>
 
-   Try out `--gpu-bind=single:2`
+    Try out `--gpu-bind=single:3`
 
-</details> 
+    </details> 
 
 
 <!--
@@ -1034,16 +1034,16 @@ gpu-st-g4dnmetal-1 Task   1/  2 running on 6 CPUs: 6-11
 One possible response:
 
 ```
-srun --gpus-per-node=8 -n24 -c2 --cpu-bind=core --gpu-bind=single:2 mpi+gpu
+srun --gpus-per-node=8 -n24 -c2 --cpu-bind=core --gpu-bind=single:3 mpi+gpu
 ```
 
 -->
 
-1. Using Slurm's GPU affinity or vendor-specific environment variables, run a 6-task MPI program such that 4 tasks reside on the first socket and use local GPUs (one GPU per task) and 2 tasks reside on the second socket and use local GPUs (two GPU per task). If using environment variables to control GPU affinity, you can still use Slurm to control CPU affinity. 
+2. Using Slurm's GPU affinity or vendor-specific environment variables, run a 6-task MPI program such that 4 tasks reside on the first socket and use local GPUs (one GPU per task) and 2 tasks reside on the second socket and use local GPUs (two GPU per task). If using environment variables to control GPU affinity, you can still use Slurm to control CPU affinity. 
 
    Here is some guidance, using Slurm's GPU affinity:
-   * GPUs [0-7] can be identified by the hexadecimal representations of [2^0 - 2^7]
-   * You'll have to handpick CPUs & GPUs for this one, so there's not only one correct answer!
+   * GPUs[0-7] can be identified by the bitmask representations [2<sup>0</sup>-2<sup>7</sup>]
+   * You'll have to handpick CPUs & GPUs for this one, so there's more than one correct answer!
 
 <!--
   
@@ -1070,14 +1070,14 @@ gpu-st-g4dnmetal-1 Task   2/  6 running on 1 CPUs: 2
 One point of this exercise is that you have to use `--gpu-bind=mask_gpu` as opposed to `--gpu-bind=map_gpu` because the latter doesn't allow you to assign multiple GPUs to a single task.
 
 
-Here we're assigning one task to each of the four GPUs on NUMA 0: GPUs [0-3]. On NUMA 1, one task gets GPUs [4-5] and the other gets GPUs [6-7]. So, we'll need 6 masks -- one for each task!
+Here we're assigning one task to each of the four GPUs on NUMA 0: GPUs[0-3]. On NUMA 1, one task gets GPUs [4-5] and the other gets GPUs[6-7]. So, we'll need 6 masks -- one for each task!
 
 How do you calculate these masks?
 
-For GPUs [0-3], we could simply use the hexadecimal of 2^[0-3], i.e. `0x01,0x02,0x04,0x08`.
-Similarly, the masks for the individual GPUs [4-7] are
+For GPUs[0-3], we could simply use the hexadecimal of 2^[0-3], i.e. `0x01,0x02,0x04,0x08`.
+Similarly, the masks for the individual GPUs[4-7] are
 
-2^[GPU ID]/Base 10 representation/Hexadecimal representatioN:
+2^[GPU ID]/Base 10 representation/Hexadecimal representation:
 2^4 = 16 = 0x10
 2^5 = 32 = 0x20
 2^6 = 64 = 0x40
@@ -1085,8 +1085,8 @@ Similarly, the masks for the individual GPUs [4-7] are
 
 To specify a mask for multiple GPUs, two masks need to be added together
 
-GPUs [4-5] = 0x10 + 0x20 = 0x30
-GPUs [6-7] = 0x40 + 0x80 = 0xC0
+GPUs[4-5] = 0x10 + 0x20 = 0x30
+GPUs[6-7] = 0x40 + 0x80 = 0xC0
 
 
 
