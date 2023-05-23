@@ -277,7 +277,7 @@ bool mpibind_getopt(flux_shell_t *shell,
 	else if ( !strcmp(token2, "corespecnuma") )
 	  opt_ptr = pcs_numa;
 	else if ( !strcmp(token2, "corespecbal") )
-	  opt_ptr = pcs_bal; 
+	  opt_ptr = pcs_bal;
 	else if ( !strcmp(token2, "off") )
 	  disabled = 1;
 	else if ( !strcmp(token2, "on") )
@@ -580,7 +580,7 @@ struct usr_opts {
   int master;
   int corespec_first;
   int corespec_numa;
-  int corespec_bal; 
+  int corespec_bal;
 };
 
 /*  Restrict hwloc topology to the cpu affinity mask of the current
@@ -725,7 +725,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     x_numa_aware = 1;
     x_ncores = opts->corespec_numa;
   }
-  
+
   if (get_pus_of_lcores(topo, cores, pus,
 			x_ncores, x_numa_aware) != 0) {
     shell_log_error("get_pus_of_lcores failed\n");
@@ -787,12 +787,12 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   /* Now that the mapping has been set on the mpibind handle,
      remove the OS CPUs if corespec balanced has been set */
-  x_ncores = opts->corespec_bal; 
+  x_ncores = opts->corespec_bal;
   if (x_ncores > 0)
     for (i=0; i<ntasks; i++)
-      mpibind_pop_cores_ptask(mph, i, x_ncores); 
+      mpibind_pop_cores_ptask(mph, i, x_ncores);
 
-  
+
   /* Debug: Print out the cpus assigned to each task */
   char outbuf[LONG_STR_SIZE];
   hwloc_bitmap_t *cpus = mpibind_get_cpus(mph);
@@ -800,7 +800,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     hwloc_bitmap_list_snprintf(outbuf, LONG_STR_SIZE, cpus[i]);
     shell_debug("task %2d: cpus %s", i, outbuf);
   }
-  
+
   if (opts->verbose) {
     /* Can't print to stdout within the Flux shell environment */
     //mpibind_print_mapping(mph);
@@ -812,7 +812,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     mpibind_mapping_snprint(outbuf, LONG_STR_SIZE, mph);
     shell_log("\n%s", outbuf);
   }
-  
+
   /* Set env variables now for the purposes of task.init */
   if (mpibind_set_env_vars(mph) != 0) {
     shell_die_errno(1, "mpibind_set_env_vars");
@@ -885,7 +885,7 @@ void flux_plugin_init(flux_plugin_t *p)
      i.e., core specialization */
   opts->corespec_first = 0;
   opts->corespec_numa = 0;
-  opts->corespec_bal = 0; 
+  opts->corespec_bal = 0;
 
   /* Get mpibind user-specified options */
   if ( !mpibind_getopt(shell,
