@@ -621,6 +621,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   mpibind_t *mph = NULL;
   struct usr_opts *opts = data;
   bool restrict_topo = true;
+  const char *xml;
   flux_shell_t *shell = flux_plugin_get_shell(p);
 
 
@@ -665,23 +666,21 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   if (hwloc_topology_init(&topo) < 0)
     return shell_log_errno("hwloc_topology_init");
 
-  /* If given, read topology file.
-     Not using HWLOC_XMLFILE because that applies to
-     all hwloc clients */
-  const char *xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE");
-  if (xml != NULL && xml[0] != '\0') {
-    if (hwloc_topology_set_xml(topo, xml) < 0)
-      return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
-    shell_debug ("loaded topology from %s", xml);
-  }
-  else {
-    /* Otherwise, get hwloc topology xml from job shell to avoid heavyweight
-     * topology load duplicated by job shell.
-     */
-    if (flux_shell_get_hwloc_xml (shell, &xml) < 0)
+  /* Prefer loading topology from the Flux job shell, since this XML has
+   * already been restricted to the resources available to this job, and
+   * also avoids the need for a topo file or loading HWLOC directly.
+   *
+   * Fall back to MPIBIND_TOPOFILE if getting the topology fails or
+   * FLUX_MPIBIND_USE_TOPOFILE is set in the job environment.
+   */
+  if (!flux_shell_getenv(shell, "FLUX_MPIBIND_USE_TOPOFILE")
+      && flux_shell_get_hwloc_xml(shell, &xml) == 0) {
+
+    if (flux_shell_get_hwloc_xml(shell, &xml) < 0)
       return shell_log_errno("failed to get hwloc XML from job shell");
 
-    if (hwloc_topology_set_xmlbuffer (topo, xml, strlen (xml)) < 0)
+    shell_debug ("loaded topology from job shell");
+    if (hwloc_topology_set_xmlbuffer(topo, xml, strlen (xml)) < 0)
       return shell_log_errno ("hwloc_topology_set_xmlbuffer");
 
     xml = "shell-provided";
@@ -690,6 +689,20 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
      * in the topology XML fetched from the job shell.
      */
     restrict_topo = false;
+  }
+  else {
+    /*
+     * The fetch of HWLOC XML from the job shell failed: fall back to
+     * MPIBIND_TOPOFILE if set, if not, then hwloc topology will be loaded
+     * directly from the system (slow).
+     */
+    xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE");
+    if ((xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE"))
+        && xml[0] != '\0') {
+      if (hwloc_topology_set_xml(topo, xml) < 0)
+        return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
+        shell_debug ("loaded topology from %s", xml);
+    }
   }
 
   /* Make sure the OS binding functions are actually called */
