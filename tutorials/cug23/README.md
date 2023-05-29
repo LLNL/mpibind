@@ -20,6 +20,21 @@ Lawrence Livermore National Laboratory
 
 </center>
 
+## AWS Cluster
+
+Accounts: `user5`, `user6`, ..., `user35`
+
+Password: 
+
+```
+ssh user5@
+
+source /home/tutorial/scripts/user-env.sh
+
+srun -N1 -n1 mpi
+```
+
+
 ## Tutorial Notebook 
 
 <br>
