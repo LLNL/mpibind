@@ -1144,7 +1144,7 @@ void topology_load(hwloc_topology_t topology)
  * nvml or rsmi components loaded. These components 
  * though are required to get the uuid. 
  */
-int discover_devices(hwloc_topology_t topo, 
+int discover_devices_prev(hwloc_topology_t topo, 
                      struct device **devs, int size)
 {
   int i, id, index, ndevs=0; 
@@ -1241,6 +1241,116 @@ int discover_devices(hwloc_topology_t topo,
 
   return ndevs; 
 }
+
+
+/* 
+ * Input: osdev_obj, an OSDEV object 
+ * Output: dev
+ * 
+ * Fill in information from the OSDEV object into 
+ * a device structure. 
+ */
+static
+void fill_in_device_info(hwloc_obj_t osdev_obj, struct device *dev)
+{
+  int i, id; 
+  hwloc_obj_osdev_type_t type = osdev_obj->attr->osdev.type;
+  
+  if (type == HWLOC_OBJ_OSDEV_COPROC || type == HWLOC_OBJ_OSDEV_GPU)
+    dev->type = DEV_GPU;
+  else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+    dev->type = DEV_NIC;  
+    snprintf(dev->univ, UUID_LEN, "%s", 
+	     hwloc_obj_get_info_by_name(osdev_obj, "NodeGUID")); 
+  }
+  
+  snprintf(dev->name, SHORT_STR_SIZE, "%s", osdev_obj->name);
+  
+  if (sscanf(osdev_obj->name, "cuda%d", &id) == 1)
+    dev->visdevs = id; 
+  else if (sscanf(osdev_obj->name, "opencl%dd%d", &i, &id) == 2)
+    dev->visdevs = id;
+  else if (sscanf(osdev_obj->name, "rsmi%d", &id) == 1) {
+    dev->smi = id; 
+    snprintf(dev->univ, UUID_LEN, "%s", 
+	     hwloc_obj_get_info_by_name(osdev_obj, "AMDUUID")); 
+  } else if (sscanf(osdev_obj->name, "nvml%d", &id) == 1) {
+    dev->smi = id; 
+    snprintf(dev->univ, UUID_LEN, "%s", 
+	     hwloc_obj_get_info_by_name(osdev_obj, "NVIDIAUUID")); 
+  }
+}
+	
+
+int discover_devices(hwloc_topology_t topo, 
+			 struct device **devs, int size)
+{
+  int index, ndevs=0; 
+  char busid[PCI_BUSID_LEN];
+  hwloc_obj_osdev_type_t type;
+  hwloc_obj_t pci_obj, obj, current;
+
+  obj = NULL; 
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL ) {
+    type = obj->attr->osdev.type; 
+    if (type == HWLOC_OBJ_OSDEV_COPROC ||
+        type == HWLOC_OBJ_OSDEV_GPU || 
+        type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+
+      /* Get the PCI bus ID */ 
+      pci_obj = get_pci_busid(obj, busid, sizeof(busid)); 
+      if (pci_obj == NULL) {
+        fprintf(stderr, "Warn: Couldn't get PCI busid of I/O device\n");
+        continue; 
+      }
+
+      /* Have we seen this device already? 
+         opencl0d0 and cuda0 may correspond to the same GPU HW */ 
+      for (index=0; index<ndevs; index++) 
+        if (strcmp(devs[index]->pci, busid) == 0)
+          break; 
+      /* Add a new device with a unique PCI busid */ 
+      if (index == ndevs) {
+        if (ndevs >= size) {
+          fprintf(stderr, "Warn: I/O device array maxed out\n"); 
+          return ndevs; 
+        }
+
+        /* Allocate and initialize the new device */ 
+        devs[index] = malloc(sizeof(struct device));
+        devs[index]->univ[0] = '\0'; 
+        devs[index]->smi = -1;
+        devs[index]->visdevs = -1; 
+        devs[index]->type = -1; 
+
+        devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
+	devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj); 
+
+	/* Traverse all objects associated with this PCI device */   
+	if (pci_obj->io_arity > 0) {
+	  current = pci_obj->io_first_child; 
+	  do {
+	    fill_in_device_info(current, devs[index]); 
+	  } while ((current = current->next_sibling) != NULL);
+	}
+
+	/* Make sure VISIBLE_DEVICES id is set,
+	   even when no OpenCL device was found (AMD GPUs) */
+	if (devs[index]->visdevs == -1) {
+	  if (devs[index]->smi >= 0)
+	    devs[index]->visdevs = devs[index]->smi; 
+	  else
+	    fprintf(stderr, "Warn: No ID found for GPU %s\n", busid);
+	}
+	
+        snprintf(devs[ndevs++]->pci, PCI_BUSID_LEN, "%s", busid);
+      }
+    }
+  }
+
+  return ndevs; 
+}
+
 
 
 /* 
