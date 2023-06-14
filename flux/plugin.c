@@ -277,7 +277,7 @@ bool mpibind_getopt(flux_shell_t *shell,
 	else if ( !strcmp(token2, "corespecnuma") )
 	  opt_ptr = pcs_numa;
 	else if ( !strcmp(token2, "corespecbal") )
-	  opt_ptr = pcs_bal; 
+	  opt_ptr = pcs_bal;
 	else if ( !strcmp(token2, "off") )
 	  disabled = 1;
 	else if ( !strcmp(token2, "on") )
@@ -580,7 +580,7 @@ struct usr_opts {
   int master;
   int corespec_first;
   int corespec_numa;
-  int corespec_bal; 
+  int corespec_bal;
 };
 
 /*  Restrict hwloc topology to the cpu affinity mask of the current
@@ -621,6 +621,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   mpibind_t *mph = NULL;
   struct usr_opts *opts = data;
   bool restrict_topo = true;
+  const char *xml;
   flux_shell_t *shell = flux_plugin_get_shell(p);
 
 
@@ -665,23 +666,21 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   if (hwloc_topology_init(&topo) < 0)
     return shell_log_errno("hwloc_topology_init");
 
-  /* If given, read topology file.
-     Not using HWLOC_XMLFILE because that applies to
-     all hwloc clients */
-  const char *xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE");
-  if (xml != NULL && xml[0] != '\0') {
-    if (hwloc_topology_set_xml(topo, xml) < 0)
-      return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
-    shell_debug ("loaded topology from %s", xml);
-  }
-  else {
-    /* Otherwise, get hwloc topology xml from job shell to avoid heavyweight
-     * topology load duplicated by job shell.
-     */
-    if (flux_shell_get_hwloc_xml (shell, &xml) < 0)
+  /* Prefer loading topology from the Flux job shell, since this XML has
+   * already been restricted to the resources available to this job, and
+   * also avoids the need for a topo file or loading HWLOC directly.
+   *
+   * Fall back to MPIBIND_TOPOFILE if getting the topology fails or
+   * FLUX_MPIBIND_USE_TOPOFILE is set in the job environment.
+   */
+  if (!flux_shell_getenv(shell, "FLUX_MPIBIND_USE_TOPOFILE")
+      && flux_shell_get_hwloc_xml(shell, &xml) == 0) {
+
+    if (flux_shell_get_hwloc_xml(shell, &xml) < 0)
       return shell_log_errno("failed to get hwloc XML from job shell");
 
-    if (hwloc_topology_set_xmlbuffer (topo, xml, strlen (xml)) < 0)
+    shell_debug ("loaded topology from job shell");
+    if (hwloc_topology_set_xmlbuffer(topo, xml, strlen (xml)) < 0)
       return shell_log_errno ("hwloc_topology_set_xmlbuffer");
 
     xml = "shell-provided";
@@ -690,6 +689,20 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
      * in the topology XML fetched from the job shell.
      */
     restrict_topo = false;
+  }
+  else {
+    /*
+     * The fetch of HWLOC XML from the job shell failed: fall back to
+     * MPIBIND_TOPOFILE if set, if not, then hwloc topology will be loaded
+     * directly from the system (slow).
+     */
+    xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE");
+    if ((xml = flux_shell_getenv(shell, "MPIBIND_TOPOFILE"))
+        && xml[0] != '\0') {
+      if (hwloc_topology_set_xml(topo, xml) < 0)
+        return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
+        shell_debug ("loaded topology from %s", xml);
+    }
   }
 
   /* Make sure the OS binding functions are actually called */
@@ -725,7 +738,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     x_numa_aware = 1;
     x_ncores = opts->corespec_numa;
   }
-  
+
   if (get_pus_of_lcores(topo, cores, pus,
 			x_ncores, x_numa_aware) != 0) {
     shell_log_error("get_pus_of_lcores failed\n");
@@ -787,12 +800,12 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   /* Now that the mapping has been set on the mpibind handle,
      remove the OS CPUs if corespec balanced has been set */
-  x_ncores = opts->corespec_bal; 
+  x_ncores = opts->corespec_bal;
   if (x_ncores > 0)
     for (i=0; i<ntasks; i++)
-      mpibind_pop_cores_ptask(mph, i, x_ncores); 
+      mpibind_pop_cores_ptask(mph, i, x_ncores);
 
-  
+
   /* Debug: Print out the cpus assigned to each task */
   char outbuf[LONG_STR_SIZE];
   hwloc_bitmap_t *cpus = mpibind_get_cpus(mph);
@@ -800,7 +813,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     hwloc_bitmap_list_snprintf(outbuf, LONG_STR_SIZE, cpus[i]);
     shell_debug("task %2d: cpus %s", i, outbuf);
   }
-  
+
   if (opts->verbose) {
     /* Can't print to stdout within the Flux shell environment */
     //mpibind_print_mapping(mph);
@@ -812,7 +825,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     mpibind_mapping_snprint(outbuf, LONG_STR_SIZE, mph);
     shell_log("\n%s", outbuf);
   }
-  
+
   /* Set env variables now for the purposes of task.init */
   if (mpibind_set_env_vars(mph) != 0) {
     shell_die_errno(1, "mpibind_set_env_vars");
@@ -885,7 +898,7 @@ void flux_plugin_init(flux_plugin_t *p)
      i.e., core specialization */
   opts->corespec_first = 0;
   opts->corespec_numa = 0;
-  opts->corespec_bal = 0; 
+  opts->corespec_bal = 0;
 
   /* Get mpibind user-specified options */
   if ( !mpibind_getopt(shell,
