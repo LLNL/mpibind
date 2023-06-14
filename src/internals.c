@@ -82,38 +82,23 @@ hwloc_obj_t get_pci_busid(hwloc_obj_t dev, char *busid, int size)
 }
 
 
-
-
 /*
  * Return the number of NUMA domains with GPUs. 
  * Output:
- *   numas: OS indexes of the numa domains with GPUs.  
+ *   numas: OS indexes of the numa domains with GPUs.   
  */
 static
-int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
+int numas_wgpus(struct device **devs, int ndevs, hwloc_bitmap_t numas)
 {
-  hwloc_obj_t obj, parent; 
+  int i; 
   
   hwloc_bitmap_zero(numas);
 
-  obj = NULL; 
-  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL )
-    if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
-      parent = hwloc_get_non_io_ancestor_obj(topo, obj);
-      hwloc_bitmap_or(numas, numas, parent->nodeset);
-      /* Debug / verbose */
-#if VERBOSE >= 4
-      print_obj(obj, 0);
-      print_obj_info(obj);  
-      print_obj(parent, 0);
-#endif
-    }
-  
+  for (i=0; i<ndevs; i++)
+    hwloc_bitmap_or(numas, numas, devs[i]->ancestor->nodeset); 
+    
   return hwloc_bitmap_weight(numas);   
 }
-
-
-
 
 
 /*
@@ -563,7 +548,8 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
   /* Distribute tasks over numa domains */
   if (gpu_optim) { 
     io_numa_os_ids = hwloc_bitmap_alloc(); 
-    num_numas = numas_wgpus(topo, io_numa_os_ids);
+    //num_numas = numas_wgpus(topo, io_numa_os_ids);
+    num_numas = numas_wgpus(devs, ndevs, io_numa_os_ids);
     /* Verbose */
 #if VERBOSE >=2
     char str[LONG_STR_SIZE]; 
@@ -715,23 +701,23 @@ int distrib_greedy(hwloc_topology_t topo,
 }
 
 
-
-/************************************************
- * Non-static functions. 
- * Used by mpibind.c
- ************************************************/
-
-
-
-
-
-
 /* 
  * Input: osdev_obj, an OSDEV object 
  * Output: dev
  * 
  * Fill in information from the OSDEV object into 
  * a device structure. 
+ * 
+ * Todo 6/13/2023: I can probably get rid of one of 
+ * 'visdevs' or 'smi' IDs. The idea would be to 
+ * save the smi ID and use that. But, if for some 
+ * reason the smi id is not present (e.g., no rsmi
+ * device), then I can use the visdevs ID (e.g., opencl). 
+ * In the code below, I would make sure the cuda/opencl 
+ * IDs do not overwrite the rsmi/nvml IDs. 
+ * For example, if dev->smi is -1 then write cuda_id, 
+ * otherwise, do not overwrite dev->smi (since it was 
+ * set by rsmi/nvml). . 
  */
 static
 void fill_in_device_info(hwloc_obj_t osdev_obj, struct device *dev)
@@ -763,10 +749,53 @@ void fill_in_device_info(hwloc_obj_t osdev_obj, struct device *dev)
 	     hwloc_obj_get_info_by_name(osdev_obj, "NVIDIAUUID")); 
   }
 }
-	
 
+
+/************************************************
+ * Non-static functions. 
+ * Used by mpibind.c
+ ************************************************/
+	
+/*
+ * Input: An hwloc topology. 
+ * Output: An array of devices. 
+ * 
+ * For every unique I/O device, add an entry to the 
+ * output array with the device's different IDs: 
+ *   PCI Bus ID 
+ *   Universally Unique ID 
+ *   *_VISIBLE_DEVICES ID 
+ *   SMI ID (RSMI or NVML)
+ * This function includes GPUs and OpenFabrics NICs 
+ * and can add other devices as necessary. 
+ * 
+ * mpibind uses its own IDs to refer to I/O devices,
+ * namely the index of the device ID array. 
+ * Having small non-negative integers allows using 
+ * efficient storage: bitmaps. 
+ * Given an mpibind ID, one can map it to whatever the 
+ * caller wishes to use, e.g., ID for *_VISIBLE_DEVICES. 
+ *  
+ * Notes on the different type of IDs:
+ *  
+ * I no longer rely on cuda<x> or opencl<x>d<y> to 
+ * detect the device. If rsmi/nvml found, then use these. 
+ * Note that CUDA/OPENCL are COPROC IDs and are relative
+ * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
+ * NVML and RSMI (GPU IDs), on the other hand, act as absolute
+ * IDs--don't change as a result of env vars. 
+ * 
+ * A side effect: Setting *_VISIBLE_DEVICES to hide GPUs 
+ * before calling mpibind may not have an effect, because 
+ * I look for all devices including RSMI and NVML. 
+ * 
+ * Currently, I rely on the pcibus_id, because it 
+ * is absolute and it does not rely on having the 
+ * nvml or rsmi components loaded. These components 
+ * though are required to get the uuid. 
+ */
 int discover_devices(hwloc_topology_t topo, 
-			 struct device **devs, int size)
+		     struct device **devs, int size)
 {
   int index, ndevs=0; 
   char busid[PCI_BUSID_LEN];
@@ -947,7 +976,39 @@ const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu)
 
 /******************************************************
  * Previous incarnations 
+ * Eventually I should move these functions out,
+ * perhaps to a separate file. 
  ******************************************************/
+
+#if 0
+/*
+ * Return the number of NUMA domains with GPUs. 
+ * Output:
+ *   numas: OS indexes of the numa domains with GPUs.  
+ */
+static
+int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
+{
+  hwloc_obj_t obj, parent; 
+  
+  hwloc_bitmap_zero(numas);
+
+  obj = NULL; 
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL )
+    if (obj->attr->osdev.type == HWLOC_OBJ_OSDEV_COPROC) {
+      parent = hwloc_get_non_io_ancestor_obj(topo, obj);
+      hwloc_bitmap_or(numas, numas, parent->nodeset);
+      /* Debug / verbose */
+#if VERBOSE >= 4
+      print_obj(obj, 0);
+      print_obj_info(obj);  
+      print_obj(parent, 0);
+#endif
+    }
+  
+  return hwloc_bitmap_weight(numas);   
+}
+#endif
 
 
 #if 0
