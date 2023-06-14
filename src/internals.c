@@ -848,7 +848,7 @@ int discover_devices(hwloc_topology_t topo,
 
 	/* Make sure VISIBLE_DEVICES id is set,
 	   even when no OpenCL device was found (AMD GPUs) */
-	if (devs[index]->visdevs == -1) {
+	if (devs[index]->type == DEV_GPU && devs[index]->visdevs == -1) {
 	  if (devs[index]->smi >= 0)
 	    devs[index]->visdevs = devs[index]->smi; 
 	  else
