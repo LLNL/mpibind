@@ -74,6 +74,34 @@
 #define MAX_NUMA_DOMAINS 32
 
 
+/*
+ * Structure to pass parameters from flux_plugin_init()
+ * to mpibind_shell_init().
+ */
+struct usr_opts {
+  int smt;
+  int greedy;
+  int gpu_optim;
+  int verbose;
+  int master;
+  int corespec_first;
+  int corespec_numa;
+  int corespec_bal;
+  int omp_proc_bind;
+  int omp_places;
+  int visible_devices;
+};
+
+/* 
+ * Structure to pass parameters from flux_plugin_add_handler()
+ * to mpibind_task_init()
+ */
+struct handle_and_opts {
+  mpibind_t *mph;
+  struct usr_opts *opts; 
+}; 
+
+
 /*  Return task id for a shell task
  */
 static int flux_shell_task_getid(flux_shell_task_t *task)
@@ -127,20 +155,34 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
 {
   int nvars, i;
   char **env_var_values;
-
-  mpibind_t *mph = data;
+  
+  //mpibind_t *mph = data;
+  struct handle_and_opts *hdl = data; 
+  //todo: hdl->opts 
+  
   int taskid = get_taskid(p);
-  char **env_var_names = mpibind_get_env_var_names(mph, &nvars);
-
-  for (i=0; i <nvars; i++) {
-    env_var_values = mpibind_get_env_var_values(mph, env_var_names[i]);
+  char **env_var_names = mpibind_get_env_var_names(hdl->mph,
+						   &nvars);
+  
+  for (i=0; i<nvars; i++) {
+    /* Tell mpibind to not set a variable */ 
+    if ( (!strcmp(env_var_names[i], "OMP_PLACES") &&
+	  hdl->opts->omp_places) ||
+	 (!strcmp(env_var_names[i], "OMP_PROC_BIND") &&
+	  hdl->opts->omp_proc_bind) ||
+	 (strstr(env_var_names[i], "VISIBLE_DEVICES") &&
+	  hdl->opts->visible_devices) )
+      continue;
+    
+    env_var_values = mpibind_get_env_var_values(hdl->mph,
+						env_var_names[i]);
     if (env_var_values[taskid]) {
       shell_debug("task %2d: setting %s=%s\n", taskid,
 		  env_var_names[i], env_var_values[taskid]);
       plugin_task_setenv(p, env_var_names[i], env_var_values[taskid]);
     }
   }
-
+  
   return 0;
 }
 
@@ -153,7 +195,7 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
  *    to the user opts structure.
  * 2. Pass a pointer to this new structure to the task.exec callback
  *    instead of the mpibind handle. Don't free the user opts struct yet.
- * 3. Pass a pointer to this new structure to the flux primite that
+ * 3. Pass a pointer to this new structure to the flux primitive that
  *    registers the mpibind_destroy function. Modify mpibind_destroy
  *    accordingly so that it frees the user opts structure.
  * 4. In the task.exec callback use mpibind_print_mapping_task
@@ -202,7 +244,9 @@ static
 bool mpibind_getopt(flux_shell_t *shell,
 		    int *psmt, int *pgreedy, int *pgpu_optim,
 		    int *pverbose, int *pmaster,
-		    int *pcs_first, int *pcs_numa, int *pcs_bal)
+		    int *pcs_first, int *pcs_numa, int *pcs_bal,
+		    int *pomp_proc_bind, int *pomp_places,
+		    int *pvisible_devices)
 {
   int rc;
   int disabled = 0;
@@ -278,6 +322,12 @@ bool mpibind_getopt(flux_shell_t *shell,
 	  opt_ptr = pcs_numa;
 	else if ( !strcmp(token2, "corespecbal") )
 	  opt_ptr = pcs_bal;
+	else if ( !strcmp(token2, "omp_places") )
+	  opt_ptr = pomp_places;
+	else if ( !strcmp(token2, "omp_proc_bind") )
+	  opt_ptr = pomp_proc_bind;
+	else if ( !strcmp(token2, "visible_devices") )
+	  opt_ptr = pvisible_devices;
 	else if ( !strcmp(token2, "off") )
 	  disabled = 1;
 	else if ( !strcmp(token2, "on") )
@@ -319,11 +369,15 @@ bool mpibind_getopt(flux_shell_t *shell,
 static
 void mpibind_destroy(void *arg)
 {
-  mpibind_t *mph = arg;
-  hwloc_topology_t topo = mpibind_get_topology(mph);
+  //mpibind_t *mph = arg;
+  struct handle_and_opts *hdl = arg; 
+  hwloc_topology_t topo = mpibind_get_topology(hdl->mph);
 
-  mpibind_finalize(mph);
+  mpibind_finalize(hdl->mph);
   hwloc_topology_destroy(topo);
+  
+  free(hdl->opts);
+  free(hdl); 
 }
 
 /*
@@ -568,21 +622,6 @@ int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus,
   return 0;
 }
 
-/*
- * Structure to pass parameters from flux_plugin_init()
- * to mpibind_shell_init().
- */
-struct usr_opts {
-  int smt;
-  int greedy;
-  int gpu_optim;
-  int verbose;
-  int master;
-  int corespec_first;
-  int corespec_numa;
-  int corespec_bal;
-};
-
 /*  Restrict hwloc topology to the cpu affinity mask of the current
  *  proces. This is required for handling nested jobs in Flux, since
  *  the nested job will be bound to a subset of total resources, but
@@ -776,17 +815,25 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   shell_debug("user opts: ntasks=%d nthreads=%d restrict=%s "
 	      "greedy=%d smt=%d gpu_optim=%d verbose=%d master=%d "
-	      "corespec_first=%d corespec_numa=%d xml=%s ",
+	      "corespec_first=%d corespec_numa=%d corespec_bal=%d "
+	      "visible_devices=%d omp_proc_bind=%d omp_places=%d "
+	      "xml=%s ",
 	      ntasks, nthreads, pus, opts->greedy, opts->smt,
 	      opts->gpu_optim, opts->verbose, opts->master,
-	      opts->corespec_first, opts->corespec_numa, xml);
+	      opts->corespec_first, opts->corespec_numa,
+	      opts->corespec_bal, opts->visible_devices,
+	      opts->omp_proc_bind, opts->omp_places, xml);
+
+  struct handle_and_opts *hdl = malloc(sizeof(struct handle_and_opts));
+  hdl->mph = mph;
+  hdl->opts = opts; 
 
   /* Set mpibind handle in shell aux data for auto-destruction */
-  flux_shell_aux_set(shell, "mpibind", mph, (flux_free_f) mpibind_destroy);
+  flux_shell_aux_set(shell, "mpibind", hdl, (flux_free_f) mpibind_destroy);
 
   /* Set handlers for 'task.exec', called for each task before exec(2),
      and 'task.init' */
-  if (flux_plugin_add_handler(p, "task.init", mpibind_task_init, mph) < 0
+  if (flux_plugin_add_handler(p, "task.init", mpibind_task_init, hdl) < 0
       || flux_plugin_add_handler(p, "task.exec", mpibind_task, mph) < 0) {
     shell_die_errno(1, "flux_plugin_add_handler");
     return -1;
@@ -834,7 +881,8 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   /* Clean up */
   free(pus);
-  free(opts);
+  /* Can't free opts here since it will be used by mpibind_task_init */ 
+  //free(opts);
 
   return 0;
 }
@@ -899,7 +947,12 @@ void flux_plugin_init(flux_plugin_t *p)
   opts->corespec_first = 0;
   opts->corespec_numa = 0;
   opts->corespec_bal = 0;
-
+  /* By default mpibind sets the environment variables, i.e.,
+     (do not disable setting the variables) */
+  opts->omp_proc_bind = 0;
+  opts->omp_places = 0;
+  opts->visible_devices = 0; 
+  
   /* Get mpibind user-specified options */
   if ( !mpibind_getopt(shell,
 		       &opts->smt,
@@ -909,7 +962,10 @@ void flux_plugin_init(flux_plugin_t *p)
 		       &opts->master,
 		       &opts->corespec_first,
 		       &opts->corespec_numa,
-		       &opts->corespec_bal) ) {
+		       &opts->corespec_bal,
+		       &opts->omp_proc_bind,
+		       &opts->omp_places,
+		       &opts->visible_devices) ) {
     shell_debug("mpibind disabled");
     return;
   }
