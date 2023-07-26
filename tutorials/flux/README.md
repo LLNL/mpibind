@@ -253,13 +253,17 @@ otherwise Flux will complain.
 ## 3. Basic affinity with Flux
 
 Now that we reviewed some basic Flux commands and pitfalls, let's see
-what type of affinity and binding we can use with the simple `flux
+what type of affinity and binding we can use with the `flux
 run` interface. Here are the options we will use:
 
 ```
--o cpu-affinity=per-task
--o gpu-affinity=per-task
+-o cpu-affinity=off|per-task
+-o gpu-affinity=off|per-task
 ```
+
+<!--
+-o cpu-affinity=map:<list-of-cpus>
+-->
 
 In the following example, we use `cpu-affinity` in conjuction with `-c`
 to ask Flux to bind each task to two cores. Note that if
@@ -344,11 +348,39 @@ tioga19    Task   0/  4 running on 4 CPUs: 56-57,120-121
 </details>
 
 
-Nice.
-
-Note, however, that *locality* is not a primary consideration here:
+Nice. But, *locality* is not a primary consideration here:
 None of the processes are using local GPUs: The only local GPU to
 cores 56-63 is 0xc6, which is not being used. Ay.
+
+
+<!--
+Case 1: Based on Flux's selection of GPUs, choose the right CPUs.
+We can't use the `map` clause as I thought we would, because it would
+require allocating the node exclusively with `--exclusive`. When
+allocating the node exclusively, options like `-g1` does not work
+anymore.
+
+Case 2: Select the right CPUs and then let mpibind select the GPUs. 
+We would have to use the `--excluisve` option to use the `map` clause
+of `cpu-affinity`. Even if this is successful, mpibind disables
+`cpu-affinity` so the selected set of CPUs would be ignored.
+
+There are a few associated Flux issues with this:
+https://github.com/flux-framework/flux-core/issues/5342
+https://github.com/flux-framework/flux-core/issues/5351
+https://github.com/flux-framework/flux-core/issues/5352
+
+This is what I was going to write...
+
+To get local CPUs to the assigned GPUs, we will use the `map` clause
+of `cpu-affinity`. 
+
+First, the assigned GPUs are local to cores 0-7, 8-15, 32-39,
+and 40-47. So, let's pick 4 CPUs, one from each set and assign them to
+the appropriate MPI tasks.
+
+flux run -N1 -n4 -o mpibind=off -x -g1 -o cpu-affinity='map:0-1;8-9;32-33;40-41' -o gpu-affinity=per-task ./mpi-tioga
+-->
 
 
 ## 4. Affinity with mpibind
@@ -1044,20 +1076,21 @@ We will leverage the following options for this section:
 ```
 -o mpibind=corespecfirst:<n>
 -o mpibind=corespecnuma:<n>
+-o mpibind=corespecbal:<k>
 ```
 
 *System noise*&#8212;any process, hardware or software, that delays an
 application's execution and is not directly controlled by the
 application&#8212;can be a significant source of performance
 degradation. There are several techniques to mitigate system noise,
-one of them we already covered: **Thread specialization**, which leaves
+one of them we already covered: **Thread Specialization**, which leaves
 one or more hardware threads per core available for processing system
-services. The one we cover in this section is **Core specialization**.
+services. The one we cover in this section is **Core Specialization**.
 
-As its name implies, Core specialization dedicates a number of cores
+As its name implies, core specialization dedicates a number of cores
 for the processing of system services. This scheme partitions the
-available cores into two categories: *OS cores* and *Application
-cores*. With `mpibind`, one can specify the number of OS cores. Here
+available cores into two categories: *OS Cores* and *Application
+Cores*. With `mpibind`, one can specify the number of OS cores. Here
 are a few examples.
 
 Let's start with the default behavior:
@@ -1093,27 +1126,27 @@ $ flux run -N1 -n4 --exclusive -o mpibind=corespecfirst:4 ./mpi-tioga
 </summary>
 
 ```
-tioga28    Task   3/  4 running on 16 CPUs: 48-63
-           Task   3/  4 has 2 GPUs: 0xc1 0xc6
+tioga28    Task   0/  4 running on 12 CPUs: 4-15
+           Task   0/  4 has 2 GPUs: 0xd1 0xd6
 tioga28    Task   1/  4 running on 16 CPUs: 16-31
            Task   1/  4 has 2 GPUs: 0xc9 0xce
 tioga28    Task   2/  4 running on 16 CPUs: 32-47
            Task   2/  4 has 2 GPUs: 0xd9 0xde
-tioga28    Task   0/  4 running on 12 CPUs: 4-15
-           Task   0/  4 has 2 GPUs: 0xd1 0xd6
+tioga28    Task   3/  4 running on 16 CPUs: 48-63
+           Task   3/  4 has 2 GPUs: 0xc1 0xc6
 ```
 </details>
 
 
-Task 0 is no longer running on 16 cores, instead it runs on Cores
-4-15, because Cores 0-3 are now the OS cores.
+Task 0 is no longer running on 16 cores, instead it runs on cores
+4-15, because cores 0-3 are now the OS cores.
 
 The `corespecfirst` option takes the first `n` cores away from the
 application. This can create an imbalance in terms of how many cores
-are available to each task. In the example above, tasks 0-3 got 16
+are available to each task. In the example above, tasks 1-3 got 16
 cores, but task 0 got 12 cores.
 
-To spread out the OS cores across the NUMA domains, `mpibind` provides
+To spread out the OS cores across NUMA domains, `mpibind` provides
 the `corespecnuma` option:
 
 <details>
@@ -1127,12 +1160,12 @@ $ flux run -N1 -n4 --exclusive -o mpibind=corespecnuma:4 ./mpi-tioga
 ```
 tioga28    Task   0/  4 running on 15 CPUs: 1-15
            Task   0/  4 has 2 GPUs: 0xd1 0xd6
+tioga28    Task   1/  4 running on 15 CPUs: 17-31
+           Task   1/  4 has 2 GPUs: 0xc9 0xce
 tioga28    Task   2/  4 running on 15 CPUs: 33-47
            Task   2/  4 has 2 GPUs: 0xd9 0xde
 tioga28    Task   3/  4 running on 15 CPUs: 49-63
            Task   3/  4 has 2 GPUs: 0xc1 0xc6
-tioga28    Task   1/  4 running on 15 CPUs: 17-31
-           Task   1/  4 has 2 GPUs: 0xc9 0xce
 ```
 </details>
 
@@ -1140,7 +1173,82 @@ tioga28    Task   1/  4 running on 15 CPUs: 17-31
 Now, one core has been taken out from each NUMA domain resulting in
 all tasks running on 15 cores!
 
-The option that may work best is application dependent.
+Let's further our analysis and examine a common use case: One MPI task per GPU. What happens if we take away 8 cores across NUMA domains?
+
+<details>
+<summary>
+
+```
+$ flux run -N1 -n8 --exclusive -o mpibind=corespecnuma:8 ./mpi-gpu
+```
+</summary>
+
+```
+rzvernal15 Task   0/  8 running on 7 CPUs: 2-8
+           Task   0/  8 has 1 GPUs: 0xd1 
+rzvernal15 Task   1/  8 running on 7 CPUs: 9-15
+           Task   1/  8 has 1 GPUs: 0xd6 
+rzvernal15 Task   2/  8 running on 7 CPUs: 18-24
+           Task   2/  8 has 1 GPUs: 0xc9 
+rzvernal15 Task   3/  8 running on 7 CPUs: 25-31
+           Task   3/  8 has 1 GPUs: 0xce 
+rzvernal15 Task   4/  8 running on 7 CPUs: 34-40
+           Task   4/  8 has 1 GPUs: 0xd9 
+rzvernal15 Task   5/  8 running on 7 CPUs: 41-47
+           Task   5/  8 has 1 GPUs: 0xde 
+rzvernal15 Task   6/  8 running on 7 CPUs: 50-56
+           Task   6/  8 has 1 GPUs: 0xc1 
+rzvernal15 Task   7/  8 running on 7 CPUs: 57-63
+           Task   7/  8 has 1 GPUs: 0xc6 
+```
+</details>
+
+
+Since we have 4 NUMA domains and 8 OS cores, 2 cores per NUMA domain
+are set aside for the OS. Unfortunately, this assignment breaks
+locality as a result of taking out the first two cores of each NUMA
+domain. For example, task 0 is assigned cores 2-8 and GPU 0xd1. Cores
+2-7 are local to GPU 0xd1, but core 8 is not.   
+
+To address this issue and provide a *balanced* assignment of OS
+cores among tasks, mpibind provides the `corespecbal` option:
+
+<details>
+<summary>
+
+```
+$ flux run -N1 -n8 --exclusive -o mpibind=corespecbal:1 ./mpi-gpu
+```
+</summary>
+
+```
+rzvernal15 Task   0/  8 running on 7 CPUs: 1-7
+           Task   0/  8 has 1 GPUs: 0xd1 
+rzvernal15 Task   1/  8 running on 7 CPUs: 9-15
+           Task   1/  8 has 1 GPUs: 0xd6 
+rzvernal15 Task   2/  8 running on 7 CPUs: 17-23
+           Task   2/  8 has 1 GPUs: 0xc9 
+rzvernal15 Task   3/  8 running on 7 CPUs: 25-31
+           Task   3/  8 has 1 GPUs: 0xce 
+rzvernal15 Task   4/  8 running on 7 CPUs: 33-39
+           Task   4/  8 has 1 GPUs: 0xd9 
+rzvernal15 Task   5/  8 running on 7 CPUs: 41-47
+           Task   5/  8 has 1 GPUs: 0xde 
+rzvernal15 Task   6/  8 running on 7 CPUs: 49-55
+           Task   6/  8 has 1 GPUs: 0xc1 
+rzvernal15 Task   7/  8 running on 7 CPUs: 57-63
+           Task   7/  8 has 1 GPUs: 0xc6 
+```
+</details>
+
+Voilà. Locality is maintained! 
+
+One core per task was set aside for the OS, balancing
+the OS cores among tasks (rather than NUMA domains). Unlike the
+integer parameter of `corespecfirst` and `corespecnuma`, the parameter
+of `corespecbal` is the number of OS cores per task.
+
+The core specialization option that may work best is application dependent.
 
 Finally, `mpibind` makes sure the application does not run on the OS
 cores, but does not enforce system services to run on the OS
