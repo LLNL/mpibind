@@ -10,7 +10,15 @@
 
 int get_gpu_count()
 {
-  int count = 0;
+  /* 
+     Surprinsingly, I must set 'count' to zero before
+     passing it to cudaGetDeviceCount(&count)
+     If CUDA_VISIBLE_DEVICES is set to '', calling 
+     this function will not set a value for count. 
+     Then, count will be used uninitialized and 
+     most likely the program will segfault. 
+  */ 
+  int count=0;
 
   cudaGetDeviceCount(&count);
 
@@ -32,17 +40,17 @@ int get_gpu_pci_id(int dev)
 
 int get_gpu_affinity(char *buf)
 {
-  int i, value, count;
-  int nc = 0; 
-
-  cudaGetDeviceCount(&count); 
-
+  int count=0; 
+  cudaGetDeviceCount(&count);
+  
+  int nc=0; 
+  int i, value; 
   for (i=0; i<count; i++) {
     cudaDeviceGetAttribute(&value, cudaDevAttrPciBusId, i);
     nc += sprintf(buf+nc, "0x%x ", value); 
   }
   nc += sprintf(buf+nc, "\n"); 
-
+  
   return nc; 
 }
 
@@ -85,8 +93,8 @@ int get_gpu_info(int devid, char *buf)
 int get_gpu_info_all(char *buf)
 {
   cudaError_t err; 
-  int i, myid, count, value;
-  int nc = 0; 
+  int i, myid, count=0, value;
+  int nc=0; 
   
   cudaGetDeviceCount(&count);
   err = cudaGetDevice(&myid);
