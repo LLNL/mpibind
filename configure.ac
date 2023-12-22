@@ -84,6 +84,15 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$flux_core = xtrue])
 #)
 #AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$fluxcore = xtrue])
 
+PKG_CHECK_MODULES([SLURM], [slurm], [
+  slurm=true
+  slurm_dir=`$PKG_CONFIG --variable=includedir slurm`
+  AC_MSG_NOTICE([$slurm_dir])
+  ],
+  [AC_MSG_NOTICE([Slurm plugin will not be built])]
+)
+AM_CONDITIONAL([HAVE_SLURM], [test x$slurm = xtrue])
+
 # Notes 
 # AC_DEFINE([HAVE_LIBTAP], 1, [Define libtap to build the test suite])
 # AC_CHECK_FUNC([hwloc_topology_set_all_types_filter])
@@ -95,6 +104,7 @@ AM_CONDITIONAL([HAVE_FLUX_CORE], [test x$flux_core = xtrue])
 #  [AC_MSG_ERROR([unable to find pkgconf_pkg_free()])
 # ])
 # AS_IF(test-1, [run-if-true-1], ..., [run-if-false])
+# AC_SUBST(SLURM_INCDIR, $slurm_dir)
 
 # Define pkgconfigdir to install mpibind.pc
 PKG_INSTALLDIR
@@ -154,6 +164,7 @@ AC_CONFIG_FILES([
  test-suite/Makefile
  python/Makefile
  flux/Makefile
+ slurm/Makefile
  etc/Makefile
  etc/mpibind.pc
 ])

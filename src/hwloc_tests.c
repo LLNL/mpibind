@@ -159,7 +159,10 @@ void check_topo_filters(hwloc_topology_t topo)
 int main(int argc, char *argv[])
 {
   hwloc_topology_t topology;
-
+  
+  printf("hwloc: API version=0x%x, HWLOC_API_VERSION=0x%x\n",
+	 hwloc_get_api_version(), HWLOC_API_VERSION); 
+  
   hwloc_topology_init(&topology); 
   /* OS devices are filtered by default, enable to see GPUs */
   hwloc_topology_set_type_filter(topology, HWLOC_OBJ_OS_DEVICE,
