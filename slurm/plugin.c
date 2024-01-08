@@ -9,25 +9,12 @@
 
 /* 
  * Notes 
- * 
- * mpibind is not called with salloc/sbatch--only with srun. 
- * The side effect of calling mpibind with salloc is that
- * env vars set by mpibind continue to be set (and presumably
- * the cpu bindings). For example, OMP_NUM_THREADS is set to all 
- * CPUs and that has an effect on subsequent srun calls with 
- * mpibind. 
- * To check whether salloc is calling mpibind after 
- * the nodes are allocated, check the value of OMP_NUM_THREADS.  
  *
  * In some cases, the plugin hangs when not using an XML 
- # topology file. The hang is triggered by hwloc when enabling 
- # OS devices and discovering the topology. 
- # See TOSS-6198. 
- * 
- * Disable mpibind for jobs not using nodes exclusively? 
- * Use 'job_is_exclusive' to check. 
- * Currently, mpibind will be applied on whatever allowed 
- * topology (subset or full) hwloc returns. 
+ * topology file. The hang is triggered by hwloc when enabling 
+ * OS devices and discovering the topology. This is not an 
+ * mpibind or hwloc issue. 
+ * See TOSS-6198. 
  * 
  */ 
 
@@ -83,10 +70,17 @@ static int opt_smt = -1;
 /* Enable greedy by default */ 
 static int opt_greedy = 1; 
 
-/* mpibind plugin options */ 
-static int opt_enable = 1;
+/* mpibind plugin options */
 static int opt_verbose = 0;
 static int opt_debug = 0; 
+static int opt_enable = 1;
+/* True if enabled via --mpibind=on */
+static int opt_user_on = 0; 
+/* True if disabled via plugstack.conf or --mpibind=off */ 
+static int opt_disable = 0; 
+/* Only set affinity if this job has exclusive access to this node.
+   Set via plugstack.conf */
+static int opt_exclusive_only = 0;
 
 /* mpibind vars */ 
 static mpibind_t *mph = NULL;
@@ -235,20 +229,20 @@ void print_context(char *note)
 static
 void print_user_options()
 {
-  fprintf(stderr, "User options: enable=%d verbose=%d debug=%d "
-	  "gpu=%d smt=%d greedy=%d \n",
-	  opt_enable, opt_verbose, opt_debug, 
-	  opt_gpu, opt_smt, opt_greedy); 
+  fprintf(stderr, "Options: enable=%d disable=%d user_on=%d excl_only=%d "
+	  "verbose=%d debug=%d gpu=%d smt=%d greedy=%d \n",
+	  opt_enable, opt_disable, opt_user_on, opt_exclusive_only, 
+	  opt_verbose, opt_debug, opt_gpu, opt_smt, opt_greedy); 
 }
 
 static
 int parse_option(const char *opt, int remote)
 {  
   if (strcmp(opt, "off") == 0) {
-    opt_enable = 0;
+    opt_disable = 1;
   }
   else if (strcmp(opt, "on") == 0) {
-    opt_enable = 1; 
+    opt_user_on = 1; 
   }
   else if (strncmp(opt, "gpu", 3) == 0) {
     opt_gpu = 1;
@@ -319,6 +313,31 @@ int parse_user_options(int val, const char *arg, int remote)
   }
   
   free(str); 
+
+  return 0;
+}
+
+/* 
+ * Parse plugstack.conf options. 
+ */ 
+static
+int parse_conf_options(int argc, char *argv[], int remote)
+{
+  int i;
+  
+  for (i=0; i<argc; i++) {
+    //fprintf(stderr, "confopt=%s\n", argv[i]);
+    
+    if (strcmp(argv[i], "off") == 0)
+      opt_disable = 1;
+    else if (strcmp(argv[i], "exclusive_only") == 0)
+      opt_exclusive_only = 1;
+    else { 
+      fprintf(stderr, "mpibind: Invalid plugstack.conf argument %s\n",
+	      argv[i]);
+      return -1; 
+    }
+  }
 
   return 0;
 }
@@ -395,6 +414,19 @@ int get_omp_num_threads(spank_t sp)
   return val;
 }
 
+static
+int clean_up(mpibind_t *mph, hwloc_topology_t topo)
+{
+  int rc=0;
+  
+  if ((rc=mpibind_finalize(mph)) != 0)
+    fprintf(stderr, "mpibind: mpibind_finalize failed\n");
+  
+  hwloc_topology_destroy(topo); 
+  
+  return rc; 
+}
+
 
 /************************************************ 
  * SPANK callback functions 
@@ -441,7 +473,6 @@ int slurm_spank_exit(spank_t sp, int ac, char *argv[])
   char name[] = "slurm_spank_exit";
   print_context(name); 
 #endif
-
   
   return ESPANK_SUCCESS;
 }
@@ -455,8 +486,21 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 {
   if (!spank_remote(sp))
     return ESPANK_SUCCESS; 
+
+  /* I could do this in slurm_spank_init, but can't 
+     print to the console there if there's an error */ 
+  if (parse_conf_options(ac, argv, spank_remote(sp)) < 0) {
+    opt_enable = 0; 
+    return ESPANK_ERROR;
+  }
   
   /* Disable mpibind in salloc/sbatch commands */
+  /* The side effect of calling mpibind with salloc is that
+     env vars set by mpibind continue to be set (and presumably
+     the cpu bindings). For example, if OMP_NUM_THREADS is set to 
+     all CPUs, that has an effect on subsequent srun calls with 
+     mpibind. To check whether salloc is calling mpibind after 
+     the nodes are allocated, check the value of OMP_NUM_THREADS */ 
   if (job_is_alloc(sp) == 1) { 
     opt_enable = 0;
     if (opt_debug)
@@ -468,7 +512,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   print_context(name);
 #endif
 
-  if (!opt_enable)
+  if (!opt_enable || opt_disable)
     return ESPANK_SUCCESS;
 
 #if 1
@@ -564,9 +608,16 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 	    mpibind_get_topology(mph),
 	    exclusive);
 
-  if (!exclusive)
-    fprintf(stderr, "%s: Job doesn't have exclusive access to node\n",
-	    header);  
+  if (!exclusive && opt_exclusive_only && !opt_user_on) {
+    if (opt_debug)
+      fprintf(stderr, "%s: Job doesn't have exclusive access to node\n",
+	      header);
+    
+    opt_enable = 0;
+    clean_up(mph, topo);
+    
+    return ESPANK_SUCCESS;
+  }
   
   /*
    * Get the mpibind mapping!
@@ -616,7 +667,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
   print_context(name);
 #endif 
 
-  if (!opt_enable)
+  if (!opt_enable || opt_disable)
     return ESPANK_SUCCESS; 
   
   char header[16];  
@@ -650,9 +701,10 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
   }
 
 #if 1
+  clean_up(mph, topo); 
   /* Clean up */ 
-  mpibind_finalize(mph);
-  hwloc_topology_destroy(topo);
+  /* mpibind_finalize(mph); */
+  /* hwloc_topology_destroy(topo); */
 #endif
   
   return ESPANK_SUCCESS;  
