@@ -40,14 +40,27 @@ int get_gpu_pci_id(int dev)
 
 int get_gpu_affinity(char *buf)
 {
-  int count=0; 
+  int count=0;
+  cudaError_t err;
+  cudaDeviceProp prop;
   cudaGetDeviceCount(&count);
   
   int nc=0; 
   int i, value; 
   for (i=0; i<count; i++) {
-    cudaDeviceGetAttribute(&value, cudaDevAttrPciBusId, i);
-    nc += sprintf(buf+nc, "0x%x ", value); 
+#if 1
+    err = cudaGetDeviceProperties(&prop, i);
+    if ( err ) {
+      fprintf(stderr, "Could not get info for GPU %d\n", i);
+      return -1;
+    }
+    nc += sprintf(buf+nc, "%04x:%02x ", prop.pciDomainID, prop.pciBusID);
+#else
+    // [domain]:[bus]:[device].[function]
+    char pcibusid[64];
+    cudaDeviceGetPCIBusId(pcibusid, 64, i);
+    nc += sprintf(buf+nc, "%s", pcibusid);
+#endif
   }
   nc += sprintf(buf+nc, "\n"); 
   
@@ -68,11 +81,11 @@ int get_gpu_info(int devid, char *buf)
   }
 
   float ghz = prop.clockRate / 1000.0 / 1000.0; 
-#if 0
-  nc += sprintf(buf+nc, "\tName: %s\n", prop.name); 
+#if 1
+  nc += sprintf(buf+nc, "\tName: %s\n", prop.name);
+  nc += sprintf(buf+nc, "\tPCI domain ID 0x%x\n", prop.pciDomainID);
   nc += sprintf(buf+nc, "\tPCI bus ID: 0x%x\n", prop.pciBusID);
-  //nc += sprintf(buf+nc, "\tPCI device ID 0x%x\n", prop.pciDeviceID);
-  //nc += sprintf(buf+nc, "\tPCI domain ID 0x%x\n", prop.pciDomainID); 
+  nc += sprintf(buf+nc, "\tPCI device ID 0x%x\n", prop.pciDeviceID);
   nc += sprintf(buf+nc, "\tMemory: %lu GB\n", prop.totalGlobalMem >> 30);
   nc += sprintf(buf+nc, "\tMultiprocessor count: %d\n", prop.multiProcessorCount);
   nc += sprintf(buf+nc, "\tClock rate: %.3f Ghz\n", ghz); 
@@ -102,9 +115,10 @@ int get_gpu_info_all(char *buf)
     fprintf(stderr, "Could not get default device\n");
     return -1; 
   }
-  cudaDeviceGetAttribute(&value, cudaDevAttrPciBusId, myid);
 
-  nc += sprintf(buf+nc, "\tDefault device: 0x%x\n", value); 
+  char pcibusid[SHORT_STR_SIZE];
+  cudaDeviceGetPCIBusId(pcibusid, sizeof(pcibusid), myid);
+  nc += sprintf(buf+nc, "\tDefault device: %s\n", pcibusid);
   
   for (i=0; i<count; i++) {
     //nc += sprintf(buf+nc, "\t--\n"); 
