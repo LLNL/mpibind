@@ -46,7 +46,7 @@ int get_gpu_affinity(char *buf)
   cudaGetDeviceCount(&count);
   
   int nc=0; 
-  int i, value; 
+  int i; 
   for (i=0; i<count; i++) {
 #if 1
     err = cudaGetDeviceProperties(&prop, i);
@@ -106,7 +106,7 @@ int get_gpu_info(int devid, char *buf)
 int get_gpu_info_all(char *buf)
 {
   cudaError_t err; 
-  int i, myid, count=0, value;
+  int i, myid, count=0;
   int nc=0; 
   
   cudaGetDeviceCount(&count);
