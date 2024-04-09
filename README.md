@@ -42,6 +42,19 @@ $ make
 $ make install
 ```
 
+If building from a release tarball, please specify MPIBIND_VERSION appropriately. For example: 
+
+```
+$ MPIBIND_VERSION=0.15.1 ./bootstrap
+
+$ ./configure --prefix=<install_dir>
+
+$ make
+
+$ make install
+```
+
+
 The resulting library is `<install_dir>/lib/libmpibind` and a simple program using it is `src/main.c`
 
 
