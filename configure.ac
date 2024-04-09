@@ -1,6 +1,6 @@
 ## Prologue
 AC_INIT([mpibind],
-	m4_esyscmd_s([git describe --tags | sed s/^v//]))
+	m4_esyscmd_s([test -n "$MPIBIND_VERSION" && printf $MPIBIND_VERSION || git describe --tags | sed s/^v//]))
 AC_CONFIG_MACRO_DIRS([config])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADERS([config/config.h])
