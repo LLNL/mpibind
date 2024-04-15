@@ -16,8 +16,14 @@
  * mpibind or hwloc issue. 
  * See TOSS-6198. 
  * 
- */ 
+ */
 
+/*
+ * Todo
+ *
+ * Expose a restrict CPU or MEM interface.
+ * Helpful for system noise investigations.
+ */
 
 /* 
  * SPANK errors 
@@ -74,13 +80,14 @@ static int opt_greedy = 1;
 static int opt_verbose = 0;
 static int opt_debug = 0; 
 static int opt_enable = 1;
-/* True if enabled via --mpibind=on */
-static int opt_user_on = 0; 
-/* True if disabled via plugstack.conf or --mpibind=off */ 
-static int opt_disable = 0; 
+
+/* plugstack.conf: if 'default_off' then 1, else 0 */
+static int opt_conf_disabled = 0;
 /* Only set affinity if this job has exclusive access to this node.
-   Set via plugstack.conf */
-static int opt_exclusive_only = 0;
+   Set via plugstack.conf: if 'exclusive_only_off' then 0, else 1 */
+static int opt_exclusive_only = 1;
+/* if '--mpibind=on' then 1, elif '--mpibind=off' then 0, else -1 */
+static int opt_user_specified = -1;
 
 /* mpibind vars */ 
 static mpibind_t *mph = NULL;
@@ -129,6 +136,59 @@ struct spank_option spank_options [] =
  ************************************************/
 
 /*
+ * Determine if mpibind should be on or off.
+ */
+static
+int mpibind_is_on(int exclusive_job)
+{
+  /* User specifying on or off has the highest priority */
+  if (opt_user_specified > -1)
+    return opt_user_specified;
+
+  /* User did not specify to turn it on or off */
+  /* And plugstack config turned it off */
+  else if (opt_conf_disabled)
+    return 0;
+
+  /* At plugstack config, mpibind is on */
+  /* And mpibind is on on all jobs */
+  else if (!opt_exclusive_only)
+    return 1;
+
+  /* Turn on only on exclusive jobs */
+  /* And the job is using the node exclusively */
+  else if (exclusive_job)
+    return 1;
+  else
+    return 0;
+}
+
+
+static
+int get_machine_smt()
+{
+  int i, n, smt=0;
+  hwloc_obj_t obj;
+  hwloc_obj_type_t core_t = mpibind_get_core_type(topo);
+  int ncores = hwloc_get_nbobjs_by_type(topo, core_t);
+
+  for (i=0; i<ncores; i++) {
+    obj = hwloc_get_obj_by_type(topo, core_t, i);
+    n = hwloc_bitmap_weight(obj->cpuset);
+    //printf("%d: arity=%d weight=%d\n", i, obj->arity, n);
+
+    if (n > smt)
+      smt = n;
+  }
+
+  if (opt_debug)
+    fprintf(stderr, "Core: type=%s number=%d smt=%d\n",
+	    hwloc_obj_type_string(core_t), ncores, smt);
+
+  return smt;
+}
+
+/*
  * Return 1 if this is an salloc command. 
  * salloc: job_stepid=0xfffffffa
  * sbatch: job_stepid=0xfffffffb
@@ -155,9 +215,9 @@ int job_is_alloc(spank_t sp)
  * Return 1 if the job has the nodes exclusively (not shared). 
  */ 
 static
-int job_is_exclusive(hwloc_topology_t topo)
+int job_is_exclusive(hwloc_topology_t topo, spank_t sp)
 {
-  int cpus, pus;
+  int cpus;
   
   /* Total number of online CPUs */
   if ((cpus = (int) sysconf(_SC_NPROCESSORS_ONLN)) <= 0) {
@@ -165,16 +225,46 @@ int job_is_exclusive(hwloc_topology_t topo)
     return -1;
   }
 
-  /* Number of allowed PUs */ 
+  /* Number of allowed PUs */
+
+  /* This approach doesn't work when a topology file is provided.
+     In this case, the number of PUs (from the topology file) is the
+     same as the total number of PUs on the machine */
+#if 0
   if ((pus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU)) <= 0) {
     fprintf(stderr, "mpibind: Invalid #PUs=%d\n", pus);
     return 0;
   }
+#endif
 
+  /* Second approach: Use SLURM_CPUS_ON_NODE.
+     (Could also use SLURM_JOB_CPUS_PER_NODE, but its format is
+     CPU_count[(xnumber_of_nodes)][,CPU_count [(xnumber_of_nodes)] ...]).
+     Even though it says "CPUs", the variable refers to cores.
+     But, perhaps, is Slurm-configuration dependent, in which case
+     I would have to make it a spank plugin parameter such as
+     'slurm_cpus_are_cores' or 'slurm_cpus_are_pus' */
+
+  const char var[] = "SLURM_CPUS_ON_NODE";
+  char str[16];
+  int slurm_cpus;
+
+  if (spank_getenv(sp, var, str, sizeof(str)) != ESPANK_SUCCESS) {
+    slurm_error("mpibind: Failed to get %s in env\n", var);
+    return -1;
+  }
+
+  if ((slurm_cpus = atoi(str)) == 0) {
+    slurm_error("mpibind: %s=%s invalid\n", var, str);
+    return -1;
+  }
+
+  int n = slurm_cpus * get_machine_smt();
   if (opt_debug) 
-    fprintf(stderr, "CPUs: total=%d allowed=%d\n", cpus, pus); 
+    fprintf(stderr, "CPUs: %s=%d slurm=%d vs online=%d \n",
+	    var, slurm_cpus, n, cpus);
   
-  return (pus == cpus); 
+  return (n >= cpus);
 }
 
 
@@ -229,20 +319,27 @@ void print_context(char *note)
 static
 void print_user_options()
 {
-  fprintf(stderr, "Options: enable=%d disable=%d user_on=%d excl_only=%d "
-	  "verbose=%d debug=%d gpu=%d smt=%d greedy=%d \n",
-	  opt_enable, opt_disable, opt_user_on, opt_exclusive_only, 
-	  opt_verbose, opt_debug, opt_gpu, opt_smt, opt_greedy); 
+  fprintf(stderr, "Options: enable=%d "
+	  "conf_disabled=%d user_specified=%d excl_only=%d "
+	  "verbose=%d debug=%d "
+	  "gpu=%d smt=%d greedy=%d\n",
+	  opt_enable,
+	  opt_conf_disabled, opt_user_specified, opt_exclusive_only,
+	  opt_verbose, opt_debug,
+	  opt_gpu, opt_smt, opt_greedy);
 }
 
+/*
+ * User optios passed via '--mpibind' on srun command line
+ */
 static
 int parse_option(const char *opt, int remote)
 {  
   if (strcmp(opt, "off") == 0) {
-    opt_disable = 1;
+    opt_user_specified = 0;
   }
   else if (strcmp(opt, "on") == 0) {
-    opt_user_on = 1; 
+    opt_user_specified = 1;
   }
   else if (strncmp(opt, "gpu", 3) == 0) {
     opt_gpu = 1;
@@ -294,9 +391,9 @@ int parse_user_options(int val, const char *arg, int remote)
   
   const char delim[] = ","; 
   
-  /* 'mpibind' with no args, enables the plugin */ 
+  /* '--mpibind' with no args enables the plugin */
   if (arg == NULL) {
-    opt_enable = 1; 
+    opt_user_specified = 1;
     return 0;
   }
   
@@ -328,10 +425,10 @@ int parse_conf_options(int argc, char *argv[], int remote)
   for (i=0; i<argc; i++) {
     //fprintf(stderr, "confopt=%s\n", argv[i]);
     
-    if (strcmp(argv[i], "off") == 0)
-      opt_disable = 1;
-    else if (strcmp(argv[i], "exclusive_only") == 0)
-      opt_exclusive_only = 1;
+    if (strcmp(argv[i], "default_off") == 0)
+      opt_conf_disabled = 1;
+    else if (strcmp(argv[i], "exclusive_only_off") == 0)
+      opt_exclusive_only = 0;
     else { 
       fprintf(stderr, "mpibind: Invalid plugstack.conf argument %s\n",
 	      argv[i]);
@@ -506,30 +603,15 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     if (opt_debug)
       fprintf(stderr, "Disabling mpibind for salloc/sbatch\n"); 
   }
-  
+
 #if 0
   char name[] = "slurm_spank_user_init"; 
   print_context(name);
 #endif
 
-  if (!opt_enable || opt_disable)
+  if (!opt_enable)
     return ESPANK_SUCCESS;
 
-#if 1
-  /* Allocate mpibind's global handle */ 
-  if ( mpibind_init(&mph) != 0 || mph == NULL ) {
-    slurm_error("mpibind_init");
-    return ESPANK_ERROR;
-  }
-  //fprintf(stderr, "%s: mph=%p\n", name, mph);
-  
-  /* Allocate hwloc's topology handle */
-  if ( hwloc_topology_init(&topo) < 0 ) { 
-    slurm_error("hwloc_topology_init");
-    return ESPANK_ERROR;
-  }
-#endif 
-  
   char header[16];  
   uint32_t nodeid = get_nodeid(sp); 
   uint32_t nnodes = get_nnodes(sp);
@@ -541,21 +623,19 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   uint32_t ntasks = get_local_ntasks(sp);
   int nthreads = get_omp_num_threads(sp);
 
-  /* Set mpibind input parameters */ 
-  if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
-       (nthreads > 0 && mpibind_set_nthreads(mph, nthreads) != 0) ||
-       (opt_smt > 0 && mpibind_set_smt(mph, opt_smt) != 0) ||
-       (opt_greedy >= 0 && mpibind_set_greedy(mph, opt_greedy) != 0) ||
-       (opt_gpu >= 0 && mpibind_set_gpu_optim(mph, opt_gpu) != 0) ) {
-    slurm_error("mpibind: Unable to set input parameters");
-    return ESPANK_ERROR; 
-  }
-
   /* 
    * Set the topology
    */
 #if 1
-  /* Use topology file if provided */ 
+  /* Allocate hwloc's topology handle */
+  if ( hwloc_topology_init(&topo) < 0 ) {
+    slurm_error("hwloc_topology_init");
+    return ESPANK_ERROR;
+  }
+
+  /* Use topology file if provided.
+     Some LLNL systems require a topology file to overcome
+     Bug TOSS-6198 */
   char xml[512];
   xml[0] = '\0'; 
   if (spank_getenv(sp, "MPIBIND_TOPOFILE", xml, sizeof(xml))
@@ -590,12 +670,40 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 
   if (hwloc_topology_is_thissystem(topo) == 0)
     slurm_error("mpibind: Binding will not be enforced");
-  
-  mpibind_set_topology(mph, topo);
 #endif 
 
   /* Topology needs to be loaded already */ 
-  int exclusive = job_is_exclusive(topo); 
+  int exclusive = job_is_exclusive(topo, sp);
+
+  /* Determine if mpibind should be on or off */
+  if ( !(opt_enable = mpibind_is_on(exclusive)) ) {
+    if (opt_debug)
+      fprintf(stderr, "mpibind is not enabled\n");
+
+    hwloc_topology_destroy(topo);
+
+    return ESPANK_SUCCESS;
+  }
+
+#if 1
+  /* Allocate mpibind's global handle */
+  if ( mpibind_init(&mph) != 0 || mph == NULL ) {
+    slurm_error("mpibind_init");
+    return ESPANK_ERROR;
+  }
+  //fprintf(stderr, "%s: mph=%p\n", name, mph);
+
+  /* Set mpibind input parameters */
+  if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
+       (nthreads > 0 && mpibind_set_nthreads(mph, nthreads) != 0) ||
+       (opt_smt > 0 && mpibind_set_smt(mph, opt_smt) != 0) ||
+       (opt_greedy >= 0 && mpibind_set_greedy(mph, opt_greedy) != 0) ||
+       (opt_gpu >= 0 && mpibind_set_gpu_optim(mph, opt_gpu) != 0) ) {
+    slurm_error("mpibind: Unable to set input parameters");
+    return ESPANK_ERROR;
+  }
+
+  mpibind_set_topology(mph, topo);
   
   if (opt_debug)
     fprintf(stderr, "%s: ntasks=%d nthreads=%d greedy=%d gpu=%d "
@@ -608,21 +716,9 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 	    mpibind_get_topology(mph),
 	    exclusive);
 
-  if (!exclusive && opt_exclusive_only && !opt_user_on) {
-    if (opt_debug)
-      fprintf(stderr, "%s: Job doesn't have exclusive access to node\n",
-	      header);
-    
-    opt_enable = 0;
-    clean_up(mph, topo);
-    
-    return ESPANK_SUCCESS;
-  }
-  
   /*
    * Get the mpibind mapping!
    */
-#if 1
   if (mpibind(mph) != 0) {
     slurm_error("mpibind()");
     return ESPANK_ERROR;
@@ -667,7 +763,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
   print_context(name);
 #endif 
 
-  if (!opt_enable || opt_disable)
+  if (!opt_enable)
     return ESPANK_SUCCESS; 
   
   char header[16];  
@@ -702,9 +798,6 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
 
 #if 1
   clean_up(mph, topo); 
-  /* Clean up */ 
-  /* mpibind_finalize(mph); */
-  /* hwloc_topology_destroy(topo); */
 #endif
   
   return ESPANK_SUCCESS;  

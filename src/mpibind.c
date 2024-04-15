@@ -83,7 +83,12 @@ int mpibind_init(mpibind_t **handle)
   hdl->env_vars = NULL; 
 
   hdl->ndevs = 0; 
-  hdl->devs = NULL; 
+  hdl->devs = NULL;
+
+  /* Initialize output parameters */
+  hdl->nthreads = NULL;
+  hdl->cpus = NULL;
+  hdl->gpus = NULL;
   hdl->gpus_usr = NULL; 
   hdl->cpus_usr = NULL;
 
@@ -134,7 +139,7 @@ int mpibind_finalize(mpibind_t *hdl)
   /* Release I/O devices structure */ 
   for (i=0; i<hdl->ndevs; i++) 
     free(hdl->devs[i]);
-  free(hdl->devs);   
+  free(hdl->devs);
 
   /* Release env variables space */ 
   for (v=0; v<hdl->nvars; v++) {
