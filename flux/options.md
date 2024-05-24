@@ -22,7 +22,7 @@ If mpibind is enabled by default, turn it off with `-o mpibind=off`
 
 ### Enable verbosity
 
-To display the mapping of tasks to CPUs, use `-o mpibind=verbose`
+To display the mapping of tasks to CPUs and GPUs, use `-o mpibind=verbose`
 
 ### Specify an SMT level
 
@@ -75,17 +75,3 @@ To not set OMP_PROC_BIND and OMP_PLACES, use `-o mpibind=omp_proc_bind` and `-o 
 To not set GPU affinity, use `-o mpibind=visible_devices`. This setting applies to AMD and NVIDIA GPUs.
 
 By default OpenMP affinity and GPU affinity are enabled.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
