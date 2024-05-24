@@ -20,67 +20,67 @@ plugin will not be built.
 
 ### Installing the plugin in Flux 
 
-The plugin is installed here:  
+The `mpibind_flux.so` plugin is installed here:  
 ```
 <mpibind-prefix>/lib/mpibind/
-# which can be obtained with the command
+
+# It can be obtained with the command
 pkg-config --variable=plugindir mpibind
 ```
 
-To install the plugin into your Flux installation, copy or link
-`mpibind_flux.so` to the Flux shell plugins directory:
-```
-<flux-prefix>/lib/flux/shell/plugins/
-# which can be obtained with the command
-pkg-config --variable=fluxshellpluginpath flux-core
-```
+There are many ways to load a plugin into Flux. Here, I outline three.
+1. Extend the Flux plugin search path.
+   ```
+   export FLUX_SHELL_RC_PATH=<mpibind-prefix>/share/mpibind
+   ```
+2. Add to the Flux shell plugins directory.
+   ```
+   # Copy or link mpibind_flux.so to the Flux shell plugins directory
+   cp mpibind_flux.so <flux-prefix>/lib/flux/shell/plugins/
 
-If you do not have write access to this directory, see **Manual
-loading** below. 
+   # The plugins directory can be obtained as follows
+   pkg-config --variable=fluxshellpluginpath flux-core
+   ```
+   This method assumes write access to the Flux shell plugins directory, i.e., one owns the Flux installation. 
+
+3. Load the plugin explicitly at runtime.
+
+   One can create a job shell `initrc` file (e.g., mpibind-flux.lua) that will load the mpibind plugin:
+   ```
+   -- mpibind-flux.lua
+
+   plugin.load { file="<mpibind-build-dir>/flux/.libs/mpibind_flux.so" }
+   ```
+   Load the plugin explicitly every time a program is run, e.g., 
+   ```
+   flux run -n2 -o initrc=mpibind-flux.lua hostname
+   ```
+   Make sure to specify the path of `mpibind-flux.lua` and, within the lua
+script, make sure the location of `mpibind_flux.so` is accurate. 
+
+   To verify the mpibind flux plugin was loaded successfully, one can use the Flux verbose option:
+   ```
+   flux run -n2 -o initrc=mpibind-flux.lua -o verbose=1 hostname
+   ```
 
 ### Usage 
 
-Using the mpibind plugin should be transparent to the user (the
-plugin is automatically loaded by Flux from its shell plugins directory):
+Using the mpibind plugin should be transparent to the user, i.e., no additional parameters to `flux run` should be needed to execute the plugin. To verify that indeed the plugin has been loaded one can run the following: 
 
 ```
-flux mini run -n2 hostname
-```
-
-To verify that indeed the plugin has been loaded:
-
-```
-flux mini run -n2 -o mpibind=verbose:1 hostname
+flux run -n2 -o mpibind=verbose:1 hostname
 ```
 
 To disable the plugin and enable Flux's cpu-affinity module: 
 
 ```
-flux mini run -n2 -o mpibind=off -o cpu-affinity=on hostname
+flux run -n2 -o mpibind=off -o cpu-affinity=on hostname
 ```
 
-### Manual loading
+The options of mpibind are documented [here](options.md). A [tutorial](../tutorials/flux/README.md) is also available.  
 
-If the plugin is not installed in Flux's shell plugins directory,
-one can load the plugin explicitly (see `mpibind_flux.lua` in this
-directory).  
 
-```
-flux mini run -n2 -o initrc=mpibind_flux.lua hostname
-```
-
-If executing the above command in a different directory, make sure
-to specify the full path of `mpibind_flux.lua` and, within the lua
-script, make sure the location of `mpibind_flux.so` is accurate. 
-
-Finally, to verify that the mpibind flux plugin was loaded
-successfully, one can use the Flux verbose option:
-
-```
-flux mini run -n2 -o initrc=mpibind_flux.lua -o verbose=1 hostname
-```
-
-## Other relevant details about Flux
+### Other details about Flux
 
 You need at least `v0.17.0` of `flux-core` built with `hwloc v2.1` or
 above. 
@@ -157,7 +157,7 @@ $ flux mini run -o verbose -n2 -c2 /bin/true
 ```
 --->
 
-
+<!--
 ### Flux shell plugins 
 
 One can create a job shell `initrc` file that will load the mpibind plugin from
@@ -174,4 +174,4 @@ mpibind$ flux start -s 4
 
 mpibind$ flux mini run -o verbose -o userrc=mpibind.lua -n2 -c2 /bin/true
 ```
-
+-->
