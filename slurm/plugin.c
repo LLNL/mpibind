@@ -582,7 +582,7 @@ int slurm_spank_exit(spank_t sp, int ac, char *argv[])
 int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 {
   if (!spank_remote(sp))
-    return ESPANK_SUCCESS; 
+    return ESPANK_SUCCESS;
 
   /* I could do this in slurm_spank_init, but can't 
      print to the console there if there's an error */ 
@@ -622,6 +622,23 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   
   uint32_t ntasks = get_local_ntasks(sp);
   int nthreads = get_omp_num_threads(sp);
+
+  /*
+   * Read in MPIBIND environment variables
+   */
+  char restr_str[64];
+  int restr_type = -1;
+  if (spank_getenv(sp, "MPIBIND_RESTRICT_TYPE", restr_str, sizeof(restr_str))
+      == ESPANK_SUCCESS) {
+    if (strcmp(restr_str, "cpu") == 0)
+      restr_type = MPIBIND_RESTRICT_CPU;
+    else if (strcmp(restr_str, "mem") == 0)
+      restr_type = MPIBIND_RESTRICT_MEM;
+  }
+
+  if (spank_getenv(sp, "MPIBIND_RESTRICT", restr_str, sizeof(restr_str))
+      != ESPANK_SUCCESS)
+    restr_str[0] = '\0';
 
   /* 
    * Set the topology
@@ -698,7 +715,9 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
        (nthreads > 0 && mpibind_set_nthreads(mph, nthreads) != 0) ||
        (opt_smt > 0 && mpibind_set_smt(mph, opt_smt) != 0) ||
        (opt_greedy >= 0 && mpibind_set_greedy(mph, opt_greedy) != 0) ||
-       (opt_gpu >= 0 && mpibind_set_gpu_optim(mph, opt_gpu) != 0) ) {
+       (opt_gpu >= 0 && mpibind_set_gpu_optim(mph, opt_gpu) != 0) ||
+       (restr_type >= 0 && mpibind_set_restrict_type(mph, restr_type) != 0) ||
+       (restr_str[0] && mpibind_set_restrict_ids(mph, restr_str) != 0) ) {
     slurm_error("mpibind: Unable to set input parameters");
     return ESPANK_ERROR;
   }
@@ -707,14 +726,16 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   
   if (opt_debug)
     fprintf(stderr, "%s: ntasks=%d nthreads=%d greedy=%d gpu=%d "
-	    "topo=%p, exclusive=%d\n",
+	    "topo=%p exclusive=%d restr_type=%d restr_ids=%s\n",
 	    header,
 	    mpibind_get_ntasks(mph),
-	    nthreads, 
+	    nthreads,
 	    mpibind_get_greedy(mph),
 	    mpibind_get_gpu_optim(mph),
 	    mpibind_get_topology(mph),
-	    exclusive);
+	    exclusive,
+	    mpibind_get_restrict_type(mph),
+	    mpibind_get_restrict_ids(mph));
 
   /*
    * Get the mpibind mapping!
@@ -729,15 +750,20 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     slurm_error("mpibind_set_env_vars");
     return ESPANK_ERROR;
   }
-  
+
+#define PRINT_MAP_BUF_SIZE (1024*4)
   if (opt_verbose) {
-    char buf[1024];
+    char buf[PRINT_MAP_BUF_SIZE];
     int ngpus = mpibind_get_num_gpus(mph);
+
     /* Use VISIBLE_DEVICES IDs to enumerate the GPUs
        since users are used to this enumeration
        (as opposed to mpibind's enumeration) */
     mpibind_set_gpu_ids(mph, MPIBIND_ID_VISDEVS);
-    mpibind_mapping_snprint(buf, 1024, mph);
+
+    // This call had an issue with buffer overrun. Now fixed!
+    mpibind_mapping_snprint(buf, PRINT_MAP_BUF_SIZE, mph);
+
     if (nodeid == 0 || opt_verbose > 1) { 
       fprintf(stderr, "mpibind: %d GPUs on this node\n", ngpus);
       fprintf(stderr, "%s", buf);
@@ -756,7 +782,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
 {  
   if (!spank_remote(sp))
-    return ESPANK_SUCCESS; 
+    return ESPANK_SUCCESS;
 
 #if 0
   char name[] = "slurm_spank_task_init";
