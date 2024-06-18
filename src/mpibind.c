@@ -823,24 +823,36 @@ int mpibind_mapping_ptask_snprint(char *buf, size_t size,
   int j, nc=0; 
   /* The number of threads */ 
   nc += snprintf(buf+nc, size-nc, "mpibind: task %2d nths %2d gpus ",
-                 taskid, handle->nthreads[taskid]); 
+                 taskid, handle->nthreads[taskid]);
+#if DEBUG >= 1
+  fprintf(OUT_STREAM, "mapping_ptask: task=%d size=%lu nc=%d\n",
+	  taskid, size, nc);
+#endif
 
   /* The GPUs */ 
-  if (handle->gpus_usr == NULL)
+  if (handle->gpus_usr == NULL) {
     /* The user did not specify the type of IDs to use:
-       Use the mpibind IDs */ 
+       Use the mpibind IDs */
+    if (size <= nc)
+      return nc;
     nc += hwloc_bitmap_list_snprintf(buf+nc, size-nc, handle->gpus[taskid]);
-  else {
+  } else {
     /* Use the user-specified IDs (stored in gpus_usr) */ 
-    for (j=0; j<hwloc_bitmap_weight(handle->gpus[taskid]); j++) 
-      nc += snprintf(buf+nc, size-nc, "%s,", handle->gpus_usr[taskid][j]); 
+    for (j=0; j<hwloc_bitmap_weight(handle->gpus[taskid]); j++) {
+      if (size <= nc)
+	return nc;
+      nc += snprintf(buf+nc, size-nc, "%s,", handle->gpus_usr[taskid][j]);
+    }
     if (buf[nc-1] == ',')
       nc--; 
   }
 
-  /* The CPUs */ 
-  nc += snprintf(buf+nc, size-nc, " cpus "); 
-  nc += hwloc_bitmap_list_snprintf(buf+nc, size-nc, handle->cpus[taskid]);
+  /* The CPUs */
+  if (size <= nc)
+    return nc;
+  nc += snprintf(buf+nc, size-nc, " cpus ");
+  if (size > nc)
+    nc += hwloc_bitmap_list_snprintf(buf+nc, size-nc, handle->cpus[taskid]);
 
   return nc; 
 }
@@ -858,17 +870,20 @@ int mpibind_mapping_snprint(char *buf, size_t size,
   int i, nc=0;
   
   for (i=0; i<handle->ntasks; i++) {
-    if (size > nc)
-      nc += mpibind_mapping_ptask_snprint(buf+nc, size-nc, handle, i);
-    if (size > nc)
-      nc += snprintf(buf+nc, size-nc, "\n"); 
+    if (size <= nc)
+      return nc;
+    nc += mpibind_mapping_ptask_snprint(buf+nc, size-nc, handle, i);
+
+    if (size <= nc)
+      return nc;
+    nc += snprintf(buf+nc, size-nc, "\n");
+
+    // snprintf writes the terminating null byte '\0'
+    // A return value of size or more means the output was truncated
+    // Debug:
+    // fprintf(stderr, "mapping: task=%d size=%lu nc=%d\n", i, size, nc);
   }
   
-  // snprintf writes the terminating null byte '\0'
-  //   A return value of size or more means the output was truncated
-  // Debug: 
-  // printf("size=%lu nc=%d\n", size, nc); 
-
   return nc; 
 } 
 

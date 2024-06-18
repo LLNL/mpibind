@@ -15,6 +15,7 @@
 
 #define VERBOSE 0
 #define DEBUG 0
+#define OUT_STREAM stderr
 
 #define ERR_MSG(whatstr)						\
   do {									\
