@@ -1,15 +1,14 @@
 
-### The mpibind Slurm Plugin
+## The mpibind Slurm Plugin
 
-The `mpibind_slurm.so` plugin is a SPANK plugin that enables using
-the mpibind algorithm in Slurm to map parallel codes to the
-hardware.
+The `mpibind_slurm.so` library is a SPANK plugin that enables using
+mpibind in Slurm to map parallel codes to the hardware.
 
-#### Requirements
+### Requirements
 
-The file `slurm/spank.h` is necessary to build the plugin. This file is part of the Slurm installation. 
+The file `slurm/spank.h` is necessary to build the plugin. This file is distributed with Slurm.
 
-#### Building and installing 
+### Building and installing 
 
 The building system looks for a Slurm installation using `pkg-config` and, if
 found, the plugin is built and installed here:
@@ -19,13 +18,28 @@ found, the plugin is built and installed here:
 pkg-config --variable=plugindir mpibind
 ```
 
-To install the plugin into your Slurm installation add the following
+To install the plugin into your Slurm installation, add the following
 line to the `plugstack.conf` file:
 ```
 required <mpibind-prefix>/lib/mpibind/mpibind_slurm.so
 ```
+The plugin configuration options are below. Separate multiple options with commas. 
+```
+# Disable the plugin by default
+# To use mpibind add --mpibind=on to srun 
+default_off
 
-#### Usage 
+# By default, mpibind is enabled only on full-node allocations
+# This option enables mpibind on partial-node allocations as well
+exclusive_only_off
+```
+For example:
+```
+required <mpibind-prefix>/lib/mpibind/mpibind_slurm.so default_off
+```
+### Usage 
+
+mpibind can be used with the `srun` command as follows. 
 
 ```
 Automatically map tasks/threads/GPU kernels to heterogeneous hardware
@@ -80,5 +94,28 @@ mpibind: task  6 nths 14 gpus  cpus 84-97
 mpibind: task  7 nths 14 gpus  cpus 98-111
 ```
 
+### Environment variables
 
+To restrict mpibind to a subset of the node resources, one can use the following environment variables. 
+
+```
+# The type of resource to restrict mpibind to 
+MPIBIND_RESTRICT_TYPE=<cpu|mem>
+
+# Restrict mpibind to a list of CPUs or NUMA domains
+MPIBIND_RESTRICT=<list-of-integers>
+```
+
+For example:
+
+```
+# Restrict mpibind to the third and forth NUMA domains
+$ export MPIBIND_RESTRICT_TYPE=mem
+$ export MPIBIND_RESTRICT=2,3
+$ srun --mpibind=on -N1 -n4 ./mpi
+mutt124    Task   0/  4 running on 7 CPUs: 28-34
+mutt124    Task   1/  4 running on 7 CPUs: 35-41
+mutt124    Task   2/  4 running on 7 CPUs: 42-48
+mutt124    Task   3/  4 running on 7 CPUs: 49-55
+```
 
