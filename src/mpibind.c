@@ -48,6 +48,7 @@ int device_key_snprint(char *buf, size_t size,
       struct device *dev, int id_type);
 int get_gpu_vendor(struct device **devs, int ndevs);
 const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu);
+void terminate_str(char *buf, int size);
 
 
 /*********************************************
@@ -822,14 +823,10 @@ int mpibind_mapping_ptask_snprint(char *buf, size_t size,
 
   int j, nc=0; 
   /* The number of threads */ 
-  nc += snprintf(buf+nc, size-nc, "mpibind: task %2d nths %2d gpus ",
+  nc += snprintf(buf+nc, size-nc, "mpibind: task %3d nths %2d gpus ",
                  taskid, handle->nthreads[taskid]);
-#if DEBUG >= 1
-  fprintf(OUT_STREAM, "mapping_ptask: task=%d size=%lu nc=%d\n",
-	  taskid, size, nc);
-#endif
 
-  /* The GPUs */ 
+  /* The GPUs */
   if (handle->gpus_usr == NULL) {
     /* The user did not specify the type of IDs to use:
        Use the mpibind IDs */
@@ -854,6 +851,11 @@ int mpibind_mapping_ptask_snprint(char *buf, size_t size,
   if (size > nc)
     nc += hwloc_bitmap_list_snprintf(buf+nc, size-nc, handle->cpus[taskid]);
 
+#if DEBUG >= 1
+  fprintf(OUT_STREAM, "mapping_ptask: task=%d size=%lu nc=%d\n",
+	  taskid, size, nc);
+#endif
+
   return nc; 
 }
 
@@ -870,12 +872,16 @@ int mpibind_mapping_snprint(char *buf, size_t size,
   int i, nc=0;
   
   for (i=0; i<handle->ntasks; i++) {
-    if (size <= nc)
+    if (size <= nc) {
+      terminate_str(buf, size);
       return nc;
+    }
     nc += mpibind_mapping_ptask_snprint(buf+nc, size-nc, handle, i);
 
-    if (size <= nc)
+    if (size <= nc) {
+      terminate_str(buf, size);
       return nc;
+    }
     nc += snprintf(buf+nc, size-nc, "\n");
 
     // snprintf writes the terminating null byte '\0'
@@ -883,9 +889,9 @@ int mpibind_mapping_snprint(char *buf, size_t size,
     // Debug:
     // fprintf(stderr, "mapping: task=%d size=%lu nc=%d\n", i, size, nc);
   }
-  
+
   return nc; 
-} 
+}
 
 
 /*

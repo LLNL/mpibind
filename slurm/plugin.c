@@ -65,6 +65,9 @@
 SPANK_PLUGIN(mpibind, 2); 
 
 
+#define PRINT_MAP_BUF_SIZE (1024*5)
+
+
 /************************************************
  * Global variables 
  ************************************************/
@@ -751,7 +754,6 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     return ESPANK_ERROR;
   }
 
-#define PRINT_MAP_BUF_SIZE (1024*4)
   if (opt_verbose) {
     char buf[PRINT_MAP_BUF_SIZE];
     int ngpus = mpibind_get_num_gpus(mph);

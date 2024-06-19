@@ -974,6 +974,31 @@ const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu)
 }
 
 
+/*
+ * Input:
+ *   buf: A set of lines. The last line was partially written.
+ *   size: The number of chars in the buffer
+ *
+ * Either
+ *   Remove the partial line or
+ *   Overwrite it with [...] if there's space
+ */
+void terminate_str(char *buf, int size)
+{
+  /* Look for the beginning of the last line */
+  int ch = '\n';
+  char *ptr = strrchr(buf, ch) + 1;
+  int nchars = buf+size - ptr;
+#if DEBUG >=1
+  fprintf(OUT_STREAM, "terminate_str: nchars=%d last='%s'\n", nchars, ptr);
+#endif
+  if (nchars > 6)
+    snprintf(ptr, nchars, "[...]\n");
+  else
+    ptr[0] = '\0';
+}
+
+
 /******************************************************
  * Previous incarnations 
  * Eventually I should move these functions out,
