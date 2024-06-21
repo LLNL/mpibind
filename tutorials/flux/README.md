@@ -8,11 +8,11 @@ use compatibility flags, e.g., march...)
 **Edgar A. Leon** and **Jane E. Herriman**<br>
 Lawrence Livermore National Laboratory
 
-<!-- Livermore Computing<br> 19 October 2022 -->
-<!-- Livermore Computing User Forum<br>13 December 2022 -->
-<!-- El Capitan Center of Excellence<br> -->
+## Related tutorials
 
-*Updated March 27, 2023*
+[Flux affinity on the AMD MI300A architecture](../cug24/module4.md)<br>
+While this tutorial focuses specifically on the MI300A architecture, it does not include mpibind, which is treated below. 
+
 
 ## Table of contents
 
