@@ -718,7 +718,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     if (flux_shell_get_hwloc_xml(shell, &xml) < 0)
       return shell_log_errno("failed to get hwloc XML from job shell");
 
-    shell_debug ("loaded topology from job shell");
+    shell_debug("Loaded topology from job shell");
     if (hwloc_topology_set_xmlbuffer(topo, xml, strlen (xml)) < 0)
       return shell_log_errno ("hwloc_topology_set_xmlbuffer");
 
@@ -740,7 +740,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
         && xml[0] != '\0') {
       if (hwloc_topology_set_xml(topo, xml) < 0)
         return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
-        shell_debug ("loaded topology from %s", xml);
+        shell_debug("Loaded topology from %s", xml);
     }
   }
 
@@ -784,15 +784,52 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     return -1;
   }
 
-  shell_debug("flux given cores: %s\n", cores);
-  shell_debug("\tderived pus: %s\n", pus);
-  shell_debug("flux given gpus: %s", gpus);
-  shell_debug("total #cores: %d",
+  shell_debug("Flux given cores: %s\n", cores);
+  shell_debug("\tDerived pus: %s\n", pus);
+  shell_debug("Flux given gpus: <%s>", gpus);
+  shell_debug("Total #cores: %d",
 	      hwloc_get_nbobjs_by_depth(topo,
 					mpibind_get_core_depth(topo)));
-  shell_debug("total #pus: %d",
+  shell_debug("Total #pus: %d",
 	      hwloc_get_nbobjs_by_type(topo,
 				       HWLOC_OBJ_PU));
+
+  /*
+   * One may restrict the PUs/NUMAs where the application runs.
+   * Among others, useful for thread or core specialization.
+   */
+
+  /* Get the restrict CPU or NUMA IDs */
+  const char *str2 = flux_shell_getenv(shell, "MPIBIND_RESTRICT");
+  if (str2 != NULL) {
+    /* Need non-const pointer */
+    char *restr_str = strdup(str2);
+    hwloc_bitmap_t genset = hwloc_bitmap_alloc();
+    hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+
+    /* Calculate the restrict CPU set */
+    const char *str1 = flux_shell_getenv(shell, "MPIBIND_RESTRICT_TYPE");
+    if (str1 != NULL && strcmp(str1, "mem") == 0) {
+      hwloc_bitmap_list_sscanf(genset, restr_str);
+      hwloc_cpuset_from_nodeset(topo, cpuset, genset);
+    } else {
+      hwloc_bitmap_list_sscanf(cpuset, restr_str);
+    }
+    char str3[LONG_STR_SIZE];
+    hwloc_bitmap_list_snprintf(str3, sizeof(str3), cpuset);
+    shell_debug("Restrict pus requested: <%s>", str3);
+
+    hwloc_bitmap_list_sscanf(genset, pus);
+    hwloc_bitmap_and(genset, genset, cpuset);
+
+    if ( !hwloc_bitmap_iszero(genset) )
+      hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, genset);
+    else
+      shell_debug("Restrict yields empty set thus ignoring");
+
+    hwloc_bitmap_free(genset);
+    hwloc_bitmap_free(cpuset);
+  }
 
   if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
        mpibind_set_topology(mph, topo) != 0 ||
