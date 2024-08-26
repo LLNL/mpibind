@@ -237,7 +237,7 @@ void fill_in_buckets_bitmap(hwloc_bitmap_t elems,
   char str[LONG_STR_SIZE];
   for (i=0; i<nbuckets; i++) { 
     hwloc_bitmap_list_snprintf(str, sizeof(str), buckets[i]);
-    printf("bucket[%2d]: %s\n", i, str); 
+    PRINT("bucket[%2d]: %s\n", i, str);
   }
 #endif
 }
@@ -284,7 +284,7 @@ void distrib_and_assign_pus(hwloc_bitmap_t *puset, int nobjs,
   char str[100];
   for (i=0; i<nobjs; i++) {
     hwloc_bitmap_list_snprintf(str, sizeof(str), puset_rev[i]);
-    printf("puset_rev[%d]: %s\n", i, str);
+    PRINT("puset_rev[%d]: %s\n", i, str);
   }  
 #endif
 
@@ -307,7 +307,7 @@ void distrib_and_assign_pus(hwloc_bitmap_t *puset, int nobjs,
 #if VERBOSE >= 2
     for (i=0; i<ntasks; i++) {
       hwloc_bitmap_list_snprintf(str, sizeof(str), cpus[i]);
-      printf("cpus[%d]: %s\n", i, str);
+      PRINT("cpus[%d]: %s\n", i, str);
     }
 #endif 
   } else {
@@ -393,7 +393,7 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
   it_smt = (usr_smt > 1 && usr_smt < hw_smt) ? usr_smt : 0; 
 
 #if VERBOSE >= 4
-  printf("hw_smt=%d usr_smt=%d, it_smt=%d\n", hw_smt, usr_smt, it_smt);
+  PRINT("hw_smt=%d usr_smt=%d, it_smt=%d\n", hw_smt, usr_smt, it_smt);
 #endif 
 
   core_depth = mpibind_get_core_depth(topo);
@@ -412,7 +412,7 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
     *nthreads_ptr = (nobjs >= ntasks) ? nobjs/ntasks : 1;
     
 #if VERBOSE >= 4
-    printf("num_threads/task=%d nobjs=%d\n", *nthreads_ptr, nobjs);
+    PRINT("num_threads/task=%d nobjs=%d\n", *nthreads_ptr, nobjs);
     print_obj(root, 0);
 #endif 
   }
@@ -467,8 +467,8 @@ void cpu_match(hwloc_topology_t topo, hwloc_obj_t root, int ntasks,
 
       /* Verbose */
 #if VERBOSE >= 1
-      printf("Match: %s-%d depth %d nobjs %d npus %d nwks %d\n",
-	     str, pus_per_obj, depth, nobjs, nobjs*pus_per_obj, nwks);
+      PRINT("Match: %s-%dPUs depth %d nobjs %d npus %d nwks %d\n",
+	    str, pus_per_obj, depth, nobjs, nobjs*pus_per_obj, nwks);
 #endif
       
       /* Clean up */ 
@@ -505,7 +505,7 @@ void gpu_match(hwloc_topology_t topo,
   gpus = hwloc_bitmap_alloc();
   num_gpus = get_gpus(topo, devs, ndevs, root, gpus);
 #if VERBOSE >=2
-  printf("Num GPUs for this NUMA domain: %d\n", num_gpus); 
+  PRINT("Num GPUs for this NUMA domain: %d\n", num_gpus);
 #endif
   
   /* Distribute GPUs among tasks */
@@ -554,7 +554,7 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
 #if VERBOSE >=2
     char str[LONG_STR_SIZE]; 
     hwloc_bitmap_list_snprintf(str, sizeof(str), io_numa_os_ids);
-    printf("%d NUMA domains (for GPUs): %s\n", num_numas, str);
+    PRINT("%d NUMA domains (for GPUs): %s\n", num_numas, str);
 #endif
   } else 
     num_numas = hwloc_get_nbobjs_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE);
@@ -679,7 +679,7 @@ int distrib_greedy(hwloc_topology_t topo,
 #if VERBOSE >= 2
     hwloc_bitmap_list_snprintf(str1, sizeof(str1), obj->parent->cpuset);
     hwloc_bitmap_list_snprintf(str2, sizeof(str2), gpus); 
-    printf("task %d numa %d gpus %s cpus %s\n", task, i, str2, str1);
+    PRINT("task %d numa %d gpus %s cpus %s\n", task, i, str2, str1);
     print_obj(obj->parent, 1);
 #endif
     
@@ -1329,7 +1329,7 @@ int get_device_id(hwloc_obj_t obj, int *vendor)
   if (vendor && device_idx >= 0) {
     str = hwloc_obj_get_info_by_name(obj, "GPUVendor");
 #if VERBOSE >=3
-    printf("GPUVendor: %s\n", str); 
+    PRINT("GPUVendor: %s\n", str);
 #endif
     if ( strncmp(str, nv_str, sizeof(nv_str)-1) == 0 )
       *vendor = MPIBIND_GPU_NVIDIA;

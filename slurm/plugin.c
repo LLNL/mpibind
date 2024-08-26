@@ -18,13 +18,6 @@
  * 
  */
 
-/*
- * Todo
- *
- * Expose a restrict CPU or MEM interface.
- * Helpful for system noise investigations.
- */
-
 /* 
  * SPANK errors 
  *
@@ -42,22 +35,6 @@
  *
  */ 
 
-/* 
- * Slurm items: 
- * 
- * S_TASK_ID: Local task id (int *)                       
- * S_JOB_LOCAL_TASK_COUNT: Number of local tasks (uint32_t *)     
- * S_JOB_NNODES: Total number of nodes in job (uint32_t *)
- * S_JOB_NODEID: Relative id of this node (uint32_t *) 
- * S_JOB_STEPID: Slurm job step id (uint32_t *) 
- *
- * S_JOB_ALLOC_CORES: Job allocated cores in list format (char **) 
- * S_STEP_ALLOC_CORES: Step alloc'd cores in list format  (char **)
- * S_JOB_NCPUS: Number of CPUs used by this job (uint16_t *)
- * S_STEP_CPUS_PER_TASK: CPUs allocated per task (=1 if --overcommit
- *                       option is used, uint32_t *)
- */ 
-
 
 /* 
  * Spank plugin name and version 
@@ -65,7 +42,26 @@
 SPANK_PLUGIN(mpibind, 2); 
 
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
+#define PRINT(...) fprintf(stderr, __VA_ARGS__)
+#define PRINT_DEBUG(...) if (opt_debug) fprintf(stderr, __VA_ARGS__)
+
+#define LONG_STR_SIZE 2048
 #define PRINT_MAP_BUF_SIZE (1024*5)
+
+/*
+ * S_ALLOC_CORES can be one of:
+ * (1) S_JOB_ALLOC_CORES
+ *     mpibind will use all the cores allocated to the job,
+ *     even when the user restricts the program to run
+ *     on a subset of cores, e.g., with --cpus-per-task.
+ * (2) S_STEP_ALLOC_CORES
+ *     mpibind will use only those cores allocated to the
+ *     job step even when the job has more cores available to it.
+ */
+#define S_ALLOC_CORES  S_JOB_ALLOC_CORES
+//#define S_ALLOC_CORES  S_STEP_ALLOC_CORES
 
 
 /************************************************
@@ -139,137 +135,122 @@ struct spank_option spank_options [] =
  ************************************************/
 
 /*
- * Determine if mpibind should be on or off.
+ * Calculate the number of ints in a given range
+ * Example:
+ *   Input range: 0-10,18
+ *   Output: 12
  */
-static
-int mpibind_is_on(int exclusive_job)
+int nints_in_range(char *arg)
 {
-  /* User specifying on or off has the highest priority */
-  if (opt_user_specified > -1)
-    return opt_user_specified;
+  const char delim[] = ",";
+  /* Don't overwrite the input string */
+  char *str = strdup(arg);
 
-  /* User did not specify to turn it on or off */
-  /* And plugstack config turned it off */
-  else if (opt_conf_disabled)
-    return 0;
+  /* First token */
+  char *token = strtok(str, delim);
 
-  /* At plugstack config, mpibind is on */
-  /* And mpibind is on on all jobs */
-  else if (!opt_exclusive_only)
-    return 1;
+  int num=0, rc, begin, end;
+  while (token != NULL) {
+    rc = sscanf(token, "%d-%d", &begin, &end);
+    //fprintf(stderr, "token=%s rc=%d begin=%d end=%d\n",
+    //	    token, rc, begin, end);
+    if (rc == 2 && end >= begin)
+      num += end - begin + 1;
+    else if (rc == 1)
+      num++;
+    else
+      PRINT("Could not parse range %s\n", token);
 
-  /* Turn on only on exclusive jobs */
-  /* And the job is using the node exclusively */
-  else if (exclusive_job)
-    return 1;
-  else
-    return 0;
-}
-
-
-static
-int get_machine_smt()
-{
-  int i, n, smt=0;
-  hwloc_obj_t obj;
-  hwloc_obj_type_t core_t = mpibind_get_core_type(topo);
-  int ncores = hwloc_get_nbobjs_by_type(topo, core_t);
-
-  for (i=0; i<ncores; i++) {
-    obj = hwloc_get_obj_by_type(topo, core_t, i);
-    n = hwloc_bitmap_weight(obj->cpuset);
-    //printf("%d: arity=%d weight=%d\n", i, obj->arity, n);
-
-    if (n > smt)
-      smt = n;
+    token = strtok(NULL, delim);
   }
 
-  if (opt_debug)
-    fprintf(stderr, "Core: type=%s number=%d smt=%d\n",
-	    hwloc_obj_type_string(core_t), ncores, smt);
-
-  return smt;
+  PRINT_DEBUG("nints_in_range: %s -> %d\n", arg, num);
+  
+  free(str);
+  
+  return num;
 }
 
 /*
- * Return 1 if this is an salloc command. 
- * salloc: job_stepid=0xfffffffa
- * sbatch: job_stepid=0xfffffffb
- */
-static
-int job_is_alloc(spank_t sp)
-{
-  uint32_t stepid;
-  
-  if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
-    slurm_error ("mpibind: Failed to get S_JOB_STEPID");
-    return -1;
-  }
-  
-  if (stepid >= 0xfffffffa) {
-    //fprintf(stderr, "mpibind: stepid is 0x%x\n", stepid); 
-    return 1;
-  }
-
-  return 0; 
-}
-
-/*
- * Return 1 if the job has the nodes exclusively (not shared). 
+ * Slurm items:
+ *
+ * S_TASK_ID: Local task id (int *)
+ * S_JOB_LOCAL_TASK_COUNT: Number of local tasks (uint32_t *)
+ * S_JOB_NNODES: Total number of nodes in job (uint32_t *)
+ * S_JOB_NODEID: Relative id of this node (uint32_t *)
+ * S_JOB_STEPID: Slurm job step id (uint32_t *)
+ *
  */ 
 static
-int job_is_exclusive(hwloc_topology_t topo, spank_t sp)
+void print_spank_items(spank_t sp)
 {
-  int cpus;
+  /*
+     S_JOB_ALLOC_CORES
+     Job allocated cores in list format (char **)
+     Ex: S_JOB_ALLOC_CORES=0-111
+     Ex: S_JOB_ALLOC_CORES=0-1,56
+     This is what I can use to replace SLURM_CPUS_ON_NODE,
+     Its value does not depend on the number of tasks or
+     cpus-per-task requested.
+     It works for core-scheduled clusters as well--its value
+     has the subset of cores associated with the job/allocation
+     and does not change across job steps.
+     Since the value is given as a list I need to count the cores.
+  */
+#define SI_NAME1 S_JOB_ALLOC_CORES
+  const char *s1;
+  if (spank_get_item(sp, SI_NAME1, &s1) != ESPANK_SUCCESS) {
+    slurm_error("mpibind: Failed to get " XSTR(SI_NAME1));
+    return;
+  }
+  PRINT(XSTR(SI_NAME1) "=%s\n", s1);
   
-  /* Total number of online CPUs */
-  if ((cpus = (int) sysconf(_SC_NPROCESSORS_ONLN)) <= 0) {
-    slurm_error("Failed to get number of processors: %m\n");
-    return -1;
+  /*
+     S_STEP_ALLOC_CORES
+     Step alloc'd cores in list format  (char **)
+     Ex: S_STEP_ALLOC_CORES=0-2,56-58
+     Value depends on the number of tasks and cpus-per-task
+     requested.
+  */
+#define SI_NAME2 S_STEP_ALLOC_CORES
+  const char *s2;
+  if (spank_get_item(sp, SI_NAME2, &s2) != ESPANK_SUCCESS) {
+    slurm_error("mpibind: Failed to get " XSTR(SI_NAME2));
+    return;
   }
+  PRINT(XSTR(SI_NAME2) "=%s\n", s2);
 
-  /* Number of allowed PUs */
-
-  /* This approach doesn't work when a topology file is provided.
-     In this case, the number of PUs (from the topology file) is the
-     same as the total number of PUs on the machine */
-#if 0
-  if ((pus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU)) <= 0) {
-    fprintf(stderr, "mpibind: Invalid #PUs=%d\n", pus);
-    return 0;
+  /*
+     S_STEP_CPUS_PER_TASK (uint32_t *)
+     CPUs allocated per task (=1 if --overcommit option is used)
+     Ex: S_STEP_CPUS_PER_TASK=3
+     Matches cpus-per-task requested or default value (1)
+  */
+#define SI_NAME3 S_STEP_CPUS_PER_TASK
+  uint32_t vu32;
+  if (spank_get_item(sp, SI_NAME3, &vu32) != ESPANK_SUCCESS) {
+    slurm_error ("mpibind: Failed to get " XSTR(SI_NAME3));
+    return;
   }
-#endif
+  PRINT(XSTR(SI_NAME3) "=%d\n", vu32);
 
-  /* Second approach: Use SLURM_CPUS_ON_NODE.
-     (Could also use SLURM_JOB_CPUS_PER_NODE, but its format is
-     CPU_count[(xnumber_of_nodes)][,CPU_count [(xnumber_of_nodes)] ...]).
-     Even though it says "CPUs", the variable refers to cores.
-     But, perhaps, is Slurm-configuration dependent, in which case
-     I would have to make it a spank plugin parameter such as
-     'slurm_cpus_are_cores' or 'slurm_cpus_are_pus' */
-
-  const char var[] = "SLURM_CPUS_ON_NODE";
-  char str[16];
-  int slurm_cpus;
-
-  if (spank_getenv(sp, var, str, sizeof(str)) != ESPANK_SUCCESS) {
-    slurm_error("mpibind: Failed to get %s in env\n", var);
-    return -1;
+  /*
+     S_JOB_NCPUS
+     Number of CPUs used by this job (uint16_t *)
+     Ex: S_JOB_NCPUS=6
+     Matches ntasks*cpus-per-task
+     If no cpus-per-task given, it provides all of the CPUs on node.
+     I can't use as a replacement of SLURM_CPUS_ON_NODE because
+     value depends on cpus-per-task.
+   */
+#define SI_NAME4 S_JOB_NCPUS
+  uint16_t vu16;
+  if (spank_get_item(sp, SI_NAME4, &vu16) != ESPANK_SUCCESS) {
+    slurm_error ("mpibind: Failed to get " XSTR(SI_NAME4));
+    return;
   }
-
-  if ((slurm_cpus = atoi(str)) == 0) {
-    slurm_error("mpibind: %s=%s invalid\n", var, str);
-    return -1;
-  }
-
-  int n = slurm_cpus * get_machine_smt();
-  if (opt_debug) 
-    fprintf(stderr, "CPUs: %s=%d slurm=%d vs online=%d \n",
-	    var, slurm_cpus, n, cpus);
-  
-  return (n >= cpus);
+  PRINT(XSTR(SI_NAME4) "=%d\n", vu16);
 }
-
 
 /* 
  * Print Slurm context, e.g., local, remote. 
@@ -315,14 +296,14 @@ void print_context(char *note)
   }
   nc+= snprintf(str+nc, sizeof(str)-nc, "\n"); 
   
-  fprintf(stderr, str);
+  PRINT(str);
 }
 #endif 
 
 static
 void print_user_options()
 {
-  fprintf(stderr, "Options: enable=%d "
+  PRINT("Options: enable=%d "
 	  "conf_disabled=%d user_specified=%d excl_only=%d "
 	  "verbose=%d debug=%d "
 	  "gpu=%d smt=%d greedy=%d\n",
@@ -376,7 +357,7 @@ int parse_option(const char *opt, int remote)
     opt_debug = 1; 
   }
   else {
-    fprintf(stderr, mpibind_help);
+    PRINT(mpibind_help);
     exit(0);
   }
   
@@ -433,13 +414,47 @@ int parse_conf_options(int argc, char *argv[], int remote)
     else if (strcmp(argv[i], "exclusive_only_off") == 0)
       opt_exclusive_only = 0;
     else { 
-      fprintf(stderr, "mpibind: Invalid plugstack.conf argument %s\n",
+      PRINT("mpibind: Invalid plugstack.conf argument %s\n",
 	      argv[i]);
       return -1; 
     }
   }
 
   return 0;
+}
+
+/*
+ * Get the total number of cores on this node.
+ * This number is for actual cores regardless of SMT mode.
+ */
+static
+int get_ncores_on_node()
+{
+  FILE *fp = popen("grep '' /sys/devices/system/cpu/cpu*/topology/core_cpus_list | awk -F: '{print $2}' | sort -u | wc -l", "r");
+
+  int ncores=-1;
+  if (fp == NULL || fscanf(fp, "%d", &ncores) != 1)
+    PRINT("Could not get the number of cores on node\n");
+
+  PRINT_DEBUG("Number of cores on this node: %d\n", ncores);
+
+  pclose(fp);
+
+  return ncores;
+}
+
+static
+int get_ncores_allocated(spank_t sp)
+{
+  /* Generate the list of allocated cores */
+  char *str;
+  if (spank_get_item(sp, S_ALLOC_CORES, &str) != ESPANK_SUCCESS) {
+    slurm_error("mpibind: Failed to get " XSTR(S_ALLOC_CORES));
+    return -1;
+  }
+
+  /* Get the number of cores from the list */
+  return nints_in_range(str);
 }
 
 static
@@ -450,7 +465,7 @@ uint32_t get_nnodes(spank_t sp)
   
   if ( (rc=spank_get_item(sp, S_JOB_NNODES, &nnodes)) !=
        ESPANK_SUCCESS ) 
-    fprintf(stderr, "mpibind: Failed to get node count: %s",
+    PRINT("mpibind: Failed to get node count: %s",
 	    spank_strerror(rc)); 
   
   return nnodes;
@@ -464,7 +479,7 @@ uint32_t get_nodeid(spank_t sp)
   
   if ( (rc=spank_get_item(sp, S_JOB_NODEID, &nodeid)) !=
        ESPANK_SUCCESS ) 
-    fprintf(stderr, "mpibind: Failed to get node id: %s",
+    PRINT("mpibind: Failed to get node id: %s",
 	    spank_strerror(rc)); 
   
   return nodeid;
@@ -478,7 +493,7 @@ uint32_t get_local_ntasks(spank_t sp)
   
   if ( (rc=spank_get_item(sp, S_JOB_LOCAL_TASK_COUNT, &ntasks)) !=
        ESPANK_SUCCESS ) 
-    fprintf(stderr, "mpibind: Failed to get local task count: %s",
+    PRINT("mpibind: Failed to get local task count: %s",
 	    spank_strerror(rc)); 
 
   return ntasks;
@@ -492,7 +507,7 @@ int get_local_taskid(spank_t sp)
   
   if ( (rc=spank_get_item(sp, S_TASK_ID, &taskid)) !=
        ESPANK_SUCCESS ) 
-    fprintf(stderr, "mpibind: Failed to get local task id: %s",
+    PRINT("mpibind: Failed to get local task id: %s",
 	    spank_strerror(rc)); 
   
   return taskid;
@@ -514,13 +529,73 @@ int get_omp_num_threads(spank_t sp)
   return val;
 }
 
+/*
+ * Return 1 if this is an salloc command.
+ * salloc: job_stepid=0xfffffffa
+ * sbatch: job_stepid=0xfffffffb
+ */
+static
+int job_is_alloc(spank_t sp)
+{
+  uint32_t stepid;
+
+  if (spank_get_item(sp, S_JOB_STEPID, &stepid) != ESPANK_SUCCESS) {
+    slurm_error ("mpibind: Failed to get S_JOB_STEPID");
+    return -1;
+  }
+
+  if (stepid >= 0xfffffffa) {
+    //fprintf(stderr, "mpibind: stepid is 0x%x\n", stepid);
+    return 1;
+  }
+
+  return 0;
+}
+
+static
+int job_is_exclusive(spank_t sp)
+{
+  int ncores_node = get_ncores_on_node();
+  int ncores_alloc = get_ncores_allocated(sp);
+
+  return (ncores_alloc >= ncores_node);
+}
+
+/*
+ * Determine if mpibind should be on or off.
+ */
+static
+int mpibind_is_on(int exclusive)
+{
+  /* User specifying on or off has the highest priority */
+  if (opt_user_specified > -1)
+    return opt_user_specified;
+
+  /* User did not specify to turn it on or off */
+  /* And plugstack config turned it off */
+  else if (opt_conf_disabled)
+    return 0;
+
+  /* At plugstack config, mpibind is on */
+  /* And mpibind is on on all jobs */
+  else if (!opt_exclusive_only)
+    return 1;
+
+  /* Turn on only on exclusive jobs */
+  /* And the job is using the node exclusively */
+  else if (exclusive)
+    return 1;
+  else
+    return 0;
+}
+
 static
 int clean_up(mpibind_t *mph, hwloc_topology_t topo)
 {
   int rc=0;
   
   if ((rc=mpibind_finalize(mph)) != 0)
-    fprintf(stderr, "mpibind: mpibind_finalize failed\n");
+    PRINT("mpibind: mpibind_finalize failed\n");
   
   hwloc_topology_destroy(topo); 
   
@@ -546,14 +621,14 @@ int clean_up(mpibind_t *mph, hwloc_topology_t topo)
  */ 
 int slurm_spank_init(spank_t sp, int ac, char *argv[])
 {
-  if (!spank_remote(sp))
-    return ESPANK_SUCCESS; 
-  
 #if 0
   char name[] = "slurm_spank_init";
   print_context(name);
 #endif
-  
+
+  if (!spank_remote(sp))
+    return ESPANK_SUCCESS;
+
   return ESPANK_SUCCESS;
 }
 
@@ -566,14 +641,14 @@ int slurm_spank_init(spank_t sp, int ac, char *argv[])
  */ 
 int slurm_spank_exit(spank_t sp, int ac, char *argv[])
 {
-  if (!spank_remote(sp))
-    return ESPANK_SUCCESS; 
-
 #if 0
   char name[] = "slurm_spank_exit";
   print_context(name); 
 #endif
   
+  if (!spank_remote(sp))
+    return ESPANK_SUCCESS;
+
   return ESPANK_SUCCESS;
 }
 
@@ -584,6 +659,11 @@ int slurm_spank_exit(spank_t sp, int ac, char *argv[])
  */
 int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 {
+#if 0
+  char name[] = "slurm_spank_user_init";
+  print_context(name);
+#endif
+
   if (!spank_remote(sp))
     return ESPANK_SUCCESS;
 
@@ -603,45 +683,34 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
      the nodes are allocated, check the value of OMP_NUM_THREADS */ 
   if (job_is_alloc(sp) == 1) { 
     opt_enable = 0;
-    if (opt_debug)
-      fprintf(stderr, "Disabling mpibind for salloc/sbatch\n"); 
+    PRINT_DEBUG("Disabling mpibind for salloc/sbatch\n");
+    return ESPANK_SUCCESS;
   }
 
-#if 0
-  char name[] = "slurm_spank_user_init"; 
-  print_context(name);
-#endif
-
-  if (!opt_enable)
-    return ESPANK_SUCCESS;
+  /* Test config options without changing plugstack.conf */
+  //opt_exclusive_only = 1;
+  //opt_conf_disabled = 0;
 
   char header[16];  
   uint32_t nodeid = get_nodeid(sp); 
   uint32_t nnodes = get_nnodes(sp);
   sprintf(header, "Node %d/%d", nodeid, nnodes);
 
-  if (nodeid == 0 && opt_debug)
+  if (nodeid == 0 && opt_debug) {
+    print_spank_items(sp);
     print_user_options();
+  }
   
+  /* Determine if mpibind should be on or off */
+  int exclusive = job_is_exclusive(sp);
+  if ( !(opt_enable = mpibind_is_on(exclusive)) ) {
+    PRINT_DEBUG("mpibind is off\n");
+    return ESPANK_SUCCESS;
+  }
+
   uint32_t ntasks = get_local_ntasks(sp);
   int nthreads = get_omp_num_threads(sp);
 
-  /*
-   * Read in MPIBIND environment variables
-   */
-  char restr_str[64];
-  int restr_type = -1;
-  if (spank_getenv(sp, "MPIBIND_RESTRICT_TYPE", restr_str, sizeof(restr_str))
-      == ESPANK_SUCCESS) {
-    if (strcmp(restr_str, "cpu") == 0)
-      restr_type = MPIBIND_RESTRICT_CPU;
-    else if (strcmp(restr_str, "mem") == 0)
-      restr_type = MPIBIND_RESTRICT_MEM;
-  }
-
-  if (spank_getenv(sp, "MPIBIND_RESTRICT", restr_str, sizeof(restr_str))
-      != ESPANK_SUCCESS)
-    restr_str[0] = '\0';
 
   /* 
    * Set the topology
@@ -657,58 +726,76 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
      Some LLNL systems require a topology file to overcome
      Bug TOSS-6198 */
   char xml[512];
-  xml[0] = '\0'; 
+  xml[0] = '\0';
   if (spank_getenv(sp, "MPIBIND_TOPOFILE", xml, sizeof(xml))
       == ESPANK_SUCCESS && xml[0] != '\0') {
-    
-    if (hwloc_topology_set_xml(topo, xml) < 0)
-      slurm_error("hwloc_topology_set_xml(%s)", xml);
 
-    if (nodeid == 0 && opt_debug)
-      fprintf(stderr, "mpibind: Loaded topology from %s\n", xml); 
+    /* Only load the topology file if the job is exclusive.
+       Non-exclusive jobs use only a subset of cores:
+       mpibind should keep to that subset instead of using
+       all the cores in the topology specified in the XML file */
+    if (exclusive) {
+      if (hwloc_topology_set_xml(topo, xml) < 0)
+	slurm_error("hwloc_topology_set_xml(%s)", xml);
+
+      if (nodeid == 0 && opt_debug)
+	PRINT("mpibind: Loaded topology from %s\n", xml);
+    }
   }
 
-  /* Make sure OS binding functions are actually called */
-  /* Could also use HWLOC_THISSYSTEM=1, but that applies
+  /* Make sure OS binding functions are actually called
+     Could also use HWLOC_THISSYSTEM=1, but that applies
      globally to all hwloc clients */
-  if (hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM)
-      < 0) {
-    slurm_error("hwloc_topology_set_flags");
+  int topo_flags = HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM;
+  if (hwloc_topology_set_flags(topo, topo_flags) < 0) {
+    slurm_error("mpibind: hwloc_topology_set_flags");
     return ESPANK_ERROR;
   }
 
   /* Make sure OS and PCI devices are not filtered out */
   if (mpibind_filter_topology(topo) < 0) {
-    slurm_error("mpibind_filter_topology");
+    slurm_error("mpibind: Failed to filter topology");
     return ESPANK_ERROR;
   }
   
   if (hwloc_topology_load(topo) < 0) {
-    slurm_error("hwloc_topology_load");
+    slurm_error("mpibind: hwloc_topology_load");
     return ESPANK_ERROR;
   }
 
   if (hwloc_topology_is_thissystem(topo) == 0)
     slurm_error("mpibind: Binding will not be enforced");
-#endif 
 
-  /* Topology needs to be loaded already */ 
-  int exclusive = job_is_exclusive(topo, sp);
+  if (!exclusive && mpibind_restrict_to_current_binding(topo) < 0)
+    slurm_error("mpibind: Failed to restrict topology to current binding");
+#endif
 
-  /* Determine if mpibind should be on or off */
-  if ( !(opt_enable = mpibind_is_on(exclusive)) ) {
-    if (opt_debug)
-      fprintf(stderr, "mpibind is not enabled\n");
-
-    hwloc_topology_destroy(topo);
-
-    return ESPANK_SUCCESS;
+  /*
+   * Read in MPIBIND environment variables
+   */
+#if 1
+  char restr_str[64];
+  int restr_type = -1;
+  if (spank_getenv(sp, "MPIBIND_RESTRICT_TYPE", restr_str, sizeof(restr_str))
+      == ESPANK_SUCCESS) {
+    if (strcmp(restr_str, "cpu") == 0)
+      restr_type = MPIBIND_RESTRICT_CPU;
+    else if (strcmp(restr_str, "mem") == 0)
+      restr_type = MPIBIND_RESTRICT_MEM;
   }
 
+  if (spank_getenv(sp, "MPIBIND_RESTRICT", restr_str, sizeof(restr_str))
+      != ESPANK_SUCCESS)
+    restr_str[0] = '\0';
+#endif
+
+  /*
+   * Everything is set for mpibind
+   */
 #if 1
   /* Allocate mpibind's global handle */
   if ( mpibind_init(&mph) != 0 || mph == NULL ) {
-    slurm_error("mpibind_init");
+    slurm_error("mpibind: Init failed");
     return ESPANK_ERROR;
   }
   //fprintf(stderr, "%s: mph=%p\n", name, mph);
@@ -727,30 +814,29 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 
   mpibind_set_topology(mph, topo);
   
-  if (opt_debug)
-    fprintf(stderr, "%s: ntasks=%d nthreads=%d greedy=%d gpu=%d "
-	    "topo=%p exclusive=%d restr_type=%d restr_ids=%s\n",
-	    header,
-	    mpibind_get_ntasks(mph),
-	    nthreads,
-	    mpibind_get_greedy(mph),
-	    mpibind_get_gpu_optim(mph),
-	    mpibind_get_topology(mph),
-	    exclusive,
-	    mpibind_get_restrict_type(mph),
-	    mpibind_get_restrict_ids(mph));
+  PRINT_DEBUG("%s: ntasks=%d nthreads=%d greedy=%d gpu=%d "
+	      "topo=%p exclusive=%d restr_type=%d restr_ids=%s\n",
+	      header,
+	      mpibind_get_ntasks(mph),
+	      nthreads,
+	      mpibind_get_greedy(mph),
+	      mpibind_get_gpu_optim(mph),
+	      mpibind_get_topology(mph),
+	      exclusive,
+	      mpibind_get_restrict_type(mph),
+	      mpibind_get_restrict_ids(mph));
 
   /*
    * Get the mpibind mapping!
    */
   if (mpibind(mph) != 0) {
-    slurm_error("mpibind()");
+    slurm_error("mpibind: Mapping function failed");
     return ESPANK_ERROR;
   }
 
   /* Set values of env variables for task_init */
   if (mpibind_set_env_vars(mph) != 0) {
-    slurm_error("mpibind_set_env_vars");
+    slurm_error("mpibind: Set environment variables failed");
     return ESPANK_ERROR;
   }
 
@@ -767,8 +853,8 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     mpibind_mapping_snprint(buf, PRINT_MAP_BUF_SIZE, mph);
 
     if (nodeid == 0 || opt_verbose > 1) { 
-      fprintf(stderr, "mpibind: %d GPUs on this node\n", ngpus);
-      fprintf(stderr, "%s", buf);
+      PRINT("mpibind: %d GPUs on this node\n", ngpus);
+      PRINT("%s", buf);
     }
   }
 #endif 
@@ -782,18 +868,15 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
  * Called once per task 
  */
 int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
-{  
-  if (!spank_remote(sp))
-    return ESPANK_SUCCESS;
-
+{
 #if 0
   char name[] = "slurm_spank_task_init";
   print_context(name);
 #endif 
 
-  if (!opt_enable)
-    return ESPANK_SUCCESS; 
-  
+  if (!spank_remote(sp) || !opt_enable)
+    return ESPANK_SUCCESS;
+
   char header[16];  
   int taskid = get_local_taskid(sp); 
   uint32_t ntasks = get_local_ntasks(sp);
@@ -801,7 +884,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
 
   /* Bind this task to the calculated cpus */ 
   if (mpibind_apply(mph, taskid) != 0) {
-    slurm_error("mpibind_apply");
+    slurm_error("mpibind: Failed to apply mapping");
     return ESPANK_ERROR;
   }
 
@@ -810,7 +893,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
   char **env_var_values;
   char **env_var_names = mpibind_get_env_var_names(mph, &nvars);
   
-  for (i=0; i<nvars; i++) {    
+  for (i=0; i<nvars; i++) {
     env_var_values = mpibind_get_env_var_values(mph, env_var_names[i]);
     if (env_var_values[taskid]) {
       //      fprintf(stderr, "%s: setting %s=%s\n", header,
@@ -818,9 +901,9 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
       
       if (spank_setenv(sp, env_var_names[i], env_var_values[taskid], 1)
 	  != ESPANK_SUCCESS) {
-	fprintf(stderr, "mpibind: Failed to set %s in environment\n",
-		env_var_names[i]);
-      }   
+	slurm_error("mpibind: Failed to set %s in environment\n",
+		    env_var_names[i]);
+      }
     }
   }
 

@@ -22,6 +22,8 @@
     fprintf(stderr, "%s failed: %s.\n", __func__, (whatstr));		\
   } while (0)
 
+#define PRINT(...) fprintf(stderr, __VA_ARGS__)
+
 
 /* 
  * An environment variable with one value per task 

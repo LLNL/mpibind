@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <hwloc.h>
+#include "mpibind-priv.h"
 
 #define SHORT_STR_SIZE 32
 #define LONG_STR_SIZE 1024
@@ -355,7 +356,7 @@ void print_obj(hwloc_obj_t obj, int indent)
   int verb = 0; 
   char str[LONG_STR_SIZE];
   if (obj_attr_snprintf(str, sizeof(str), obj, verb) > 0)
-    printf("%*s%s\n", 2*indent, "", str);
+    PRINT("%*s%s\n", 2*indent, "", str);
 }
 
 /*
@@ -385,9 +386,9 @@ void print_topo_brief(hwloc_topology_t topo)
   int topo_depth = hwloc_topology_get_depth(topo); 
   
   for (depth = 0; depth < topo_depth; depth++)
-    printf("Depth %d: %s[%d]\n", depth,
-	   hwloc_obj_type_string(hwloc_get_depth_type(topo, depth)), 
-	   hwloc_get_nbobjs_by_depth(topo, depth)); 
+    PRINT("Depth %d: %s[%d]\n", depth,
+	  hwloc_obj_type_string(hwloc_get_depth_type(topo, depth)),
+	  hwloc_get_nbobjs_by_depth(topo, depth));
 }  
 
 /*

@@ -299,8 +299,17 @@ extern "C" {
    * Pop cores from the assigned CPUs of a task.
    */
   int mpibind_pop_cores_ptask(mpibind_t *handle, int taskid, int ncores);
+  /*
+   * Get the PUs of a given set of logical cores.
+   */
+  int mpibind_get_pus_of_lcores(hwloc_topology_t topo, char *lcores,
+				char *pus);
+  /*
+   * Restrict the topology to the current binding.
+   */
+  int mpibind_restrict_to_current_binding(hwloc_topology_t topo);
 
-  
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
