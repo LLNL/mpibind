@@ -72,6 +72,7 @@
 #define PLUGIN_NAME FLUX_SHELL_PLUGIN_NAME
 #define LONG_STR_SIZE 2048
 #define MAX_NUMA_DOMAINS 32
+#define PRINT_MAP_BUF_SIZE (1024*5)
 
 
 /*
@@ -740,7 +741,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
         && xml[0] != '\0') {
       if (hwloc_topology_set_xml(topo, xml) < 0)
         return shell_log_errno("hwloc_topology_set_xml(%s)", xml);
-        shell_debug("Loaded topology from %s", xml);
+      shell_debug("Loaded topology from %s", xml);
     }
   }
 
@@ -891,10 +892,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
 
   /* Debug: Print out the cpus assigned to each task */
-  char outbuf[LONG_STR_SIZE];
+  char outbuf[PRINT_MAP_BUF_SIZE];
   hwloc_bitmap_t *cpus = mpibind_get_cpus(mph);
   for (i=0; i<ntasks; i++) {
-    hwloc_bitmap_list_snprintf(outbuf, LONG_STR_SIZE, cpus[i]);
+    hwloc_bitmap_list_snprintf(outbuf, PRINT_MAP_BUF_SIZE, cpus[i]);
     shell_debug("task %2d: cpus %s", i, outbuf);
   }
 
@@ -906,7 +907,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
        since users are used to this enumeration
        (as opposed to mpibind's enumeration) */
     mpibind_set_gpu_ids(mph, MPIBIND_ID_VISDEVS);
-    mpibind_mapping_snprint(outbuf, LONG_STR_SIZE, mph);
+    mpibind_mapping_snprint(outbuf, PRINT_MAP_BUF_SIZE, mph);
     shell_log("\n%s", outbuf);
   }
 
