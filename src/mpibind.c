@@ -673,7 +673,7 @@ int mpibind(mpibind_t *hdl)
   hdl->ndevs = discover_devices(hdl->topo, hdl->devs, MAX_IO_DEVICES);
 
 #if VERBOSE >=1 
-  printf("Effective I/O devices: %d\n", hdl->ndevs); 
+  PRINT("Effective I/O devices: %d\n", hdl->ndevs);
   for (i=0; i<hdl->ndevs; i++) 
     PRINT("[%d]: busid=%s smi=%d visdevs=%d vendor=0x%x "
 	  "name=%s\n\tuuid=%s ancestor=0x%" PRIu64 "\n",
