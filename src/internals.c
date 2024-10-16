@@ -50,7 +50,7 @@ void print_array(int *arr, int size, char *label)
   for (i=0; i<size; i++)
     nc += snprintf(str+nc, sizeof(str)-nc, "[%d]=%d ", i, arr[i]);
 
-  printf("%s: %s\n", label, str); 
+  PRINT("%s: %s\n", label, str);
 }
 #endif 
 
@@ -79,25 +79,6 @@ hwloc_obj_t get_pci_busid(hwloc_obj_t dev, char *busid, int size)
       obj->attr->pcidev.dev, obj->attr->pcidev.func);
 
   return obj; 
-}
-
-
-/*
- * Return the number of NUMA domains with GPUs. 
- * Output:
- *   numas: OS indexes of the numa domains with GPUs.   
- */
-static
-int numas_wgpus(struct device **devs, int ndevs, hwloc_bitmap_t numas)
-{
-  int i; 
-  
-  hwloc_bitmap_zero(numas);
-
-  for (i=0; i<ndevs; i++)
-    hwloc_bitmap_or(numas, numas, devs[i]->ancestor->nodeset); 
-    
-  return hwloc_bitmap_weight(numas);   
 }
 
 
@@ -526,6 +507,134 @@ void gpu_match(hwloc_topology_t topo,
 }
 
 
+/*
+ * Compare the indices of an int array
+ * based on the values they point to
+ * in descending order
+ */
+static
+int compare_indices_desc(const void *a, const void *b)
+{
+  /* Input parameter is a pointer to the index
+     and thus '**' is needed */
+  const int **left  = (const int **)a;
+  const int **right = (const int **)b;
+
+  /* Compare the values pointed to by the indexes
+     if (left < right) return 1 (positive)
+     if (right < left) return -1 (negative)
+     else return 0 (equal) */
+  return (**left < **right) - (**right < **left);
+}
+
+
+/*
+ * Given an array of ints, sort the array in
+ * descending order, but instead of sorting
+ * the array of values, provide the sorted
+ * array of indices.
+ */
+static
+void sort_ints_desc(int *arr, int n, int *indices)
+{
+  int i;
+  int* ptrs[n];
+
+  for (i=0; i<n; i++)
+    ptrs[i] = arr + i;
+
+  qsort(ptrs, n, sizeof(int*), compare_indices_desc);
+
+  for (i=0; i<n; i++)
+    indices[i] = ptrs[i] - arr;
+}
+
+
+/*
+ * Calculate the number of tasks to assign to each
+ * NUMA domain. It takes into consideration how many
+ * compute units (CPUs or GPUs) each NUMA domain has
+ * to make an appropriate assignment. Before this
+ * function I was distributing the tasks evenly among
+ * NUMA domains.
+ */
+static
+void num_tasks_per_numa(int ntasks, int nnumas, int *cus_per_numa,
+			int *ntasks_per_numa)
+{
+  /* Total number of compute units */
+  int i, ncus=0;
+  for (i=0; i<nnumas; i++)
+    ncus += cus_per_numa[i];
+
+  /* Calculate the num tasks per numa based on the
+     fraction of compute units held per NUMA.
+     Use floor(ntasks * ncus_per_numa / ncus) first,
+     then use the remainder to assign leftover tasks
+     (since we are taking the floor) */
+  int rem[nnumas];
+  int numerator, assigned=0;
+  for (i=0; i<nnumas; i++) {
+    numerator = ntasks * cus_per_numa[i];
+    ntasks_per_numa[i] = numerator / ncus;
+    assigned += ntasks_per_numa[i];
+    rem[i] = numerator % ncus;
+  }
+
+  /* Use the remainder to assign leftover tasks.
+     Use the NUMAs with the highests remainders
+     to assign an extra task to those NUMAs */
+  int indices[nnumas];
+  sort_ints_desc(rem, nnumas, indices);
+
+  for (i=0; i<ntasks-assigned; i++)
+    ntasks_per_numa[indices[i]] += 1;
+}
+
+
+/*
+ * Calculate the number of PUs per NUMA
+ * Useful to determine how many tasks per NUMA to assign.
+ */
+static
+void num_pus_per_numa(hwloc_topology_t topo,
+		      int nnumas, int *pus_per_numa)
+{
+  int i = 0;
+  hwloc_obj_t obj = NULL;
+  while ((obj=hwloc_get_next_obj_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE,
+					  obj)) != NULL) {
+    pus_per_numa[i++] = hwloc_bitmap_weight(obj->cpuset);
+  }
+}
+
+
+/*
+ * Calculate the number of GPUs per NUMA
+ * Useful to determine how many tasks per NUMA to assign.
+ */
+static
+void num_gpus_per_numa(hwloc_topology_t topo,
+		       struct device **devs, int ndevs,
+		       int nnumas, int *gpus_per_numa)
+{
+  int i, j;
+  for (i=0; i<nnumas; i++)
+    gpus_per_numa[i] = 0;
+
+  i = 0;
+  hwloc_obj_t obj = NULL;
+  while ((obj=hwloc_get_next_obj_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE,
+					  obj)) != NULL) {
+    for (j=0; j<ndevs; j++)
+      if (devs[j]->type == DEV_GPU)
+	if (hwloc_bitmap_isset(devs[j]->ancestor->nodeset, obj->os_index))
+	  gpus_per_numa[i] += 1;
+    i++;
+  }
+}
+
+
 /* 
  * And then pass this as a parameter to this function
  * (this is my 'until' parameter from hwloc_distrib)
@@ -544,8 +653,27 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
   int *ntasks_per_numa;
   hwloc_obj_t obj;
   hwloc_bitmap_t io_numa_os_ids = NULL; 
+
+  /* Distribute tasks over numa domains.
+     Use the number of compute units within each NUMA
+     to balance the tasks accordingly */
+#if 1
+  num_numas = hwloc_get_nbobjs_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE);
+  int *cus_per_numa = calloc(num_numas, sizeof(int));
+  ntasks_per_numa = calloc(num_numas, sizeof(int));
   
-  /* Distribute tasks over numa domains */
+  if (gpu_optim)
+    num_gpus_per_numa(topo, devs, ndevs, num_numas, cus_per_numa);
+  else
+    num_pus_per_numa(topo, num_numas, cus_per_numa);
+#if VERBOSE >=1
+  print_array(cus_per_numa, num_numas, "ncus_per_numa");
+#endif
+
+  num_tasks_per_numa(ntasks, num_numas, cus_per_numa, ntasks_per_numa);
+  free(cus_per_numa);
+#else
+  /* Previous method was to distribute tasks over NUMAs evenly */
   if (gpu_optim) { 
     io_numa_os_ids = hwloc_bitmap_alloc(); 
     //num_numas = numas_wgpus(topo, io_numa_os_ids);
@@ -566,7 +694,8 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
   
   ntasks_per_numa = calloc(num_numas, sizeof(int));
   distrib(ntasks, num_numas, ntasks_per_numa);
-  /* Verbose */
+#endif
+
 #if VERBOSE >=1
   print_array(ntasks_per_numa, num_numas, "ntasks_per_numa");
 #endif
@@ -577,9 +706,12 @@ int distrib_mem_hierarchy(hwloc_topology_t topo,
   task_offset = 0;
   while ((obj=hwloc_get_next_obj_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE,
 					  obj)) != NULL) {
+#if 0
+    /* Previous method */
     if (gpu_optim)
       if (!hwloc_bitmap_isset(io_numa_os_ids, obj->os_index))
-	continue; 
+	continue;
+#endif
     
     /* Get the cpuset for each task assigned to this NUMA */
     nt = nthreads;
@@ -1004,6 +1136,31 @@ void terminate_str(char *buf, int size)
  * Eventually I should move these functions out,
  * perhaps to a separate file. 
  ******************************************************/
+
+/*
+ * Replaced this function with num_gpus_per_numa
+ * since balancing tasks among numas now takes into
+ * consideration the number of compute units per numa.
+ *
+ * Return the number of NUMA domains with GPUs.
+ * Output:
+ *   numas: OS indexes of the numa domains with GPUs.
+ */
+#if 0
+static
+int numas_wgpus(struct device **devs, int ndevs, hwloc_bitmap_t numas)
+{
+  int i;
+
+  hwloc_bitmap_zero(numas);
+
+  for (i=0; i<ndevs; i++)
+    hwloc_bitmap_or(numas, numas, devs[i]->ancestor->nodeset);
+
+  return hwloc_bitmap_weight(numas);
+}
+#endif
+
 
 #if 0
 /*
