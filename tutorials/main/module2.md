@@ -370,18 +370,12 @@ Key design principles:
 * Maximize cache and memory per worker
 * Leverage resource locality based on node topology
 * Optimize mappings based on a given type of resource
-* Avoid remote memory accesses
+* Minimize remote memory accesses
 
-|<b> Lassen </b>|
+
+||
 |:--:|
 |![Lassen](../figures/sierra.png ":Lassen")|
-
-
-
-
-
-
-
 
 
 <!--
@@ -512,7 +506,7 @@ pascal30 Task   1/  4 Thread   5/  9 with  1 gpus: 0x4
 
 </details>
 
-Similarly, if we run a MPI + OpenMP program with 4 tasks on `Lassen`, where we have 40 cores per node, we'll see that a default of 10 threads per task will be generated. *By default, `mpibind` creates as many threads as cores.*
+Similarly, if we run an MPI + OpenMP program with 4 tasks on `Lassen`, where we have 40 cores per node, we'll see that a default of 10 threads per task will be generated. *By default, `mpibind` creates as many threads as cores.*
 
 <details>
 <summary>
