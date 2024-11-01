@@ -48,7 +48,7 @@ int get_gpu_affinity(char *buf)
   int nc=0; 
   int i; 
   for (i=0; i<count; i++) {
-#if 1
+#if 0
     err = cudaGetDeviceProperties(&prop, i);
     if ( err ) {
       fprintf(stderr, "Could not get info for GPU %d\n", i);
@@ -59,7 +59,7 @@ int get_gpu_affinity(char *buf)
     // [domain]:[bus]:[device].[function]
     char pcibusid[64];
     cudaDeviceGetPCIBusId(pcibusid, 64, i);
-    nc += sprintf(buf+nc, "%s", pcibusid);
+    nc += sprintf(buf+nc, "%s ", pcibusid);
 #endif
   }
   nc += sprintf(buf+nc, "\n"); 
