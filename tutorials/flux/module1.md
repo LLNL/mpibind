@@ -26,7 +26,7 @@ Lawrence Livermore National Laboratory
 
 Before talking about binding and affinity, let's make sure we
 understand the machine topology. There are a few example
-architectures [here](archs.md). In this document, we focus on the
+architectures [here](../common/archs.md). In this document, we focus on the
 `RZAdams` MI300A architecture.
 
 RZAdams has 4 NUMA domains, each with 24 cores, 3 `L3` caches and 1
