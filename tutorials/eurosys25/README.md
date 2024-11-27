@@ -1,5 +1,9 @@
-# An Affinity Affair: Bridging Applications & Hardware
+# 4th Tutorial on Mapping and Affinity (MAP)
+## Bridging Applications and Hardware
+
+<!--
 ## ISC 2024
+-->
 
 *Edgar A. León* and *Jane E. Herriman*<br>
 Lawrence Livermore National Laboratory
