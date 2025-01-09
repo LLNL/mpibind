@@ -41,15 +41,14 @@ int get_gpu_pci_id(int dev)
 int get_gpu_affinity(char *buf)
 {
   int count=0;
-  cudaError_t err;
-  cudaDeviceProp prop;
   cudaGetDeviceCount(&count);
   
   int nc=0; 
   int i; 
   for (i=0; i<count; i++) {
 #if 0
-    err = cudaGetDeviceProperties(&prop, i);
+    cudaDeviceProp prop;
+    cudaError_t err = cudaGetDeviceProperties(&prop, i);
     if ( err ) {
       fprintf(stderr, "Could not get info for GPU %d\n", i);
       return -1;
