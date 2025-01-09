@@ -249,6 +249,7 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
       nc += hwloc_obj_attr_snprintf(str+nc, size-nc, obj, " ", verbose);
       break; 
 
+    case HWLOC_OBJ_OSDEV_NETWORK:
     case HWLOC_OBJ_OSDEV_OPENFABRICS :
       nc += hwloc_obj_type_snprintf(str+nc, size-nc, obj, 1);
       nc += snprintf(str+nc, size-nc, ": name=%s ", obj->name);
@@ -264,7 +265,7 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
   if (obj->type == HWLOC_OBJ_PCI_DEVICE) {
     /* Filter out less interesting devices:
        0x106: SATA
-       0x200: Ethernet 
+       0x200: Ethernet (Slingshot in this category)
        0x300: VGA
        More interesting devices: 
        0x108: NVMe memory
@@ -272,7 +273,8 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
        0x302: NVIDIA GPUs
        0x380: AMD GPUs */ 
     unsigned cid = obj->attr->pcidev.class_id; 
-    if (cid != 0x300 && cid != 0x200 && cid != 0x106) {
+    //if (cid != 0x300 && cid != 0x200 && cid != 0x106) {
+    if (cid != 0x300 && cid != 0x106) {
       nc += hwloc_obj_type_snprintf(str+nc, size-nc, obj, 1);
       nc += snprintf(str+nc, size-nc, ": busid=");
       nc += pci_busid_snprintf(str+nc, size-nc, obj);
@@ -280,6 +282,8 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
         obj->attr->pcidev.linkspeed); 
       nc += snprintf(str+nc, size-nc, "class=0x%x ",
         obj->attr->pcidev.class_id);
+      nc += snprintf(str+nc, size-nc, "PCIVendor=%s ",
+        hwloc_obj_get_info_by_name(obj, "PCIVendor"));
       nc += snprintf(str+nc, size-nc, "PCIDevice=%s ",
         hwloc_obj_get_info_by_name(obj, "PCIDevice")); 
       nc += snprintf(str+nc, size-nc, "   ");
