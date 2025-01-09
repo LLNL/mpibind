@@ -3,6 +3,7 @@
  * Lawrence Livermore National Laboratory 
  ******************************************************/
 #include <stdlib.h>
+#include <ctype.h>
 #include <hwloc.h>
 #include "mpibind.h"
 #include "mpibind-priv.h"
@@ -833,6 +834,42 @@ int distrib_greedy(hwloc_topology_t topo,
 }
 
 
+/*
+ * Does input object has the given subtype?
+ */
+static
+int obj_has_subtype(hwloc_obj_t obj, char *subtype)
+{
+  if (obj->subtype && strcmp(obj->subtype, subtype) == 0)
+    return 1;
+  return 0;
+}
+
+
+/*
+ * Get the numeric ID of a device name, e.g.,
+ *  rsmi2 -> 2
+ *  opencl1d0 -> 10
+ *  mlx5_0 -> 50
+ */
+static
+int get_dev_name_id(char *str)
+{
+  char num[SHORT_STR_SIZE];
+  int i, j=0;
+
+  for (i=0; str[i]!='\0'; i++)
+    if (isdigit(str[i]))
+      num[j++] = str[i];
+  num[j] = '\0';
+
+  if (num[0])
+    return atoi(num);
+
+  return -1;
+}
+
+
 /* 
  * Input: osdev_obj, an OSDEV object 
  * Output: dev
@@ -840,161 +877,259 @@ int distrib_greedy(hwloc_topology_t topo,
  * Fill in information from the OSDEV object into 
  * a device structure. 
  * 
- * Todo 6/13/2023: I can probably get rid of one of 
- * 'visdevs' or 'smi' IDs. The idea would be to 
- * save the smi ID and use that. But, if for some 
- * reason the smi id is not present (e.g., no rsmi
- * device), then I can use the visdevs ID (e.g., opencl). 
- * In the code below, I would make sure the cuda/opencl 
- * IDs do not overwrite the rsmi/nvml IDs. 
- * For example, if dev->smi is -1 then write cuda_id, 
- * otherwise, do not overwrite dev->smi (since it was 
- * set by rsmi/nvml). . 
  */
 static
-void fill_in_device_info(hwloc_obj_t osdev_obj, struct device *dev)
+void fill_in_device_info(hwloc_obj_t obj, struct device *dev)
 {
-  int i, id; 
-  hwloc_obj_osdev_type_t type = osdev_obj->attr->osdev.type;
+  hwloc_obj_osdev_type_t type = obj->attr->osdev.type;
+
+  /* Set device name and smi id */
+  snprintf(dev->name, SHORT_STR_SIZE, "%s", obj->name);
+  dev->smi = get_dev_name_id(dev->name);
   
-  if (type == HWLOC_OBJ_OSDEV_COPROC || type == HWLOC_OBJ_OSDEV_GPU)
+  /* Set device type, vendor, model, and UUID */
+  if (type == HWLOC_OBJ_OSDEV_GPU) {
     dev->type = DEV_GPU;
-  else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
-    dev->type = DEV_NIC;  
+    /* GPUVendor: AMD, NVIDIA
+       Get a single word, e.g. 'NVIDIA' out of 'NVIDIA Corporation' */
+    char vendor[SHORT_STR_SIZE];
+    sscanf(hwloc_obj_get_info_by_name(obj, "GPUVendor"), "%s", vendor);
+    snprintf(dev->vendor, SHORT_STR_SIZE, "%s", vendor);
+    snprintf(dev->model, SHORT_STR_SIZE, "%s",
+	     hwloc_obj_get_info_by_name(obj, "GPUModel"));
+    /* UUID: AMDUUID, NVIDIAUUID */
+    char str_uuid[SHORT_STR_SIZE*2];
+    snprintf(str_uuid, SHORT_STR_SIZE*2, "%sUUID", dev->vendor);
     snprintf(dev->univ, UUID_LEN, "%s", 
-	     hwloc_obj_get_info_by_name(osdev_obj, "NodeGUID")); 
-  }
-  
-  snprintf(dev->name, SHORT_STR_SIZE, "%s", osdev_obj->name);
-  
-  if (sscanf(osdev_obj->name, "cuda%d", &id) == 1)
-    dev->visdevs = id; 
-  else if (sscanf(osdev_obj->name, "opencl%dd%d", &i, &id) == 2)
-    dev->visdevs = id;
-  else if (sscanf(osdev_obj->name, "rsmi%d", &id) == 1) {
-    dev->smi = id; 
-    snprintf(dev->univ, UUID_LEN, "%s", 
-	     hwloc_obj_get_info_by_name(osdev_obj, "AMDUUID")); 
-  } else if (sscanf(osdev_obj->name, "nvml%d", &id) == 1) {
-    dev->smi = id; 
-    snprintf(dev->univ, UUID_LEN, "%s", 
-	     hwloc_obj_get_info_by_name(osdev_obj, "NVIDIAUUID")); 
+	     hwloc_obj_get_info_by_name(obj, str_uuid));
+
+  } else if (type == HWLOC_OBJ_OSDEV_COPROC) {
+    dev->type = DEV_GPU;
+
+    if ( obj_has_subtype(obj, "LevelZero") ) {
+      snprintf(dev->vendor, SHORT_STR_SIZE, "%s",
+	       hwloc_obj_get_info_by_name(obj, "LevelZeroVendor"));
+      snprintf(dev->model, SHORT_STR_SIZE, "%s",
+	       hwloc_obj_get_info_by_name(obj, "LevelZeroModel"));
+      snprintf(dev->univ, UUID_LEN, "%s",
+	       hwloc_obj_get_info_by_name(obj, "LevelZeroUUID"));
+    }
+  } else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS ||
+	     type == HWLOC_OBJ_OSDEV_NETWORK) {
+    dev->type = DEV_NIC;
+
+    if ( obj_has_subtype(obj, "BXI") )
+      snprintf(dev->univ, UUID_LEN, "%s",
+	       hwloc_obj_get_info_by_name(obj, "BXIUUID"));
+    else
+      snprintf(dev->univ, UUID_LEN, "%s",
+	       hwloc_obj_get_info_by_name(obj, "NodeGUID"));
   }
 }
 
 
+/*
+ * Work in progress. Not sure it will be needed.
+ *
+ * Idea is to identify all the types of GPUs present, e.g.,
+ * rsmi, nvml, cuda, opencl, and use one (the *best*) type
+ * per device to avoid duplication of devices, e.g., nvml and cuda.
+ * For example, if a machine has NVML, OpenCL, and CUDA devices
+ * I would use NVML only. If NVML is not present, then CUDA.
+ *
+ * Currently, I look for NVML and RSMI devices. But, there could
+ * be an instance where there's no NVML devices, but there's
+ * CUDA devices.
+ */
+#if 0
+#define MAX_GPU_TYPES 16
+
+static
+int filter_gpu_types(hwloc_topology_t topo)
+{
+  int i;
+  hwloc_obj_osdev_type_t type;
+  char types[MAX_GPU_TYPES][SHORT_STR_SIZE];
+
+  int size = 0;
+  hwloc_obj_t obj = NULL;
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL ) {
+    type = obj->attr->osdev.type;
+
+#if 0
+    /* Debug */
+    if (type == HWLOC_OBJ_OSDEV_NETWORK) {
+      PRINT("Device: subtype=%s\n", obj->subtype);
+      print_obj(obj, 0);
+      print_obj_info(obj);
+    }
+#endif
+
+    if (type == HWLOC_OBJ_OSDEV_COPROC ||
+        type == HWLOC_OBJ_OSDEV_GPU) {
+
+      for (i=0; i<size; i++)
+	if (obj_has_subtype(obj, types[i]))
+	  break;
+      if (i == size) {
+	/* Got new type, add it */
+	if (size >= MAX_GPU_TYPES) {
+	  fprintf(stderr, "Warn: GPU-type array maxed out\n");
+          return size;
+	}
+	strcpy(types[size++], obj->subtype);
+      }
+
+    }
+  }
+
+#if VERBOSE >= 1
+  PRINT("GPU types: ");
+  for (i=0; i<size; i++) {
+    PRINT("%s ", types[i]);
+  }
+  PRINT("\n");
+#endif
+
+  /*
+     Then remove unnecesary device types, e.g., cuda/opencl
+     when nvml present. Then parse only the selected types
+     of devices.
+  */
+
+  return size;
+}
+#endif
+
+
 /************************************************
- * Non-static functions. 
+ * Non-static functions.
  * Used by mpibind.c
  ************************************************/
-	
+
 /*
- * Input: An hwloc topology. 
- * Output: An array of devices. 
- * 
- * For every unique I/O device, add an entry to the 
- * output array with the device's different IDs: 
- *   PCI Bus ID 
- *   Universally Unique ID 
- *   *_VISIBLE_DEVICES ID 
+ * Input: An hwloc topology.
+ * Output: An array of devices.
+ *
+ * For every unique I/O device, add an entry to the
+ * output array with the device's IDs:
+ *   PCI Bus ID
+ *   Universally Unique ID
  *   SMI ID (RSMI or NVML)
- * This function includes GPUs and OpenFabrics NICs 
- * and can add other devices as necessary. 
- * 
+ * This function includes GPUs and NICs
+ * and can add other devices as necessary.
+ *
  * mpibind uses its own IDs to refer to I/O devices,
- * namely the index of the device ID array. 
- * Having small non-negative integers allows using 
- * efficient storage: bitmaps. 
- * Given an mpibind ID, one can map it to whatever the 
- * caller wishes to use, e.g., ID for *_VISIBLE_DEVICES. 
- *  
- * Notes on the different type of IDs:
- *  
- * I no longer rely on cuda<x> or opencl<x>d<y> to 
- * detect the device. If rsmi/nvml found, then use these. 
- * Note that CUDA/OPENCL are COPROC IDs and are relative
+ * namely the index of the device ID array.
+ * Having small non-negative integers allows using
+ * efficient storage: bitmaps.
+ * Given an mpibind ID, one can map it to whatever the
+ * caller wishes to use, e.g., ID for *_VISIBLE_DEVICES.
+ *
+ * I rely on RSMI/NVML devices for AMD/NVIDIA GPUs.
+ * CUDA/OPENCL IDs are COPROC IDs and relative
  * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
  * NVML and RSMI (GPU IDs), on the other hand, act as absolute
- * IDs--don't change as a result of env vars. 
+ * IDs--don't change as a result of env vars.
+ *
+ * A side effect: Setting *_VISIBLE_DEVICES to hide GPUs
+ * before calling mpibind may not have an effect, because
+ * I look for all devices including RSMI and NVML.
+ *
+ * I no longer rely on each device having a unique PCI busid:
+ * Multiple devices can share one, e.g., partitioned devices.
+ * But, every device must have an associated PCI busid.
+ */
+/*
+ * Name   Type        Vendor          Model          Subtype   UUID
  * 
- * A side effect: Setting *_VISIBLE_DEVICES to hide GPUs 
- * before calling mpibind may not have an effect, because 
- * I look for all devices including RSMI and NVML. 
- * 
- * Currently, I rely on the pcibus_id, because it 
- * is absolute and it does not rely on having the 
- * nvml or rsmi components loaded. These components 
- * though are required to get the uuid. 
+ * rsmi0  GPU         GPUVendor       GPUModel       RSMI      AMDUUID
+ * nvml0  GPU         GPUVendor       GPUModel       NVML      NVIDIAUUID
+ * ze0    CoProc      LevelZeroVendor LevelZeroModel LevelZero LevelZeroUUID
+ * mlx5_0 OpenFabrics ___             ___            ___       ___
+ * bxi0   Network     ___             ___            BXI       BXIUUID (hwloc 3)
+ * hsi0   Network     ___             ___            Slingshot ___
+ *
+ * Todo: Take a look at Cornelis networks.
  */
 int discover_devices(hwloc_topology_t topo, 
 		     struct device **devs, int size)
 {
-  int index, ndevs=0; 
+  int index=0;
   char busid[PCI_BUSID_LEN];
   hwloc_obj_osdev_type_t type;
-  hwloc_obj_t pci_obj, obj, current;
+  hwloc_obj_t pci_obj, obj=NULL;
 
-  obj = NULL; 
+
   while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL ) {
-    type = obj->attr->osdev.type; 
+    type = obj->attr->osdev.type;
+
     if (type == HWLOC_OBJ_OSDEV_COPROC ||
-        type == HWLOC_OBJ_OSDEV_GPU || 
+        type == HWLOC_OBJ_OSDEV_GPU ||
+	type == HWLOC_OBJ_OSDEV_NETWORK ||
         type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
 
-      /* Get the PCI bus ID */ 
+      /* Get the PCI bus ID.
+	 If a device does not have an associated PCI ID,
+	 it will not be recognized/added to the device list */
       pci_obj = get_pci_busid(obj, busid, sizeof(busid)); 
       if (pci_obj == NULL) {
         fprintf(stderr, "Warn: Couldn't get PCI busid of I/O device\n");
-        continue; 
+        continue;
       }
 
-      /* Have we seen this device already? 
-         opencl0d0 and cuda0 may correspond to the same GPU HW */ 
-      for (index=0; index<ndevs; index++) 
-        if (strcmp(devs[index]->pci, busid) == 0)
-          break; 
-      /* Add a new device with a unique PCI busid */ 
-      if (index == ndevs) {
-        if (ndevs >= size) {
-          fprintf(stderr, "Warn: I/O device array maxed out\n"); 
-          return ndevs; 
-        }
+      /* To add a device, it needs to be:
+	 (1) GPU-type device (includes AMD-RSMI and NVIDIA-NVML)
+	 (2) OPENFABRICS-type device (includes InfiniBand)
+	 (3) COPROC-type: LevelZero device
+	 (4) NETWORK-type (includes Slingshot and BXI devices)
+	 I exclude CUDA and OpenCL COPROC devices to avoid 
+	 duplication with NVML and RSMI devices */
+      if ( (type == HWLOC_OBJ_OSDEV_COPROC &&
+	    !obj_has_subtype(obj, "LevelZero")) ||
+	   (type == HWLOC_OBJ_OSDEV_NETWORK &&
+	    !obj_has_subtype(obj, "Slingshot")
+	    !obj_has_subtype(obj, "BXI")) )
+	continue;
 
-        /* Allocate and initialize the new device */ 
-        devs[index] = malloc(sizeof(struct device));
-        devs[index]->univ[0] = '\0'; 
-        devs[index]->smi = -1;
-        devs[index]->visdevs = -1; 
-        devs[index]->type = -1; 
-
-        devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
-	devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj); 
-
-	/* Traverse all objects associated with this PCI device */   
-	if (pci_obj->io_arity > 0) {
-	  current = pci_obj->io_first_child; 
-	  do {
-	    fill_in_device_info(current, devs[index]); 
-	  } while ((current = current->next_sibling) != NULL);
-	}
-
-	/* Make sure VISIBLE_DEVICES id is set,
-	   even when no OpenCL device was found (AMD GPUs) */
-	if (devs[index]->type == DEV_GPU && devs[index]->visdevs == -1) {
-	  if (devs[index]->smi >= 0)
-	    devs[index]->visdevs = devs[index]->smi; 
-	  else
-	    fprintf(stderr, "Warn: No ID found for GPU %s\n", busid);
-	}
-	
-        snprintf(devs[ndevs++]->pci, PCI_BUSID_LEN, "%s", busid);
+      if (index >= size) {
+	fprintf(stderr, "Warn: I/O device array maxed out\n");
+	return index;
       }
+
+      /* Allocate and initialize the new device */
+      devs[index] = malloc(sizeof(struct device));
+      devs[index]->univ[0] = '\0';
+      devs[index]->vendor[0] = '\0';
+      devs[index]->model[0] = '\0';
+      devs[index]->type = -1;
+      devs[index]->vendor_id = -1;
+      devs[index]->smi = -1;
+
+      /* Set vendor and model from the PCI object,
+	 mostly for non-GPU devices */
+      char vendor[SHORT_STR_SIZE];
+      /* Get first word of vendor */
+      if (hwloc_obj_get_info_by_name(pci_obj, "PCIVendor")) {
+	sscanf(hwloc_obj_get_info_by_name(pci_obj, "PCIVendor"), "%s", vendor);
+	snprintf(devs[index]->vendor, SHORT_STR_SIZE, "%s", vendor);
+      }
+      snprintf(devs[index]->model, SHORT_STR_SIZE, "%s",
+	       hwloc_obj_get_info_by_name(pci_obj, "PCIDevice"));
+
+      snprintf(devs[index]->pci, PCI_BUSID_LEN, "%s", busid);
+      devs[index]->vendor_id = pci_obj->attr->pcidev.vendor_id;
+      devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj);
+
+      /* Fill in the rest of the device attributes */
+      fill_in_device_info(obj, devs[index]);
+
+      index++;
     }
   }
 
-  return ndevs; 
+  return index;
 }
-
 
 
 /* 
@@ -1013,13 +1148,26 @@ int get_num_gpus(struct device **devs, int ndevs)
 }
 
 
-int get_gpu_vendor(struct device **devs, int ndevs)
+int get_gpu_vendor_id(struct device **devs, int ndevs)
 {
   int i, vendor=-1; 
 
   for (i=0; i<ndevs; i++)
     if (devs[i]->type == DEV_GPU)
-      vendor = devs[i]->vendor; 
+      vendor = devs[i]->vendor_id;
+
+  return vendor;
+}
+
+
+char* get_gpu_vendor(struct device **devs, int ndevs)
+{
+  int i;
+  char* vendor=NULL;
+
+  for (i=0; i<ndevs; i++)
+    if (devs[i]->type == DEV_GPU)
+      vendor = devs[i]->vendor;
 
   return vendor; 
 }
@@ -1072,8 +1220,8 @@ int device_key_snprint(char *buf, size_t size,
   switch (id_type) {
   case MPIBIND_ID_UNIV :
     return snprintf(buf, size, "%s", dev->univ); 
-  case MPIBIND_ID_VISDEVS :
-    return snprintf(buf, size, "%d", dev->visdevs); 
+  case MPIBIND_ID_SMI :
+    return snprintf(buf, size, "%d", dev->smi);
   case MPIBIND_ID_PCIBUS :
     return snprintf(buf, size, "%s", dev->pci); 
   case MPIBIND_ID_NAME :
@@ -1194,6 +1342,118 @@ int numas_wgpus(hwloc_topology_t topo, hwloc_bitmap_t numas)
 
 
 #if 0
+/*
+ * Third version of discover_devices()
+ *
+ * Input: An hwloc topology.
+ * Output: An array of devices.
+ *
+ * For every unique I/O device, add an entry to the
+ * output array with the device's different IDs:
+ *   PCI Bus ID
+ *   Universally Unique ID
+ *   *_VISIBLE_DEVICES ID
+ *   SMI ID (RSMI or NVML)
+ * This function includes GPUs and OpenFabrics NICs
+ * and can add other devices as necessary.
+ *
+ * mpibind uses its own IDs to refer to I/O devices,
+ * namely the index of the device ID array.
+ * Having small non-negative integers allows using
+ * efficient storage: bitmaps.
+ * Given an mpibind ID, one can map it to whatever the
+ * caller wishes to use, e.g., ID for *_VISIBLE_DEVICES.
+ *
+ * Notes on the different type of IDs:
+ *
+ * I no longer rely on cuda<x> or opencl<x>d<y> to
+ * detect the device. If rsmi/nvml found, then use these.
+ * Note that CUDA/OPENCL are COPROC IDs and are relative
+ * IDs affected by env vars like CUDA_VISIBLE_DEVICES.
+ * NVML and RSMI (GPU IDs), on the other hand, act as absolute
+ * IDs--don't change as a result of env vars.
+ *
+ * A side effect: Setting *_VISIBLE_DEVICES to hide GPUs
+ * before calling mpibind may not have an effect, because
+ * I look for all devices including RSMI and NVML.
+ *
+ * Currently, I rely on the pcibus_id, because it
+ * is absolute and it does not rely on having the
+ * nvml or rsmi components loaded. These components
+ * though are required to get the uuid.
+ */
+int discover_devices(hwloc_topology_t topo,
+		     struct device **devs, int size)
+{
+  int index, ndevs=0;
+  char busid[PCI_BUSID_LEN];
+  hwloc_obj_osdev_type_t type;
+  hwloc_obj_t pci_obj, obj, current;
+
+  obj = NULL;
+  while ( (obj = hwloc_get_next_osdev(topo, obj)) != NULL ) {
+    type = obj->attr->osdev.type;
+    if (type == HWLOC_OBJ_OSDEV_COPROC ||
+        type == HWLOC_OBJ_OSDEV_GPU ||
+        type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+
+      /* Get the PCI bus ID */
+      pci_obj = get_pci_busid(obj, busid, sizeof(busid));
+      if (pci_obj == NULL) {
+        fprintf(stderr, "Warn: Couldn't get PCI busid of I/O device\n");
+        continue;
+      }
+
+      /* Have we seen this device already?
+         opencl0d0 and cuda0 may correspond to the same GPU HW */
+      for (index=0; index<ndevs; index++)
+        if (strcmp(devs[index]->pci, busid) == 0)
+          break;
+      /* Add a new device with a unique PCI busid */
+      if (index == ndevs) {
+        if (ndevs >= size) {
+          fprintf(stderr, "Warn: I/O device array maxed out\n");
+          return ndevs;
+        }
+
+        /* Allocate and initialize the new device */
+        devs[index] = malloc(sizeof(struct device));
+        devs[index]->univ[0] = '\0';
+        devs[index]->smi = -1;
+        devs[index]->visdevs = -1;
+        devs[index]->type = -1;
+
+        devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
+	devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj);
+
+	/* Traverse all objects associated with this PCI device */
+	if (pci_obj->io_arity > 0) {
+	  current = pci_obj->io_first_child;
+	  do {
+	    fill_in_device_info(current, devs[index]);
+	  } while ((current = current->next_sibling) != NULL);
+	}
+
+	/* Make sure VISIBLE_DEVICES id is set,
+	   even when no OpenCL device was found (AMD GPUs) */
+	if (devs[index]->type == DEV_GPU && devs[index]->visdevs == -1) {
+	  if (devs[index]->smi >= 0)
+	    devs[index]->visdevs = devs[index]->smi;
+	  else
+	    fprintf(stderr, "Warn: No ID found for GPU %s\n", busid);
+	}
+
+        snprintf(devs[ndevs++]->pci, PCI_BUSID_LEN, "%s", busid);
+      }
+    }
+  }
+
+  return ndevs;
+}
+#endif
+
+
+#if 0
 /* 
  * Second version of discover devices. 
  * 
@@ -1274,7 +1534,7 @@ int discover_devices(hwloc_topology_t topo,
         devs[index]->type = -1; 
 
         devs[index]->vendor = pci_obj->attr->pcidev.vendor_id;
-	      devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj); 
+	devs[index]->ancestor = hwloc_get_non_io_ancestor_obj(topo, obj);
  
         if (type == HWLOC_OBJ_OSDEV_COPROC)
           devs[index]->type = DEV_GPU;
