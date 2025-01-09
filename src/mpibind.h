@@ -18,7 +18,7 @@ extern "C" {
 
     /* Type of I/O ID */ 
     MPIBIND_ID_UNIV, 
-    MPIBIND_ID_VISDEVS,
+    MPIBIND_ID_SMI,
     MPIBIND_ID_PCIBUS,
     MPIBIND_ID_NAME,
   }; 

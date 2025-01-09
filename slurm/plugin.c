@@ -847,7 +847,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     /* Use VISIBLE_DEVICES IDs to enumerate the GPUs
        since users are used to this enumeration
        (as opposed to mpibind's enumeration) */
-    mpibind_set_gpu_ids(mph, MPIBIND_ID_VISDEVS);
+    mpibind_set_gpu_ids(mph, MPIBIND_ID_SMI);
 
     // This call had an issue with buffer overrun. Now fixed!
     mpibind_mapping_snprint(buf, PRINT_MAP_BUF_SIZE, mph);

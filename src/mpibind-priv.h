@@ -49,15 +49,16 @@ enum {
  * to a non-negative integer. 
  */
 struct device {
-  char name[SHORT_STR_SIZE]; // Device name 
-  char pci[PCI_BUSID_LEN];   // PCI bus ID
-  char univ[UUID_LEN];       // Universally unique ID 
-  hwloc_obj_t ancestor;      // First (smallest) non-I/O ancestor object
-  int type;                  // Type of I/O device, e.g., DEV_GPU
-  int vendor;                // Device vendor
+  char name[SHORT_STR_SIZE];   // Device name
+  char pci[PCI_BUSID_LEN];     // PCI bus ID
+  char univ[UUID_LEN];         // Universally unique ID
+  hwloc_obj_t ancestor;        // First (smallest) non-I/O ancestor object
+  int type;                    // Type of I/O device, e.g., DEV_GPU
+  int vendor_id;               // Device vendor
   /* GPU specific */ 
-  int smi;                   // System management ID (RSMI and NVML)
-  int visdevs;               // CUDA/ROCR visible devices ID
+  int smi;                     // System management ID (RSMI and NVML)
+  char vendor[SHORT_STR_SIZE]; // Vendor of GPU/COPROC devices
+  char model[SHORT_STR_SIZE];  // Model of GPU/COPROC devices
 }; 
 
 /* 

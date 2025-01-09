@@ -46,7 +46,8 @@ int mpibind_distrib(hwloc_topology_t topo,
 		  hwloc_bitmap_t *gpus_pt);
 int device_key_snprint(char *buf, size_t size, 
       struct device *dev, int id_type);
-int get_gpu_vendor(struct device **devs, int ndevs);
+int get_gpu_vendor_id(struct device **devs, int ndevs);
+char* get_gpu_vendor(struct device **devs, int ndevs);
 const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu);
 void terminate_str(char *buf, int size);
 
@@ -383,7 +384,7 @@ hwloc_bitmap_t* mpibind_get_gpus(mpibind_t *handle)
  * the specified task. The type of ID used can 
  * be specified by the user with 
  * mpibind_set_gpu_ids()
- * The default ID type is MPIBIND_ID_VISDEVS. 
+ * The default ID type is MPIBIND_ID_SMI.
  */
 char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid, 
                                int *ngpus)
@@ -394,7 +395,7 @@ char ** mpibind_get_gpus_ptask(mpibind_t *handle, int taskid,
   if (handle->gpus_usr == NULL)
     /* User hasn't called mpibind_set_gpu_ids(). 
        Call this function with the default ID type */ 
-    mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS); 
+    mpibind_set_gpu_ids(handle, MPIBIND_ID_SMI);
 
   *ngpus = hwloc_bitmap_weight(handle->gpus[taskid]); 
 
@@ -675,11 +676,13 @@ int mpibind(mpibind_t *hdl)
 #if VERBOSE >=1 
   PRINT("Effective I/O devices: %d\n", hdl->ndevs);
   for (i=0; i<hdl->ndevs; i++) 
-    PRINT("[%d]: busid=%s smi=%d visdevs=%d vendor=0x%x "
-	  "name=%s\n\tuuid=%s ancestor=0x%" PRIu64 "\n",
-	  i, hdl->devs[i]->pci, hdl->devs[i]->smi,
-	  hdl->devs[i]->visdevs, hdl->devs[i]->vendor,
-	  hdl->devs[i]->name, hdl->devs[i]->univ,
+    PRINT("[%d]: busid=%s smi=%d name=%s\n"
+	  "\tvendor=%s model=%s\n"
+	  "\tuuid=%s\n"
+	  "\tvendorid=0x%x ancestor=0x%" PRIu64 "\n",
+	  i, hdl->devs[i]->pci, hdl->devs[i]->smi, hdl->devs[i]->name,
+	  hdl->devs[i]->vendor, hdl->devs[i]->model,
+	  hdl->devs[i]->univ, hdl->devs[i]->vendor_id,
 	  hdl->devs[i]->ancestor->gp_index);
 #endif
 
@@ -699,7 +702,7 @@ int mpibind(mpibind_t *hdl)
 #if VERBOSE >= 1
   PRINT("Input: tasks %d threads %d greedy %d smt %d\n",
 	hdl->ntasks, hdl->in_nthreads, hdl->greedy, hdl->smt);
-  PRINT("GPUs: count %d optim %d vendor 0x%x\n",
+  PRINT("GPUs: count %d optim %d vendor %s\n",
 	get_num_gpus(hdl->devs, hdl->ndevs), gpu_optim,
 	get_gpu_vendor(hdl->devs, hdl->ndevs));
 #endif
@@ -920,9 +923,9 @@ int mpibind_set_gpu_ids(mpibind_t *handle, int id_type)
   int val, i, j, ngpus; 
 
   if (handle == NULL || 
-      (id_type != MPIBIND_ID_NAME && 
+      (id_type != MPIBIND_ID_NAME &&
       id_type != MPIBIND_ID_PCIBUS &&
-      id_type != MPIBIND_ID_VISDEVS && 
+      id_type != MPIBIND_ID_SMI &&
       id_type != MPIBIND_ID_UNIV))
     return 1; 
 
@@ -994,7 +997,7 @@ int mpibind_set_env_vars(mpibind_t *handle)
   handle->nvars = nvars;
   handle->env_vars = calloc(nvars, sizeof(mpibind_env_var));
 
-  vendor = get_gpu_vendor(handle->devs, handle->ndevs); 
+  vendor = get_gpu_vendor_id(handle->devs, handle->ndevs);
 
   for (v=0; v<nvars; v++) {    
     /* Fill in env_vars */ 
@@ -1059,7 +1062,7 @@ int mpibind_set_env_vars(mpibind_t *handle)
            Todo: When AMD supports UUIDs, use UUIDs instead */ 
 	hwloc_bitmap_foreach_begin(val, handle->gpus[i]) {
 	  nc += snprintf(str+nc, LONG_STR_SIZE-nc, "%d,", 
-			 handle->devs[val]->visdevs); 
+			 handle->devs[val]->smi);
 	} hwloc_bitmap_foreach_end();
       }
       

@@ -906,7 +906,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     /* Use VISIBLE_DEVICES IDs to enumerate the GPUs
        since users are used to this enumeration
        (as opposed to mpibind's enumeration) */
-    mpibind_set_gpu_ids(mph, MPIBIND_ID_VISDEVS);
+    mpibind_set_gpu_ids(mph, MPIBIND_ID_SMI);
     mpibind_mapping_snprint(outbuf, PRINT_MAP_BUF_SIZE, mph);
     shell_log("\n%s", outbuf);
   }
