@@ -14,7 +14,7 @@ void howto_gpu_ids(mpibind_t *handle)
   char str[128];
   int i, j, k, ngpus;
   int ids[] = {MPIBIND_ID_PCIBUS, MPIBIND_ID_UNIV,
-               MPIBIND_ID_VISDEVS, MPIBIND_ID_NAME}; 
+               MPIBIND_ID_SMI, MPIBIND_ID_NAME};
   char *desc[] = { "PCI", "UUID", "VISDEVS", "NAME"};
   int ntasks = mpibind_get_ntasks(handle);
 
@@ -93,27 +93,53 @@ int main(int argc, char *argv[])
   mpibind_set_ntasks(handle, ntasks);
   //mpibind_set_nthreads(handle, 3);
   //mpibind_set_greedy(handle, 0);
-  //mpibind_set_gpu_optim(handle, 0);
+  mpibind_set_gpu_optim(handle, 0);
   //mpibind_set_smt(handle, 2);
   //params.restr_type = MEM; 
-  //  mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
+  //mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
   //params.restr_set = "24-29,72-77,36-41,84-89";
   //params.restr_set = "24-35,72-83";
   //params.restr_set = "4-6";
-  //params.restr_set = "8"; 
-  //  mpibind_set_restrict_ids(handle, "24-35,72-83"); 
+  //params.restr_set = "8";
+  //mpibind_set_restrict_ids(handle, "24-35,72-83");
+  //mpibind_set_restrict_ids(handle, "0-11,24-47");
+
+
+  /* Use an hwloc topology file */
+#if 0
+  char xml[] = "../../hwloc/flash-v100.xml";
+  hwloc_topology_t etopo;
+  if (hwloc_topology_init(&etopo) < 0) {
+    fprintf(stderr, "hwloc_topology_init failed\n");
+    return 0;
+  }
+  if (hwloc_topology_set_xml(etopo, xml) < 0) {
+    fprintf(stderr, "hwloc_topology_set_xml(%s) failed\n", xml);
+    return 0;
+  }
+  if (mpibind_filter_topology(etopo) < 0) {
+    fprintf(stderr, "mpibind_filter_topology failed\n");
+    return 0;
+  }
+  if (hwloc_topology_load(etopo) < 0) {
+    fprintf(stderr, "hwloc_topology_load failed");
+    return 0;
+  }
+  mpibind_set_topology(handle, etopo);
+#endif
+
 
   /* Get the mapping */ 
   if ( mpibind(handle) )
     return 1;
   
-  /* Get the hwloc topology to parse the hwloc_bitmaps */ 
+  /* Get the hwloc topology to parse the hwloc_bitmaps */
   hwloc_topology_t topo; 
   topo = mpibind_get_topology(handle); 
 
   /* Verbose mapping */ 
   //Specify the type of GPU IDs to use
-  mpibind_set_gpu_ids(handle, MPIBIND_ID_VISDEVS);
+  mpibind_set_gpu_ids(handle, MPIBIND_ID_SMI);
   mpibind_mapping_print(handle); 
 
   /* Test popping CPUs/cores */ 
