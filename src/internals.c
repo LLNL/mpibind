@@ -1088,7 +1088,7 @@ int discover_devices(hwloc_topology_t topo,
       if ( (type == HWLOC_OBJ_OSDEV_COPROC &&
 	    !obj_has_subtype(obj, "LevelZero")) ||
 	   (type == HWLOC_OBJ_OSDEV_NETWORK &&
-	    !obj_has_subtype(obj, "Slingshot")
+	    !obj_has_subtype(obj, "Slingshot") &&
 	    !obj_has_subtype(obj, "BXI")) )
 	continue;
 
