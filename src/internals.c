@@ -914,8 +914,13 @@ void fill_in_device_info(hwloc_obj_t obj, struct device *dev)
       snprintf(dev->univ, UUID_LEN, "%s",
 	       hwloc_obj_get_info_by_name(obj, "LevelZeroUUID"));
     }
-  } else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS ||
-	     type == HWLOC_OBJ_OSDEV_NETWORK) {
+
+  } else if (type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
+    dev->type = DEV_NIC;
+    snprintf(dev->univ, UUID_LEN, "%s",
+	     hwloc_obj_get_info_by_name(obj, "NodeGUID"));
+
+  } else if (type == HWLOC_OBJ_OSDEV_NETWORK) {
     dev->type = DEV_NIC;
 
     if ( obj_has_subtype(obj, "BXI") )
@@ -923,7 +928,7 @@ void fill_in_device_info(hwloc_obj_t obj, struct device *dev)
 	       hwloc_obj_get_info_by_name(obj, "BXIUUID"));
     else
       snprintf(dev->univ, UUID_LEN, "%s",
-	       hwloc_obj_get_info_by_name(obj, "NodeGUID"));
+	       hwloc_obj_get_info_by_name(obj, "Address"));
   }
 }
 
@@ -1046,11 +1051,10 @@ int filter_gpu_types(hwloc_topology_t topo)
  * rsmi0  GPU         GPUVendor       GPUModel       RSMI      AMDUUID
  * nvml0  GPU         GPUVendor       GPUModel       NVML      NVIDIAUUID
  * ze0    CoProc      LevelZeroVendor LevelZeroModel LevelZero LevelZeroUUID
- * mlx5_0 OpenFabrics ___             ___            ___       ___
+ * mlx5_0 OpenFabrics ___             ___            ___       NodeGUID
+ * hfi1_0 OpenFabrics ___             ___            ___       NodeGUID
  * bxi0   Network     ___             ___            BXI       BXIUUID (hwloc 3)
- * hsi0   Network     ___             ___            Slingshot ___
- *
- * Todo: Take a look at Cornelis networks.
+ * hsi0   Network     ___             ___            Slingshot Address
  */
 int discover_devices(hwloc_topology_t topo, 
 		     struct device **devs, int size)

@@ -254,7 +254,9 @@ int obj_attr_snprintf(char *str, size_t size, hwloc_obj_t obj,
       nc += hwloc_obj_type_snprintf(str+nc, size-nc, obj, 1);
       nc += snprintf(str+nc, size-nc, ": name=%s ", obj->name);
       nc += snprintf(str+nc, size-nc, "NodeGUID=%s ",
-        hwloc_obj_get_info_by_name(obj, "NodeGUID"));     
+		     hwloc_obj_get_info_by_name(obj, "NodeGUID"));
+      nc += snprintf(str+nc, size-nc, "Address=%s ",
+		     hwloc_obj_get_info_by_name(obj, "Address"));
       nc += snprintf(str+nc, size-nc, "   ");
       nc += hwloc_obj_attr_snprintf(str+nc, size-nc, obj, " ", verbose);
       break; 
