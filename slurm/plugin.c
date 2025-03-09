@@ -60,8 +60,8 @@ SPANK_PLUGIN(mpibind, 2);
  *     mpibind will use only those cores allocated to the
  *     job step even when the job has more cores available to it.
  */
-#define S_ALLOC_CORES  S_JOB_ALLOC_CORES
-//#define S_ALLOC_CORES  S_STEP_ALLOC_CORES
+//#define S_ALLOC_CORES  S_JOB_ALLOC_CORES
+#define S_ALLOC_CORES  S_STEP_ALLOC_CORES
 
 
 /************************************************
