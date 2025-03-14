@@ -1,12 +1,12 @@
-# Module 2: Process affinity with Slurm
+# Module 2: Mapping processes to the hardware 
 
 *Edgar A. León* and *Jane E. Herriman*<br>
 Lawrence Livermore National Laboratory
 
 ## Table of contents
 
-1. Making sense of affinity: [Discovering the node architecture topology](module1.md)
-2. Exerting resource manger affinity: Process affinity with Slurm
+1. [Discovering the node architecture topology and reporting affinity](module1.md)
+2. Mapping processes to the hardware
    1. [Learning objectives](#learning-objectives)
    1. [Affinity through the resource manager](#affinity-through-the-resource-manager)
    1. [Example architectures](#example-architectures)
@@ -17,7 +17,7 @@ Lawrence Livermore National Laboratory
    1. [Portability across systems](#portability-across-systems)
    1. [Extra hands-on exercises](#extra-hands-on-exercises)
    1. [References](#references)
-3. Putting it all together: [Adding in GPUs](module3.md)
+3. [Adding in GPU kernels: Putting it all together](module3.md)
 
 
 

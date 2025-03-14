@@ -1,13 +1,13 @@
-# Module 3: Adding in GPUs
+# Module 3: Adding in GPU kernels: Putting it all together 
 
 *Edgar A. León* and *Jane E. Herriman*<br>
 Lawrence Livermore National Laboratory
 
 ## Table of contents
 
-1. Making sense of affinity: [Discovering the node architecture topology](module1.md)
-2. Exerting resource manger affinity: [Process affinity with Slurm](module2.md)
-3. Putting it all together: Adding in GPUs
+1. [Discovering the node architecture topology and reporting affinity](module1.md)
+2. [Mapping processes to the hardware](module2.md)
+3. Adding in GPU kernels: Putting it all together 
    1. [Learning objectives](#learning-objectives)
    1. [Background](#background)
    1. [Example architecture](#example-architecture)

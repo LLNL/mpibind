@@ -1,4 +1,4 @@
-# Module 1: Discovering node architecture topology and default affinity
+# Module 1: Discovering the node architecture topology
 
 *Edgar A. León* and *Jane E. Herriman*<br>
 Lawrence Livermore National Laboratory
@@ -6,7 +6,7 @@ Lawrence Livermore National Laboratory
 
 ## Table of contents
 
-1. Making sense of affinity: Discovering the node architecture topology
+1. Discovering the node architecture topology
    1. [Learning objectives](#learning-objectives)
    1. [Background](#background)
    1. [Example architectures](#example-architectures)
@@ -19,8 +19,8 @@ Lawrence Livermore National Laboratory
    1. [Reporting affinity](#reporting-affinity)
    1. [Extra exercises](#extra-exercises)
    1. [References](#references)
-2. Exerting resource manger affinity: [Process affinity with Slurm](module2.md)
-3. Putting it all together: [Adding in GPUs](module3.md)
+2. [Mapping processes to the hardware](module2.md)
+3. [Adding in GPU kernels: Putting it all together](module3.md)
 
 
 
@@ -31,7 +31,7 @@ Lawrence Livermore National Laboratory
 * Learn how to use `lstopo` to explore node topology
 * Learn how to calculate CPU masks with `hwloc-calc`
 * Learn how to bind processes to CPUs (sometimes via CPU masks) with `hwloc-bind`
-* Begin to understand "locality"
+* Begin to understand *locality*
 * Understand the difference between affinity policies, binding, and mappings
 * Use a simple tool identify resources available to particular processes 
 
@@ -45,11 +45,13 @@ Let's start by considering compute resources only (and ignoring memory).
 
 <img src="../figures/computing-architecture.png" width="600"/>
 
-At the bottom of the tree shown above, we see "Processing Units" denoted as "PU"s. A **PU** is the smallest processing unit that can handle a logical thread of execution, i.e. execute its own set of instructions. Multiple PUs are sometimes packaged together into a **core**. PUs have both dedicated and shared hardware resources on a core; for example, floating point units are shared by multiple PUs.
+At the bottom of the tree shown above, we see *Processing Units* denoted as *PUs*. A **PU** is the smallest processing unit that can handle a logical thread of execution, i.e. execute its own set of instructions. Multiple PUs are sometimes packaged together into a **Core**. PUs have both dedicated and shared hardware resources on a core; for example, floating point units are shared by multiple PUs.
 
-In our tree, we see **GPU**s, Graphical Processing Units, shown at the same level as cores. In contrast to cores and their PUs, GPUs allow for greater data parallelization by working on vectors of data at once.
+In our tree, we see **GPUs**, Graphical Processing Units, shown at the same level as cores. In contrast to cores and their PUs, GPUs allow for greater data parallelization by working on vectors of data at once.
 
-Multiple cores and possibly one or more GPUs are included on a single processor. Each of these processors is a set of compute resources written onto a single piece of Silicon (a die).
+Multiple cores are included on a single processor. Each of these
+processors is a set of compute resources written onto a single piece
+of Silicon (a die). One or more GPUs can be attached to a processor. 
 
 Finally, at the top of our tree is a node, which you can think of as a stand-alone computer. Modern nodes are often built from multiple processors, and the example architectures we'll consider each have two processors. 
 
@@ -69,9 +71,6 @@ Answer
 </summary>
 C!
 
-Every core has one hardware thread per PU.
-
-Every processor has one hardware thread for all the PUs across all cores.
 </details>
 
 
@@ -79,25 +78,25 @@ Every processor has one hardware thread for all the PUs across all cores.
 
 Once we throw memory into the picture, we need to consider not only what resources are available, but how they're physically arranged and, therefore, how easily they can talk to one another.
 
-In the image below, consider a scenario where we have two processors and two stores of memory. In the layout shown, processor 1 is closer to memory 1 than to memory 2; similarly, processor 2 is closer to memory 2 than memory 1. This means that processor 1 can more easily and *more quickly* access data stored in memory 1 than data stored in memory 2 and vice versus. In this case, the processors have Non-Uniform Memory Access (NUMA) and we say that memory 1 and processor 1 are in the same NUMA domain. Processor 2 shares the second NUMA domain with memory 2 and will access data in memory 1 with higher latency.
+In the image below, consider a scenario where we have two processors and two stores of memory. In the layout shown, processor 1 is closer to memory 1 than to memory 2; similarly, processor 2 is closer to memory 2 than memory 1. This means that processor 1 can more easily and *more quickly* access data stored in memory 1 than data stored in memory 2 and vice versa. In this case, the processors have Non-Uniform Memory Access (NUMA) and we say that memory 1 and processor 1 are in the same NUMA domain. Processor 2 shares the second NUMA domain with memory 2 and will access data in memory 1 with higher latency.
 
 <img src="../figures/numa.png" width="300"/>
 
-We can imagine scenarios where memory is laid out to be equidistant from multiple processors and where multiple processors are in the same NUMA domain. In the architectures we'll consider, however, there will be a one-to-one mapping between NUMA domains and processors. So, all computing resources on a Silicon die will be in the same NUMA domain and will have the same "local" memory. 
+We can imagine scenarios where memory is laid out to be equidistant from multiple processors and where multiple processors are in the same NUMA domain. In the architectures we'll consider, however, there will be a one-to-one mapping between NUMA domains and processors. So, all computing resources on a Silicon die will be in the same NUMA domain and will have the same *local* memory. 
 
-Our references to "memory" above refer to memory that's transmitted over a frontside bus. In contrast, **cache memory** serves as a faster and closer source of memory, and different cores on the same processor and within the same NUMA domain may have access to different cache. 
+Our references to *memory* above refer to memory that's transmitted over a frontside bus. In contrast, **cache memory** serves as a faster and closer source of memory, and different cores on the same processor and within the same NUMA domain may have access to different cache. 
 
 In general, cache levels are denoted as `L<N>` where `<N>` denotes the cache level. Lower values of `N` denote smaller and faster levels of cache. In the figure below, we see an example of what the cache hierarchy and layout might look like on a single processor.
 
 <img src="../figures/cache.png" width="500"/>
 
-In this example cache layout, there are three levels of cache -- `L1`, `L2`, and `L3`. Each core has its own `L1` cache, every two cores share a `L2` cache, and sets of six cores each have a `L3` cache.
+In this example cache layout, there are three levels of cache -- `L1`, `L2`, and `L3`. Each core has its own `L1` cache, every two cores share an `L2` cache, and sets of six cores each have an `L3` cache.
 
-Throughout this tutorial, we'll be talking about "locality" and compute resources that are "local" to one another. For example, we might say that a given pair of resources "are local to one another". "Being local" means being on the same NUMA domain -- even if cache is not shared.
+Throughout this tutorial, we'll be talking about *locality* and compute resources that are *local* to one another. For example, we might say that a given pair of resources *are local to one another*. *Being local* means being on the same NUMA domain -- even if cache is not shared.
 
 #### Comprehension question 2 
 
-In the cache memory diagram above, how many cores are "local" with respect to a given L3 cache?
+In the cache memory diagram above, how many cores are *local* with respect to a given L3 cache?
 
 **A)** 2
 
@@ -129,11 +128,11 @@ We'll be using the machines `Pascal` and `Tioga` in examples throughout the comi
 
 ### What is hwloc?
 
-The Hardware Locality (`hwloc`) software project is an open source toolkit that helps you better investigate and visualize the resources available to you on a given hardware architecture.
+The Hardware Locality (`hwloc`) software is an open source toolkit that helps you investigate and visualize the resources available to you on a given hardware architecture.
 
 We'll explore some of the basic commands in the sections below.
 
-Note that for this tutorial, `hwloc` is provided, so you won't need to install anything. Also note that a C API is also provied, though we'll be working with `hwloc` exclusively from the command line.
+Note that for this tutorial, `hwloc` is provided, so you won't need to install anything. Also note that a C API is also provided, though we'll be working with `hwloc` exclusively from the command line.
 
 ### hwloc objects and indexes 
 
@@ -141,19 +140,25 @@ We concentrate on three classes of objects reported by hwloc objects -- memory o
 
 ![../figures/hwloc-objects.png](../figures/hwloc-objects.png)
 
-Note that the classification of objects in `hwloc` is not mutually exclusive: a single device can register as multiple objets with different classifications depending on how it is configured. For example, a single GPU might register as a GPU, a PCI, and a CoProcessor.
+Note that the classification of objects in `hwloc` is not mutually
+exclusive: a single device can register as multiple objets with
+different classifications depending on how it is configured. For
+example, a single GPU might register as a GPU, a PCI device, and a CoProcessor.
 
-Also note that hwloc reports logical indices in reporting objects. This reporting is self consistent and so can be used when you're working exclusively with hwloc. On the other hand, the OS will report the physical index of objects, as you will encounter when you start working with bindings outside of hwloc.
+Also note that hwloc reports logical indices in reporting
+objects. This reporting is self consistent and so can be used when
+you're working exclusively with hwloc. On the other hand, the
+Operating System (OS) will
+report a potentially different index of objects, as you will encounter
+when you start working with bindings outside of hwloc. 
 
 *Definitions:*
 
-**OS or physical index**: Index the operating system (OS) uses to
-identify the object.
+**hwloc physical index**: Logical index the
+  OS uses to identify the object.
 
-**Logical index**: Index, calculated by hwloc, to uniquely identify
+**hwloc logical index**: Index, calculated by hwloc, to uniquely identify
   objects of the same type and depth.
-
-
 
 
 ## Discovering the node topology
@@ -449,41 +454,23 @@ For example, you should see a series of `.xml` files in the directory `/home/tut
 
 ```
 /home/tutorial/topo-xml$ ls
-corono.xml
+corona.xml
 lassen.xml
 pascal.xml
 tioga.xml
 ```
 
-Using these files, you should be able to create the outputs for `lstopo-no-graphics` that you'd see on these respective machines, simply by adding `--input <machine name>.xml` to the commands shown above; as an example, 
+Using these files, you should be able to create the outputs for `lstopo-no-graphics` that you'd see on these respective machines, simply by adding `--input <machine>.xml` to the commands shown above; as an example, 
 
 ```
 lstopo-no-graphics --input /home/tutorial/topo-xml/tioga.xml
 ```
 
-should allow you to "see" Tioga's architecture, without needing access to `Tioga` itself.
+should allow you to *see* Tioga's architecture, without needing access to `Tioga` itself.
 
 In another environment, `lstopo` would allow you to re-create the images shown above, but we only have the text-output version of this function working on AWS. For that reason, `lstopo` defaults to `lstopo-no-graphics` for this tutorial.
 
 #### Hands-on exercise A: Experimenting with `lstopo`
-
-By default, `lstopo` and `lstopo-no-graphics` show the topology of the machine you're logged into. Alternatively, you can pass an `.xml` file describing the topology of a *different* machine to see the topology of that machine.
-
-From your AWS desktop, try the following:
-
-```
-lstopo --input /home/tutorial/topo-xml/tioga.xml
-```
-
-and then try:
-
-```
-lstopo-no-graphics -i /home/tutorial/topo-xml/tioga.xml
-```
-
-These should give the same result!
-
-#### Hands-on exercise B: Investigating AWS nodes with `lstopo`
 
 Let's use `lstopo` to show the topology of the nodes we can see through AWS. First, try running
 
@@ -492,13 +479,25 @@ Let's use `lstopo` to show the topology of the nodes we can see through AWS. Fir
 lstopo
 ```
 
-The node you see immediately after logging in doesn't have the most interesting topology, but the nodes waiting for you in the "queue" have more features. To see the topology of one of these nodes, use the following command:
+The node you see immediately after logging in doesn't have the most interesting topology, but the nodes waiting for you in the *queue* have more features. To see the topology of one of these nodes, use the following command:
 
 ```
 srun -t1 lstopo
 ```
 
 Identify at least one way the features of the node described by `lstopo`'s output differ from those described by `srun -t1 lstopo`.
+
+By default, `lstopo` and `lstopo-no-graphics` show the topology of the machine you're logged into. Alternatively, you can pass an `.xml` file describing the topology of a *different* machine to see the topology of that machine.
+
+Try the following:
+
+```
+lstopo --input /home/tutorial/topo-xml/tioga.xml
+```
+
+Notice each case shows a different architecture! 
+
+
 
 ### Customizing `lstopo` output
 
@@ -707,7 +706,7 @@ janeh@lassen29:~$ lstopo --only PU | wc -l
 160
 ```
 
-Note that `tioga20` and `lassen29` are compute nodes, not ogin nodes!
+Note that `tioga20` and `lassen29` are compute nodes, not login nodes!
 
 </details>
 
@@ -729,7 +728,34 @@ to identify the number of cores and PUs on our AWS nodes. Do these nodes support
 
 ## Calculating CPU masks
 
-Another tool provided by `hwloc` is `hwloc-calc`, which allows you to create CPU masks. (In case this is an unfamiliar term -- this is basically a hexadecimal string that can be interpreted as a list identifying particular CPUs.) These masks can then be used as inputs to another `hwloc` function, `hwloc-bind`, as we'll see below.
+Another tool provided by `hwloc` is `hwloc-calc`, which allows you to
+create CPU masks, among other things. These masks can then be used as inputs to another `hwloc` function, `hwloc-bind`, as we'll see below.
+
+In case *bitmask* is an unfamiliar term, this is basically a hexadecimal
+string that can be interpreted as a list identifying particular
+CPUs. For example, let's say we want to create a CPU mask
+corresponding to the CPUs 1, 5, and 6 and we have 8 bits to do this: 
+```
+   Value: [ ][ ][ ][ ][ ][ ][ ][ ]
+          ------------------------
+    Bit#:  7  6  5  4  3  2  1  0
+```
+Let's light up the bits corresponding to the CPUs of interest:
+```
+   Value: [0][1][1][0][0][0][1][0]
+          ------------------------
+    Bit#:  7  6  5  4  3  2  1  0
+```
+Converting the bits into hexadecimal, we get:
+```
+0110 0010 => 0x62 
+```
+The CPU mask is then `0x62`.
+
+As you can imagine this process can get complicated easily on
+architectures with more than a handful of cores, that is why
+`hwloc-calc` is such a useful utility. 
+
 
 First off, without even worrying about CPU masks, we can use `hwloc-calc` to list, for example, the particular cores or PUs on a given NUMA domain:
 
@@ -737,15 +763,17 @@ First off, without even worrying about CPU masks, we can use `hwloc-calc` to lis
 # Get the cores on the first NUMA node
 janeh@tioga20:~$ hwloc-calc NUMAnode:0 --intersect core
 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+
 # Get the cores on the fourth NUMA node
 janeh@tioga20:~$ hwloc-calc NUMAnode:3 --intersect core
 48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63
+
 # Get the PUs on core 8 of the first NUMA node
 janeh@tioga20:~$ hwloc-calc NUMAnode:0.core:8 --intersect PU
 16,17
 ```
 
-*Note* that `hwloc-calc` uses logical indexing by default. We can see the difference if we re-run the last example:
+Note that `hwloc-calc` uses *logical indexing* by default. We can see the difference if we re-run the last example:
 
 ```
 janeh@tioga20:~$ hwloc-calc NUMAnode:0.core:8 --intersect PU --physical
@@ -758,6 +786,7 @@ If we drop the `--intersect` flag and instead simply run `hwloc-calc <compute re
 ```
 janeh@tioga22:~$ hwloc-calc NUMAnode:0.core:1
 0x00000002,,0x00000002
+
 janeh@tioga22:~$ hwloc-calc NUMAnode:0.core:2
 0x00000004,,0x00000004
 ```
@@ -767,6 +796,7 @@ We can add multiple masks together via the syntax `hwloc <mask 1> <mask 2> ...`.
 ```
 janeh@tioga22:~$ hwloc-calc 0x00000002,,0x00000002 0x00000004,,0x00000004
 0x00000006,,0x00000006
+
 janeh@tioga22:~$ hwloc-calc NUMAnode:0.core:1-2
 0x00000006,,0x00000006
 ```
@@ -783,6 +813,7 @@ The `--hierarchical` flag can be used to print expanded info about the NUMA doma
 ```
 janeh@tioga22:~$ hwloc-calc 0x00000006,,0x00000006 --hierarchical core.PU
 Core:1.PU:0 Core:1.PU:1 Core:2.PU:0 Core:2.PU:1
+
 janeh@tioga22:~$ hwloc-calc NUMAnode:0.core:1-2 --hierarchical core.PU
 Core:1.PU:0 Core:1.PU:1 Core:2.PU:0 Core:2.PU:1
 ```
@@ -792,11 +823,12 @@ Finally, observe how the `--taskset` flag changes the format of the mask printed
 ```
 janeh@tioga22:~$ hwloc-calc NUMAnode:0
 0x0000ffff,,0x0000ffff
+
 janeh@tioga22:~$ hwloc-calc NUMAnode:0 --taskset
 0xffff000000000000ffff
 ```
 
-The default mask format is specific to `hwloc`, whereas `--taskset` displays the mask in the format recognized by the taskset command-line program (an alternative command line tool for binding).
+The default mask format is specific to `hwloc`, whereas `--taskset` displays the mask in the format recognized by the `taskset` command-line program (an alternative command line tool for binding).
 
 #### Hands-on exercise E: Determine the PUs associated with a given core
 
@@ -843,6 +875,7 @@ We can get the mask for the resources running tasks with `hwloc-bind --get`:
 
 ```
 janeh@tioga22:~$ hwloc-bind NUMAnode:0.core:0-1 NUMAnode:1.core:0-1 -- sh
+
 janeh@tioga22:~$ hwloc-bind --get
 0x00030003,,0x00030003
 ```
@@ -854,7 +887,7 @@ janeh@tioga22:~$ hwloc-calc 0x00030003,,0x00030003 --intersect core
 0,1,16,17
 ```
 
-This should align with our expectations, given that `Pascal` has 18 cores per NUMA domain.
+This should align with our expectations, given that `Tioga` has 16 cores per NUMA domain.
 
 This would also have worked if we had instead calculated the mask first with `hwloc-calc` and passed it to `hwloc-bind` via:
 
@@ -903,6 +936,7 @@ To *which cores* was the last task bound with `hwloc-bind`? Determine what shoul
 
 ```
 janeh@tioga22:~$ hwloc-bind <complete this with keyword args> -- sh
+
 janeh@tioga:~$ hwloc-bind --get
 0x00100004,0x00010040,0x00100004,0x00010040
 ```
@@ -938,6 +972,7 @@ On Tioga,
 
 ```
 janeh@tioga22:~$ hwloc-bind core:6 core:16 core:34 core:52 -- sh
+
 janeh@tioga:~$ hwloc-bind --get
 0x00100004,0x00010040,0x00100004,0x00010040
 ```
@@ -1000,7 +1035,7 @@ sh-4.2$ hwloc-calc $(hwloc-bind --get) --intersect core
 **Binding**: Mechanism for implementing and changing the mappings of a given affinity policy.
 
 *Mappings*, *affinity*, and *bindings* are key and interrelated concepts in this tutorial, and so we want to define and distinguish between them. When we know a program's hardware mapping, we know which hardware resources (for example, which cores and which caches) are available to each of the workers executing the program. The affinity is a policy that informs the mapping used for a particular combination of hardware and workers, and then workers are bound to hardware resources as defined by the mapping.
-F
+
 For example, an affinity policy asking processes to spread out may result in a mapping where Process 1 is assigned to Core 1 and Process 2 maps to Core 16. After binding to Core 16, Process 2 can start performing computational work there.
 
 Since we're just getting started, these concepts may still feel abstract, but our hope is that after seeing some concrete examples in this module, these definitions will start to feel more straightforward.
@@ -1031,13 +1066,14 @@ Next, suppose we had an affinity policy with **one task per GPU on `Tioga`**. In
 
 
 #### Example 3: Mappings by GPU on Pascal
-For contrast, let's consider the same constraint of **one task per GPU on `Pascal`**. Unlike `Tioga`, `Pascal` has two processors. Also unlike `Tioga`, the distribution of GPUs across NUMAnodes is heterogeneous on `Pascal`. `Pascal` has both of its two GPUs on its first NUMAnode. A mapping of one task per GPU might look like the following:
+For contrast, let's consider the same constraint of **one task per GPU on `Pascal`**. Unlike `Tioga`, `Pascal` has two processors. Also unlike `Tioga`, the distribution of GPUs across NUMAnodes is not uniform on `Pascal`. `Pascal` has both of its two GPUs on its first NUMAnode. A mapping of one task per GPU might look like the following:
 
 * <i>Task 0: PU 0-8,36-44; nvml0</i>
 * <i>Task 1: PU 9-17,45-53; nvml1</i>
 
 in which case no tasks would run on the second NUMAnode or any of its 18 cores.
 
+<!--
 #### Comprehension question 3
 
 Match the following:
@@ -1059,17 +1095,20 @@ B. Mapping: Task 8 will run on PUs 24-26 and 72-74
 
 A. Affinity: Policy for one openMP thread per L3 on Tioga
 </details>
-
+-->
 
 
 ## Reporting affinity
 
 In the following, we'll use binaries called `mpi+gpu` and `mpi` to report the mappings of each MPI process. `mpi+gpu` will account for both CPUs and GPUs and `mpi` will let you see the mappings of processes to CPUs in isolation.
 
-Usage is straightforward. Use the `-v` option for verbose GPU output and
-the `-h` option for help.
+Usage is straightforward.The examples below should help to show how it works!
 
-The examples below should help to show how it works!
+<!--
+Use the `-v` option for verbose GPU output and
+the `-h` option for help.
+-->
+
 
 ##### Example 5
 
@@ -1097,6 +1136,7 @@ tioga12    Task   3/  4 running on 16 CPUs: 48-63
 
 </details>
 
+<!--
 When we run with the `-v` flag to get "verbose" output, we see more information about the GPUs assigned to each task.
 
 <details>
@@ -1130,7 +1170,9 @@ tioga12    Task   3/  4 running on 16 CPUs: 48-63
   0xc6: , 63 GB Mem, 110 Multiprocessors, 1.700 GHZ, 9.0 CC
 ```
 </details>
+-->
 
+<!--
 ##### Example 6
 
 For contrast, let's look at the bindings we see when we run a program with 2 processes on `Tioga`.
@@ -1155,6 +1197,7 @@ tioga12    Task   1/  2 running on 16 CPUs: 16-31
 </details>
 
 All the resources of the node are still assigned. With half the number of tasks (moving from 4 to 2 tasks), the number of CPUs and GPUs per task doubles.
+-->
 
 ##### Example 7
 
@@ -1180,9 +1223,9 @@ tioga12    Task   0/  4 running on 16 CPUs: 0-15
 </details>
 
 **Auxiliary links**
-```
-https://github.com/LLNL/mpibind/tree/master/affinity
-```
+
+* [Affinity programs](https://github.com/LLNL/mpibind/tree/master/affinity)
+
 
 ## Extra Exercises
 
