@@ -757,7 +757,7 @@ Now, let's say that we want to work only with the second GPU associated with eac
 <summary>
 
 ```
-$ ROCR_VISIBLE_DEVICES=5,3,7,1 srun -n4 -c8 --cpu-bind=thread ./mpi+gpu
+$ srun -n4 -c8 --cpu-bind=thread sh -c 'ROCR_VISIBLE_DEVICES=5,3,7,1 ./mpi+gpu'
 ```
 </summary>
 
@@ -783,7 +783,7 @@ Let's try this on the AWS cluster.
 <summary>
 
 ```
-$ CUDA_VISIBLE_DEVICES=7,6,5,4 srun -n4 -c6 --cpu-bind=thread --gpu-bind=per_task:1 mpi+gpu
+$ srun -n4 -c6 --cpu-bind=thread --gpu-bind=per_task:1 sh -c 'CUDA_VISIBLE_DEVICES=7,6,5,4 mpi+gpu'
 ```
 </summary>
 
@@ -812,7 +812,7 @@ another example.
 <summary>
 
 ```
-$ CUDA_VISIBLE_DEVICES=7,6,5,4 srun --gpus-per-node=4 -n4 -c6 --cpu-bind=thread --gpu-bind=per_task:1 mpi+gpu
+$ srun --gpus-per-node=4 -n4 -c6 --cpu-bind=thread --gpu-bind=per_task:1 sh -c 'CUDA_VISIBLE_DEVICES=7,6,5,4 mpi+gpu'
 ```
 </summary>
 
@@ -851,7 +851,7 @@ Answer
 Here, we want to use `CUDA_VISIBLE_DEVICES` to specify two GPUs -- one from each NUMA domain. This might look like
 
 ```
-[user2@ip-10-0-0-147 ~]$ CUDA_VISIBLE_DEVICES=0,4 srun -n2 -c6 --cpu-bind=thread --gpu-bind=per_task:1 mpi+gpu
+[user2@ip-10-0-0-147 ~]$ srun -n2 -c6 --cpu-bind=thread --gpu-bind=per_task:1 sh -c 'CUDA_VISIBLE_DEVICES=0,4 mpi+gpu'
 gpu-st-g4dnmetal-1 Task   1/  2 running on 6 CPUs: 6-11
            Task   1/  2 has 2 GPUs: 0x18 0xe7
 gpu-st-g4dnmetal-1 Task   0/  2 running on 6 CPUs: 0-5
@@ -956,7 +956,7 @@ fi
 In exercise B, we saw that our output for 
 
 ```
-CUDA_VISIBLE_DEVICES=0,4 srun -n2 -c6 --cpu-bind=thread --gpu-bind=per_task:1 mpi+gpu
+srun -n2 -c6 --cpu-bind=thread --gpu-bind=per_task:1 sh -c 'CUDA_VISIBLE_DEVICES=0,4 mpi+gpu'
 ```
 
 was different than that of
