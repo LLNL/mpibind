@@ -92,22 +92,6 @@ static int opt_user_specified = -1;
 static mpibind_t *mph = NULL;
 static hwloc_topology_t topo = NULL;
 
-static
-const char mpibind_help[] = 
-  "\n\
-Automatically map tasks/threads/GPU kernels to heterogeneous hardware\n\
-\n\
-Usage: --mpibind=[args]\n\
-  \n\
-where args is a comma separated list of one or more of the following:\n\
-  gpu[:0|1]         Enable(1)/disable(0) GPU-optimized mappings\n\
-  greedy[:0|1]      Allow(1)/disallow(0) multiple NUMAs per task\n\
-  help              Display this message\n\
-  off               Disable mpibind\n\
-  on                Enable mpibind\n\
-  smt:<k>           Enable worker use of SMT-<k>\n\
-  v[erbose]         Print affinty for each task\n\
-\n";
 
 
 /************************************************
@@ -133,43 +117,6 @@ struct spank_option spank_options [] =
 /************************************************ 
  * Functions 
  ************************************************/
-
-/*
- * Calculate the number of ints in a given range
- * Example:
- *   Input range: 0-10,18
- *   Output: 12
- */
-int nints_in_range(char *arg)
-{
-  const char delim[] = ",";
-  /* Don't overwrite the input string */
-  char *str = strdup(arg);
-
-  /* First token */
-  char *token = strtok(str, delim);
-
-  int num=0, rc, begin, end;
-  while (token != NULL) {
-    rc = sscanf(token, "%d-%d", &begin, &end);
-    //fprintf(stderr, "token=%s rc=%d begin=%d end=%d\n",
-    //	    token, rc, begin, end);
-    if (rc == 2 && end >= begin)
-      num += end - begin + 1;
-    else if (rc == 1)
-      num++;
-    else
-      PRINT("Could not parse range %s\n", token);
-
-    token = strtok(NULL, delim);
-  }
-
-  PRINT_DEBUG("nints_in_range: %s -> %d\n", arg, num);
-  
-  free(str);
-  
-  return num;
-}
 
 /*
  * Slurm items:
@@ -313,66 +260,14 @@ void print_user_options()
 	  opt_gpu, opt_smt, opt_greedy);
 }
 
+
 /*
  * User optios passed via '--mpibind' on srun command line
  */
 static
-int parse_option(const char *opt, int remote)
-{  
-  if (strcmp(opt, "off") == 0) {
-    opt_user_specified = 0;
-  }
-  else if (strcmp(opt, "on") == 0) {
-    opt_user_specified = 1;
-  }
-  else if (strncmp(opt, "gpu", 3) == 0) {
-    opt_gpu = 1;
-    /* Parse options if any */ 
-    sscanf(opt+3, ":%d", &opt_gpu);
-    if (opt_gpu < 0 || opt_gpu > 1)
-      goto fail; 
-  }
-  else if (sscanf(opt, "smt:%d", &opt_smt) == 1) {
-    if (opt_smt <= 0)
-      goto fail; 
-  }
-  else if (strncmp(opt, "greedy", 6) == 0) {
-    opt_greedy = 1;
-    /* Parse options if any */
-    sscanf(opt+6, ":%d", &opt_greedy);
-    if (opt_greedy < 0 || opt_greedy > 1)
-      goto fail;
-  }
-  else if (strcmp(opt, "verbose") == 0) {
-    opt_verbose = 1;
-  }
-  else if (strncmp(opt, "v", 1) == 0) {
-    opt_verbose = 1;
-    /* Parse options if any */
-    sscanf(opt+1, ":%d", &opt_verbose);
-    if (opt_verbose < 0)
-      goto fail;    
-  }
-  else if (strcmp(opt, "debug") == 0) {
-    opt_debug = 1; 
-  }
-  else {
-    PRINT(mpibind_help);
-    exit(0);
-  }
-  
-  return 0; 
-
- fail:
-  slurm_error("mpibind: Invalid option: %s", opt);
-  return -1;
-}
-
-static
 int parse_user_options(int val, const char *arg, int remote)
 {
   //fprintf(stderr, "mpibind option specified\n");
-  
   const char delim[] = ","; 
   
   /* '--mpibind' with no args enables the plugin */
@@ -382,17 +277,39 @@ int parse_user_options(int val, const char *arg, int remote)
   }
   
   /* Don't overwrite the original string */ 
-  char *str = strdup(arg); 
+  char *str = strdup(arg);
 
   /* First token */ 
   char *token = strtok(str, delim);
+
+  char *msg;
+  /* Options not implemented yet */
+  int master=-1, omp_places=-1, omp_proc_bind=-1, visdevs=-1;
   
   while (token != NULL) {
     //fprintf(stderr, "%s\n", token);
-    parse_option(token, remote); 
+    msg = mpibind_parse_option(token,
+			       &opt_debug,
+			       &opt_gpu,
+			       &opt_greedy,
+			       &master,
+			       &omp_places,
+			       &omp_proc_bind,
+			       &opt_smt,
+			       &opt_user_specified,
+			       &opt_verbose,
+			       &visdevs);
+
+    if (msg) {
+      PRINT(msg);
+      free(msg);
+      free(str);
+      exit(0);
+    }
+
     token = strtok(NULL, delim); 
   }
-  
+
   free(str); 
 
   return 0;
@@ -443,6 +360,35 @@ int get_ncores_on_node()
   return ncores;
 }
 
+
+static
+int restrict_to_allocated_cores(spank_t sp, hwloc_topology_t topo)
+{
+  int rc = 0;
+
+  /* List of allocated cores */
+  char *cores;
+  if (spank_get_item(sp, S_ALLOC_CORES, &cores) != ESPANK_SUCCESS) {
+    slurm_error("mpibind: Failed to get " XSTR(S_ALLOC_CORES));
+    return -1;
+  }
+
+  char pus[LONG_STR_SIZE];
+  mpibind_cores_to_pus(topo, cores, pus, LONG_STR_SIZE);
+
+  hwloc_bitmap_t cpus = hwloc_bitmap_alloc();
+  hwloc_bitmap_list_sscanf(cpus, pus);
+  if (hwloc_topology_restrict(topo, cpus,
+			      HWLOC_RESTRICT_FLAG_REMOVE_CPULESS) < 0) {
+    PRINT("Error: hwloc_topology_restrict %s\n", pus);
+    rc = -1;
+  }
+  hwloc_bitmap_free(cpus);
+
+  return rc;
+}
+
+
 static
 int get_ncores_allocated(spank_t sp)
 {
@@ -454,7 +400,7 @@ int get_ncores_allocated(spank_t sp)
   }
 
   /* Get the number of cores from the list */
-  return nints_in_range(str);
+  return mpibind_range_nints(str);
 }
 
 static
@@ -670,10 +616,10 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   /* I could do this in slurm_spank_init, but can't 
      print to the console there if there's an error */ 
   if (parse_conf_options(ac, argv, spank_remote(sp)) < 0) {
-    opt_enable = 0; 
+    opt_enable = 0;
     return ESPANK_ERROR;
   }
-  
+
   /* Disable mpibind in salloc/sbatch commands */
   /* The side effect of calling mpibind with salloc is that
      env vars set by mpibind continue to be set (and presumably
@@ -711,13 +657,13 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   uint32_t ntasks = get_local_ntasks(sp);
   int nthreads = get_omp_num_threads(sp);
 
-
   /* 
    * Set the topology
    */
 #if 1
   /* Allocate hwloc's topology handle */
   if ( hwloc_topology_init(&topo) < 0 ) {
+    opt_enable = 0;
     slurm_error("hwloc_topology_init");
     return ESPANK_ERROR;
   }
@@ -736,10 +682,11 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
        all the cores in the topology specified in the XML file */
     if (exclusive) {
       if (hwloc_topology_set_xml(topo, xml) < 0)
-	slurm_error("hwloc_topology_set_xml(%s)", xml);
+	slurm_spank_log("mpibind: hwloc_topology_set_xml failed with %s",
+			xml);
 
-      if (nodeid == 0 && opt_debug)
-	PRINT("mpibind: Loaded topology from %s\n", xml);
+      if (nodeid == 0)
+	PRINT_DEBUG("mpibind: Loaded topology from %s\n", xml);
     }
   }
 
@@ -747,34 +694,37 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
      Could also use HWLOC_THISSYSTEM=1, but that applies
      globally to all hwloc clients */
   int topo_flags = HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM;
-  if (hwloc_topology_set_flags(topo, topo_flags) < 0) {
-    slurm_error("mpibind: hwloc_topology_set_flags");
-    return ESPANK_ERROR;
-  }
+  if (hwloc_topology_set_flags(topo, topo_flags) < 0)
+    PRINT_DEBUG("mpibind: OS binding functions may not be called");
 
   /* Make sure OS and PCI devices are not filtered out */
   if (mpibind_filter_topology(topo) < 0) {
-    slurm_error("mpibind: Failed to filter topology");
+    opt_enable = 0;
+    slurm_error("mpibind: Failed to incorporate key topology components");
     return ESPANK_ERROR;
   }
   
   if (hwloc_topology_load(topo) < 0) {
+    opt_enable = 0;
     slurm_error("mpibind: hwloc_topology_load");
     return ESPANK_ERROR;
   }
 
   if (hwloc_topology_is_thissystem(topo) == 0)
-    slurm_error("mpibind: Binding will not be enforced");
+    slurm_spank_log("mpibind: OS binding may not be enforced");
 
-  if (!exclusive && mpibind_restrict_to_current_binding(topo) < 0)
-    slurm_error("mpibind: Failed to restrict topology to current binding");
+  /* Restrict the topology to the cores allocated for the job.
+     Note that restricting to current binding does not work
+     because slurm_spank_user_init runs on the whole node */
+  if (!exclusive && restrict_to_allocated_cores(sp, topo) < 0)
+    slurm_spank_log("mpibind: Failed to restrict topology to allocated cores");
 #endif
 
   /*
    * Read in MPIBIND environment variables
    */
 #if 1
-  char restr_str[64];
+  char restr_str[LONG_STR_SIZE];
   int restr_type = -1;
   if (spank_getenv(sp, "MPIBIND_RESTRICT_TYPE", restr_str, sizeof(restr_str))
       == ESPANK_SUCCESS) {
@@ -784,8 +734,11 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
       restr_type = MPIBIND_RESTRICT_MEM;
   }
 
-  if (spank_getenv(sp, "MPIBIND_RESTRICT", restr_str, sizeof(restr_str))
-      != ESPANK_SUCCESS)
+  if (spank_getenv(sp, "MPIBIND_RESTRICT",
+		   restr_str, sizeof(restr_str)) == ESPANK_SUCCESS) {
+    if (mpibind_parse_restrict_ids(restr_str, sizeof(restr_str)) == 1)
+      restr_str[0] = '\0';
+  } else
     restr_str[0] = '\0';
 #endif
 
@@ -795,10 +748,10 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 #if 1
   /* Allocate mpibind's global handle */
   if ( mpibind_init(&mph) != 0 || mph == NULL ) {
+    opt_enable = 0;
     slurm_error("mpibind: Init failed");
     return ESPANK_ERROR;
   }
-  //fprintf(stderr, "%s: mph=%p\n", name, mph);
 
   /* Set mpibind input parameters */
   if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
@@ -808,6 +761,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
        (opt_gpu >= 0 && mpibind_set_gpu_optim(mph, opt_gpu) != 0) ||
        (restr_type >= 0 && mpibind_set_restrict_type(mph, restr_type) != 0) ||
        (restr_str[0] && mpibind_set_restrict_ids(mph, restr_str) != 0) ) {
+    opt_enable = 0; 
     slurm_error("mpibind: Unable to set input parameters");
     return ESPANK_ERROR;
   }
@@ -830,13 +784,15 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
    * Get the mpibind mapping!
    */
   if (mpibind(mph) != 0) {
+    opt_enable = 0;
     slurm_error("mpibind: Mapping function failed");
     return ESPANK_ERROR;
   }
 
   /* Set values of env variables for task_init */
   if (mpibind_set_env_vars(mph) != 0) {
-    slurm_error("mpibind: Set environment variables failed");
+    opt_enable = 0;
+    slurm_error("mpibind: Failed to set environment variables");
     return ESPANK_ERROR;
   }
 
@@ -892,7 +848,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
   int nvars, i;
   char **env_var_values;
   char **env_var_names = mpibind_get_env_var_names(mph, &nvars);
-  
+
   for (i=0; i<nvars; i++) {
     env_var_values = mpibind_get_env_var_values(mph, env_var_names[i]);
     if (env_var_values[taskid]) {
