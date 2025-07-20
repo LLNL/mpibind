@@ -343,7 +343,7 @@ char* mpibind_calc_restrict_cpus(hwloc_topology_t topo, char *cores,
     }
   }
 
-  return pus; 
+  return pus;
 }
 
 

@@ -1160,54 +1160,6 @@ hwloc_obj_type_t mpibind_get_core_type(hwloc_topology_t topo)
 
 
 /*
- * Get the PUs of a given set of logical cores.
- */
-int mpibind_get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus)
-{
-  hwloc_bitmap_t core_set, pu_set;
-
-  if ( !(core_set = hwloc_bitmap_alloc()) ||
-       !(pu_set = hwloc_bitmap_alloc()) ) {
-    PRINT("mpibind: hwloc_bitmap_alloc failed\n");
-    return -1;
-  }
-
-  /*  Parse cpus into a bitmap list */
-  if ( hwloc_bitmap_list_sscanf(core_set, lcores) < 0) {
-    PRINT("mpibind: hwloc_bitmap_list_sscanf failed\n");
-    return -1;
-  }
-
-  /* Don't use HWLOC_OBJ_CORE directly:
-     A flattened topology may not have objects of that type!
-     Get the type or depth using mpibind functions */
-  int core_depth = mpibind_get_core_depth(topo);
-
-  /* Get the PUs of the logical cores */
-  hwloc_obj_t core;
-  int i = hwloc_bitmap_first(core_set);
-  while (i >= 0) {
-    core = hwloc_get_obj_by_depth(topo, core_depth, i);
-    if ( !core ) {
-      PRINT("mpibind: Logical core %d not in topology\n", i);
-      return -1;
-    }
-
-    hwloc_bitmap_or(pu_set, pu_set, core->cpuset);
-    i = hwloc_bitmap_next(core_set, i);
-  }
-
-  /* Write result as a string */
-  hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, pu_set);
-
-  hwloc_bitmap_free(pu_set);
-  hwloc_bitmap_free(core_set);
-
-  return 0;
-}
-
-
-/*
  * Restrict the topology to the current binding.
  *
  * When Slurm provides an allocation consisiting of a
