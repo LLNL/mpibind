@@ -20,8 +20,6 @@
  *    "greedy":int,
  *    "gpu_optim":int,
  *    "master":int
- *    "corespec_first":int
- *    "corespec_numa":int
  *  }
  *
  * Examples:
@@ -53,15 +51,16 @@
  *
  */
 
-/* Todo list:
- * mpibind extra functions:
- *   mpibind_set_restrict_ids (take in hwloc_bitmap_t)
+/*
+ * Todo:
+ *
+ * mpibind functions:
+ *   mpibind_set_restrict_ids: take in hwloc_bitmap_t
  *   mpibind_get_env_var_names(mph, &nvars): don't include
  *     variables that have no values, e.g., VISIBLE_DEVICES
  * Flux plugin
  *   - work on verbose/debug options.
  *       show mapping, number of gpus, etc.
- *   - test gpus (use new test program in 'affinity')
  */
 
 /*  The name of this plugin. To completely replace the shell's internal
@@ -85,13 +84,11 @@ struct usr_opts {
   int gpu_optim;
   int verbose;
   int master;
-  int corespec_first;
-  int corespec_numa;
-  int corespec_bal;
   int omp_proc_bind;
   int omp_places;
   int visible_devices;
 };
+
 
 /* 
  * Structure to pass parameters from flux_plugin_add_handler()
@@ -105,7 +102,8 @@ struct handle_and_opts {
 
 /*  Return task id for a shell task
  */
-static int flux_shell_task_getid(flux_shell_task_t *task)
+static
+int flux_shell_task_getid(flux_shell_task_t *task)
 {
     int id = -1;
     if (flux_shell_task_info_unpack(task, "{ s:i }", "localid", &id) < 0)
@@ -114,9 +112,11 @@ static int flux_shell_task_getid(flux_shell_task_t *task)
     return id;
 }
 
+
 /*  Return the current task id when running in task.* context.
  */
-static int get_taskid(flux_plugin_t *p)
+static
+int get_taskid(flux_plugin_t *p)
 {
     flux_shell_t *shell;
     flux_shell_task_t *task;
@@ -145,6 +145,7 @@ int plugin_task_setenv(flux_plugin_t *p, const char *var, const char *val)
 
   return 0;
 }
+
 
 /*
  * Handler for task.init.
@@ -186,6 +187,7 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
   
   return 0;
 }
+
 
 /*
  * Printing mpibind's mapping:
@@ -237,6 +239,7 @@ int mpibind_task(flux_plugin_t *p, const char *topic,
   return 0;
 }
 
+
 /*
  * Parse mpibind options from the command line
  * either as JSON or a short syntax.
@@ -245,7 +248,6 @@ static
 bool mpibind_getopt(flux_shell_t *shell,
 		    int *psmt, int *pgreedy, int *pgpu_optim,
 		    int *pverbose, int *pmaster,
-		    int *pcs_first, int *pcs_numa, int *pcs_bal,
 		    int *pomp_proc_bind, int *pomp_places,
 		    int *pvisible_devices)
 {
@@ -268,24 +270,20 @@ bool mpibind_getopt(flux_shell_t *shell,
   if ( opts )
     /* Take parameters from json */
     json_unpack_ex(opts, &err, JSON_DECODE_ANY,
-		   "{s?i s?i s?i s?i s?i s?i s?i s?i}",
+		   "{s?i s?i s?i s?i s?i}",
 		   "smt", psmt,
 		   "greedy", pgreedy,
 		   "gpu_optim", pgpu_optim,
 		   "verbose", pverbose,
-		   "master", pmaster,
-		   "corespecnuma", pcs_numa,
-		   "corespecfirst", pcs_first,
-		   "corespecbal", pcs_bal);
+		   "master", pmaster);
   else
     /* Check if options were given to mpibind.
        If no options, proceed with default parameters */
     if ( strcmp(json_str, "1") != 0 ) {
       /* Options given to mpibind. Parse short syntax */
       int len;
-      int *opt_ptr = NULL;
       char str[LONG_STR_SIZE];
-      char *token, *token2, *end_str, *end_token;
+      char *token, *end_str;
 
       /* The json string is encompased in quotes,
 	 e.g., "verbose,smt:2"
@@ -300,60 +298,35 @@ bool mpibind_getopt(flux_shell_t *shell,
       /* Get the first comma-separated token */
       token = strtok_r(str, ",", &end_str);
 
+      char *msg;
+      int debug=-1, turn_on=-1;
+
       while (token != NULL) {
 	//shell_debug("token = %s", token);
+	msg = mpibind_parse_option(token,
+				   &debug,
+				   pgpu_optim,
+				   pgreedy,
+				   pmaster,
+				   pomp_places,
+				   pomp_proc_bind,
+				   psmt,
+				   &turn_on,
+				   pverbose,
+				   pvisible_devices);
 
-	/* Get the name of the option */
-	token2 = strtok_r(token, ":", &end_token);
-	shell_debug("option = %s", token2);
+	if (msg)
+	  /* Todo:
+	     Terminate the shell without printing the message twice */
+	  shell_die(1, "%s", msg);
 
-	if ( !strcmp(token2, "smt") )
-	  opt_ptr = psmt;
-	else if ( !strcmp(token2, "greedy") )
-	  opt_ptr = pgreedy;
-	else if ( !strcmp(token2, "gpu_optim") )
-	  opt_ptr = pgpu_optim;
-	else if ( !strcmp(token2, "verbose") )
-	  opt_ptr = pverbose;
-	else if ( !strcmp(token2, "master") )
-	  opt_ptr = pmaster;
-        else if ( !strcmp(token2, "corespecfirst") )
-	  opt_ptr = pcs_first;
-	else if ( !strcmp(token2, "corespecnuma") )
-	  opt_ptr = pcs_numa;
-	else if ( !strcmp(token2, "corespecbal") )
-	  opt_ptr = pcs_bal;
-	else if ( !strcmp(token2, "omp_places") )
-	  opt_ptr = pomp_places;
-	else if ( !strcmp(token2, "omp_proc_bind") )
-	  opt_ptr = pomp_proc_bind;
-	else if ( !strcmp(token2, "visible_devices") )
-	  opt_ptr = pvisible_devices;
-	else if ( !strcmp(token2, "off") )
-	  disabled = 1;
-	else if ( !strcmp(token2, "on") )
-	  disabled = 0;
-	else {
-	  shell_die(1, "Unknown mpibind parameter '%s'", token2);
-	  return false;
-	}
-
-	/* Get the value of the option.
-	   Currently, all options use an integer value.
-	   If not specified, the value of 1 is assigned */
-	if (opt_ptr)
-	  *opt_ptr = ((token2 = strtok_r(NULL, ":", &end_token)) == NULL)
-	    ? 1 : atoi(token2);
-	//shell_debug("token2 = '%s' value = %d", token2, *opt_ptr);
-#if 0
-	while (token2 != NULL) {
-	  shell_debug("token2 = %s", token2);
-	  token2 = strtok_r(NULL, ":", &end_token);
-	}
-#endif
 	/* Get the next comma-separated token */
 	token = strtok_r(NULL, ",", &end_str);
       }
+
+      if (turn_on != -1)
+	/* Flip boolean value */
+	disabled = (turn_on + 1) % 2;
     }
 
   /* Clean up */
@@ -362,6 +335,7 @@ bool mpibind_getopt(flux_shell_t *shell,
 
   return disabled == 0;
 }
+
 
 /*
  * Free mpibind resources.
@@ -381,6 +355,7 @@ void mpibind_destroy(void *arg)
   free(hdl); 
 }
 
+
 /*
  * Distribute workers over domains
  * Input:
@@ -388,6 +363,7 @@ void mpibind_destroy(void *arg)
  *  doms: number of domains
  * Output: wk_arr of length doms
  */
+#if 0
 static
 void distrib(int wks, int doms, int *wk_arr) {
   int i, avg, rem;
@@ -401,6 +377,8 @@ void distrib(int wks, int doms, int *wk_arr) {
     else
       wk_arr[i] = avg;
 }
+#endif
+
 
 #if 0
 static
@@ -416,212 +394,6 @@ void print_array(int *arr, int size, char *label)
 }
 #endif
 
-/*
- * Given a set of logical cores (core_set),
- * provide their cpuset (out)
- * without the first n cores (ncores)
- *
- * When ncores <= 0, the output cpuset contains
- * all the PUs associated with the input cores
- */
-static
-int exclude_cores_first(hwloc_topology_t topo,
-			hwloc_bitmap_t core_set,
-			int ncores,
-			hwloc_bitmap_t out)
-{
-  hwloc_obj_t core;
-
-  /* Don't use HWLOC_OBJ_CORE directly:
-     A flattened topology may not have objects of that type!
-     Get the type or depth using mpibind functions */
-  int core_depth = mpibind_get_core_depth(topo);
-
-  int n = 0;
-  int i = hwloc_bitmap_first(core_set);
-  while (i >= 0) {
-    core = hwloc_get_obj_by_depth(topo, core_depth, i);
-    if ( !core ) {
-      shell_log_error("Logical core %d not in topology", i);
-      return 1;
-    }
-
-    /* Exclude the first 'ncores' cores */
-    if (n++ >= ncores)
-      hwloc_bitmap_or(out, out, core->cpuset);
-    i = hwloc_bitmap_next(core_set, i);
-  }
-
-  return 0;
-}
-
-/*
- * Given a set of logical cores (core_set),
- * provide their cpuset (out) without n (ncores) cores
- * such that the n cores are taken out evenly from
- * the NUMA domains that contain the input cores.
- *
- * Assumes ncores > 0
- */
-static
-int exclude_cores_numa_aware(hwloc_topology_t topo,
-			     hwloc_bitmap_t core_set,
-			     int ncores,
-			     hwloc_bitmap_t out)
-{
-  int i, nnumas, numa_idx, core_depth;
-  hwloc_obj_t core;
-  hwloc_bitmap_t pu_set, numa_set;
-  int ncores_per_numa[MAX_NUMA_DOMAINS];
-  int ncores_per_numa_idx[MAX_NUMA_DOMAINS];
-
-
-  pu_set = hwloc_bitmap_alloc();
-  numa_set = hwloc_bitmap_alloc();
-  core_depth = mpibind_get_core_depth(topo);
-
-  /* Get the cores' cpuset and numaset*/
-  i = hwloc_bitmap_first(core_set);
-  while (i >= 0) {
-    core = hwloc_get_obj_by_depth(topo, core_depth, i);
-    if ( !core ) {
-      shell_log_error("Logical core %d not in topology", i);
-      return 1;
-    }
-    hwloc_bitmap_or(pu_set, pu_set, core->cpuset);
-    hwloc_bitmap_or(numa_set, numa_set, core->nodeset);
-    i = hwloc_bitmap_next(core_set, i);
-  }
-#if 0
-  char str[100];
-  hwloc_bitmap_list_snprintf(str, sizeof(str), pu_set);
-  shell_debug("pu_set: %s\n", str);
-  hwloc_bitmap_list_snprintf(str, sizeof(str), numa_set);
-  shell_debug("numa_set: %s\n", str);
-#endif
-
-  /* The number of NUMAs the cores span */
-  if ( (nnumas = hwloc_bitmap_weight(numa_set)) <= 0 ) {
-    shell_log_error("Could not find NUMAs associated with Flux cores");
-    return 1;
-  }
-  //shell_debug("ncores=%d nnumas=%d\n", ncores, nnumas);
-
-  /* The following function does not work reliably. On corona,
-     when lcoreset is 45-47 (last 3 cores of second socket)
-     the function returns 0 rather than 1.
-     This leads to a floating point exception from the
-     'distrib' call. */
-  // nnumas = hwloc_get_nbobjs_inside_cpuset_by_type(topo, pu_set,
-  // HWLOC_OBJ_NUMANODE);
-
-  /* Determine how many cores to exclude per NUMA
-   * For example, 2 exclude cores on 4 NUMAs:
-   * [0]=1 [1]=1 [2]=0 [3]=0 */
-  distrib(ncores, nnumas, ncores_per_numa);
-  //print_array(ncores_per_numa, nnumas, "ncores_per_numa");
-
-  /* Not necessary to zero the array, but just in case */
-  memset(ncores_per_numa_idx, 0, sizeof(ncores_per_numa_idx));
-
-  /* ncores_per_numa assumes numas are labeled sequentially
-     from 0, while the actual NUMA IDs associated with the
-     input cores may be arbitrary.
-     Create an array where the index corresponds to the
-     NUMA ID and the value corresponds to the number
-     of cores for that NUMA domain */
-  i = 0;
-  numa_idx = hwloc_bitmap_first(numa_set);
-  while (numa_idx >= 0) {
-    ncores_per_numa_idx[numa_idx] = ncores_per_numa[i++];
-    numa_idx = hwloc_bitmap_next(numa_set, numa_idx);
-  }
-  //print_array(ncores_per_numa_idx, MAX_NUMA_DOMAINS,
-  //	      "ncores_per_numa_idx");
-
-  /* Add PUs to the output cpuset after setting aside
-     the number of cores per NUMA indicated for exclusion */
-  i = hwloc_bitmap_first(core_set);
-  while (i >= 0) {
-    core = hwloc_get_obj_by_depth(topo, core_depth, i);
-    if ( !core ) {
-      shell_log_error("Logical core %d not in topology", i);
-      return 1;
-    }
-    numa_idx = hwloc_bitmap_first(core->nodeset);
-
-    if (ncores_per_numa_idx[numa_idx] == 0)
-      /* No more cores to exclude */
-      hwloc_bitmap_or(out, out, core->cpuset);
-    else
-      /* Don't add core i to the cpuset */
-      ncores_per_numa_idx[numa_idx] -= 1;
-
-    i = hwloc_bitmap_next(core_set, i);
-  }
-  //print_array(ncores_per_numa_idx, MAX_NUMA_DOMAINS, "after");
-
-  if (hwloc_bitmap_weight(out) == 0) {
-    shell_log_error("Did not find any user cores");
-    return 1;
-  }
-
-  hwloc_bitmap_free(numa_set);
-  hwloc_bitmap_free(pu_set);
-
-  return 0;
-}
-
-/*
- * Get the OS PU ids of a set of logical Core IDs.
- */
-static
-int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus,
-		      int exclude_ncores, int exclude_numa_aware)
-{
-  hwloc_bitmap_t lcore_set, pu_set;
-
-
-  if ( !(lcore_set = hwloc_bitmap_alloc()) ||
-       !(pu_set = hwloc_bitmap_alloc()) ) {
-    shell_log_errno("hwloc_bitmap_alloc");
-    return 1;
-  }
-
-  /*  Parse cpus into a bitmap list */
-  if ( hwloc_bitmap_list_sscanf(lcore_set, lcores) < 0)  {
-    shell_log_error("Failed to read core list: %s", lcores);
-    return 1;
-  }
-
-  if (exclude_ncores > 0)
-    if (hwloc_bitmap_weight(lcore_set) <= exclude_ncores) {
-      shell_log_error("Not enough cores to satisfy core spec (%d)",
-		      exclude_ncores);
-      return 1;
-    }
-
-  /* Get the PUs of the logical cores, excluding
-     the appropriate cores if core specialization
-     was chosen */
-  if (exclude_numa_aware && exclude_ncores > 0) {
-    if (exclude_cores_numa_aware(topo, lcore_set,
-				 exclude_ncores, pu_set))
-      return 1;
-  } else {
-    if (exclude_cores_first(topo, lcore_set,
-			    exclude_ncores, pu_set))
-      return 1;
-  }
-
-  /* Write result as a string */
-  hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, pu_set);
-
-  hwloc_bitmap_free(pu_set);
-  hwloc_bitmap_free(lcore_set);
-
-  return 0;
-}
 
 /*  Restrict hwloc topology to the cpu affinity mask of the current
  *  proces. This is required for handling nested jobs in Flux, since
@@ -632,7 +404,8 @@ int get_pus_of_lcores(hwloc_topology_t topo, char *lcores, char *pus,
  *  This function restricts the hwloc topology to cores 3,4 so that
  *  logical cores 0,1 now correspond to OS logical cores 3,4.
  */
-static int topo_restrict (hwloc_topology_t topo)
+static
+int topo_restrict(hwloc_topology_t topo)
 {
   hwloc_bitmap_t rset = NULL;
   int rc = -1;
@@ -647,6 +420,7 @@ out:
   return rc;
 }
 
+
 /*
  * The entry function to the mpibind plugin.
  * This function initializes and calls mpibind.
@@ -655,8 +429,8 @@ static
 int mpibind_shell_init(flux_plugin_t *p, const char *s,
 		       flux_plugin_arg_t *arg, void *data)
 {
-  int i, ntasks, x_ncores, x_numa_aware;
-  char *cores, *gpus, *pus;
+  int i, ntasks;
+  char *cores, *gpus;
   hwloc_topology_t topo;
   mpibind_t *mph = NULL;
   struct usr_opts *opts = data;
@@ -764,73 +538,20 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   }
 
   if (restrict_topo && topo_restrict (topo) < 0)
-    return shell_log_errno ("failed to restrict topology");
+    return shell_log_errno ("Failed to restrict topology");
 
-  /* Current model uses logical Cores to specify where this
-     job should run. Need to get the OS cpus (including all
-     the CPUs of an SMT core) to tell mpibind what it can use. */
-  pus = malloc(LONG_STR_SIZE);
-
-  /* Core specialization settings */
-  x_numa_aware = 0;
-  x_ncores = opts->corespec_first;
-  if (opts->corespec_numa > opts->corespec_first) {
-    x_numa_aware = 1;
-    x_ncores = opts->corespec_numa;
-  }
-
-  if (get_pus_of_lcores(topo, cores, pus,
-			x_ncores, x_numa_aware) != 0) {
-    shell_log_error("get_pus_of_lcores failed\n");
-    return -1;
-  }
-
-  shell_debug("Flux given cores: %s\n", cores);
-  shell_debug("\tDerived pus: %s\n", pus);
   shell_debug("Flux given gpus: <%s>", gpus);
-  shell_debug("Total #cores: %d",
-	      hwloc_get_nbobjs_by_depth(topo,
-					mpibind_get_core_depth(topo)));
-  shell_debug("Total #pus: %d",
-	      hwloc_get_nbobjs_by_type(topo,
-				       HWLOC_OBJ_PU));
 
   /*
    * One may restrict the PUs/NUMAs where the application runs.
    * Among others, useful for thread or core specialization.
    */
-
-  /* Get the restrict CPU or NUMA IDs */
-  const char *str2 = flux_shell_getenv(shell, "MPIBIND_RESTRICT");
-  if (str2 != NULL) {
-    /* Need non-const pointer */
-    char *restr_str = strdup(str2);
-    hwloc_bitmap_t genset = hwloc_bitmap_alloc();
-    hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
-
-    /* Calculate the restrict CPU set */
-    const char *str1 = flux_shell_getenv(shell, "MPIBIND_RESTRICT_TYPE");
-    if (str1 != NULL && strcmp(str1, "mem") == 0) {
-      hwloc_bitmap_list_sscanf(genset, restr_str);
-      hwloc_cpuset_from_nodeset(topo, cpuset, genset);
-    } else {
-      hwloc_bitmap_list_sscanf(cpuset, restr_str);
-    }
-    char str3[LONG_STR_SIZE];
-    hwloc_bitmap_list_snprintf(str3, sizeof(str3), cpuset);
-    shell_debug("Restrict pus requested: <%s>", str3);
-
-    hwloc_bitmap_list_sscanf(genset, pus);
-    hwloc_bitmap_and(genset, genset, cpuset);
-
-    if ( !hwloc_bitmap_iszero(genset) )
-      hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, genset);
-    else
-      shell_debug("Restrict yields empty set thus ignoring");
-
-    hwloc_bitmap_free(genset);
-    hwloc_bitmap_free(cpuset);
-  }
+  char *pus =
+    mpibind_calc_restrict_cpus(topo, cores,
+			       flux_shell_getenv(shell,
+						 "MPIBIND_RESTRICT"),
+			       flux_shell_getenv(shell,
+						 "MPIBIND_RESTRICT_TYPE"));
 
   if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
        mpibind_set_topology(mph, topo) != 0 ||
@@ -853,13 +574,11 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   shell_debug("user opts: ntasks=%d nthreads=%d restrict=%s "
 	      "greedy=%d smt=%d gpu_optim=%d verbose=%d master=%d "
-	      "corespec_first=%d corespec_numa=%d corespec_bal=%d "
 	      "visible_devices=%d omp_proc_bind=%d omp_places=%d "
 	      "xml=%s ",
 	      ntasks, nthreads, pus, opts->greedy, opts->smt,
 	      opts->gpu_optim, opts->verbose, opts->master,
-	      opts->corespec_first, opts->corespec_numa,
-	      opts->corespec_bal, opts->visible_devices,
+	      opts->visible_devices,
 	      opts->omp_proc_bind, opts->omp_places, xml);
 
   struct handle_and_opts *hdl = malloc(sizeof(struct handle_and_opts));
@@ -882,14 +601,6 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     shell_die_errno(1, "mpibind");
     return -1;
   }
-
-  /* Now that the mapping has been set on the mpibind handle,
-     remove the OS CPUs if corespec balanced has been set */
-  x_ncores = opts->corespec_bal;
-  if (x_ncores > 0)
-    for (i=0; i<ntasks; i++)
-      mpibind_pop_cores_ptask(mph, i, x_ncores);
-
 
   /* Debug: Print out the cpus assigned to each task */
   char outbuf[PRINT_MAP_BUF_SIZE];
@@ -925,8 +636,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   return 0;
 }
 
+
 #if 0
-static const struct flux_plugin_handler handlers[] = {
+static
+const struct flux_plugin_handler handlers[] = {
     { "shell.init", mpibind_shell_init, NULL },
     { NULL, NULL, NULL },
 };
@@ -980,11 +693,6 @@ void flux_plugin_init(flux_plugin_t *p)
   // if they want mpibind to apply to all of the resources
   // of a node. But, I'm keeping this option just in case.
   opts->master = 0;
-  /* The number of cores to leave idle for system services,
-     i.e., core specialization */
-  opts->corespec_first = 0;
-  opts->corespec_numa = 0;
-  opts->corespec_bal = 0;
   /* By default mpibind sets the environment variables, i.e.,
      (do not disable setting the variables) */
   opts->omp_proc_bind = 0;
@@ -998,9 +706,6 @@ void flux_plugin_init(flux_plugin_t *p)
 		       &opts->gpu_optim,
 		       &opts->verbose,
 		       &opts->master,
-		       &opts->corespec_first,
-		       &opts->corespec_numa,
-		       &opts->corespec_bal,
 		       &opts->omp_proc_bind,
 		       &opts->omp_places,
 		       &opts->visible_devices) ) {
@@ -1021,4 +726,6 @@ void flux_plugin_init(flux_plugin_t *p)
   if (flux_shell_setopt_pack(shell, "gpu-affinity", "s", "off") < 0)
     shell_die_errno(1, "flux_shell_setopt_pack: gpu-affinity=off");
 }
+
+
 

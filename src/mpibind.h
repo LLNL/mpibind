@@ -300,11 +300,6 @@ extern "C" {
    */
   int mpibind_pop_cores_ptask(mpibind_t *handle, int taskid, int ncores);
   /*
-   * Get the PUs of a given set of logical cores.
-   */
-  int mpibind_get_pus_of_lcores(hwloc_topology_t topo, char *lcores,
-				char *pus);
-  /*
    * Restrict the topology to the current binding.
    */
   int mpibind_restrict_to_current_binding(hwloc_topology_t topo);
@@ -330,6 +325,12 @@ extern "C" {
    */
   int mpibind_cores_to_pus(hwloc_topology_t topo, char *cores,
 			   char *pus, int pus_str_size);
+  /*
+   * Calculates the PUs need to restrict the topology based on
+   * the given cores, the restrict IDs, and restrict type.
+   */
+  char* mpibind_calc_restrict_cpus(hwloc_topology_t topo, char *cores,
+				   const char *restr, const char *restr_type);
 
 
 
