@@ -618,15 +618,15 @@ int mpibind(mpibind_t *hdl)
 
     enum hwloc_type_filter_e filter;
     hwloc_topology_get_type_filter(hdl->topo, 
-      HWLOC_OBJ_PCI_DEVICE, &filter);
+				   HWLOC_OBJ_PCI_DEVICE, &filter);
     if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT &&
         filter != HWLOC_TYPE_FILTER_KEEP_ALL)
-      fprintf(stderr, "Warn: User topology doesn't include PCI devices\n");
+      PRINT("Warn: User topology doesn't include PCI devices\n");
     hwloc_topology_get_type_filter(hdl->topo, 
-      HWLOC_OBJ_OS_DEVICE, &filter);
+				   HWLOC_OBJ_OS_DEVICE, &filter);
     if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT && 
         filter != HWLOC_TYPE_FILTER_KEEP_ALL)
-      fprintf(stderr, "Warn: User topology doesn't include OS devices\n");
+      PRINT("Warn: User topology doesn't include OS devices\n");
   }
 
 #if VERBOSE >= 1
@@ -651,17 +651,13 @@ int mpibind(mpibind_t *hdl)
     else if (hdl->restr_type == MPIBIND_RESTRICT_MEM)
       flags = HWLOC_RESTRICT_FLAG_BYNODESET |
 	HWLOC_RESTRICT_FLAG_REMOVE_MEMLESS; 
-    
-    if ( hwloc_topology_restrict(hdl->topo, set, flags) ) { 
-      perror("hwloc_topology_restrict");
-      hwloc_bitmap_free(set);
-      return errno; 
-    }
+
+    if ( hwloc_topology_restrict(hdl->topo, set, flags) )
+      PRINT("Warn: Failed to restrict topology to %s\n", hdl->restr_set);
 
 #if VERBOSE >= 1
-    char str[LONG_STR_SIZE];
-    hwloc_bitmap_list_snprintf(str, sizeof(str), set);
-    PRINT("Restricted topology: %s with flags %lu\n", str, flags);
+    PRINT("Restricted topology to %s with flags %lu\n",
+	  hdl->restr_set, flags);
 #endif
     
     hwloc_bitmap_free(set);
@@ -1129,16 +1125,17 @@ char** mpibind_get_env_var_names(mpibind_t *handle, int *count)
 
 int mpibind_apply(mpibind_t *handle, int taskid)
 {
-  int rc;
+  int rc = -1;
   hwloc_bitmap_t *core_sets = mpibind_get_cpus(handle);
   hwloc_topology_t topo = mpibind_get_topology(handle);
   
-  if ((rc = hwloc_set_cpubind(topo, core_sets[taskid], 0)) < 0) {
-    perror("hwloc_set_cpubind");
-    return rc;
+  if (topo && core_sets) {
+    rc = 0;
+    if ((rc = hwloc_set_cpubind(topo, core_sets[taskid], 0)) < 0)
+      perror("hwloc_set_cpubind");
   }
   
-  return 0;
+  return rc;
 }
 
 
@@ -1227,13 +1224,24 @@ int mpibind_restrict_to_current_binding(hwloc_topology_t topo)
   hwloc_bitmap_t rset = NULL;
   int rc = -1;
 
-  if (!(rset = hwloc_bitmap_alloc())
-      || hwloc_get_cpubind(topo, rset, HWLOC_CPUBIND_PROCESS) < 0
-      || hwloc_topology_restrict(topo, rset,
-				 HWLOC_RESTRICT_FLAG_REMOVE_CPULESS) < 0)
-    goto out;
-  rc = 0;
+  if ( !(rset = hwloc_bitmap_alloc()) )
+    return rc;
 
+  if (hwloc_get_cpubind(topo, rset, HWLOC_CPUBIND_PROCESS) < 0)
+    goto out;
+#if VERBOSE >= 1
+  else {
+    char str[SHORT_STR_SIZE];
+    hwloc_bitmap_list_snprintf(str, sizeof(str), rset);
+    PRINT("Process cpubind: <%s>\n", str);
+  }
+#endif
+
+  if (hwloc_topology_restrict(topo, rset,
+			      HWLOC_RESTRICT_FLAG_REMOVE_CPULESS) < 0)
+    goto out;
+
+  rc = 0;
  out:
   hwloc_bitmap_free(rset);
   return rc;
