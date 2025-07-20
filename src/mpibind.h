@@ -308,6 +308,29 @@ extern "C" {
    * Restrict the topology to the current binding.
    */
   int mpibind_restrict_to_current_binding(hwloc_topology_t topo);
+  /*
+   * Get the number of ints within a range
+   */
+  int mpibind_range_nints(char *arg);
+  /*
+   * Read in the restrict IDs from a string or a file
+   */
+  int mpibind_parse_restrict_ids(char *restr, int len);
+  /*
+   * Parse resource manager plugin options
+   */
+  char* mpibind_parse_option(const char *opt,
+			     int *debug, int *gpu, int *greedy,
+			     int *master,
+			     int *omp_places, int *omp_proc_bind,
+			     int *smt, int *turn_on,
+			     int *verbose, int *visdevs);
+  /*
+   * Get the PUs associated with a given set of Cores
+   */
+  int mpibind_cores_to_pus(hwloc_topology_t topo, char *cores,
+			   char *pus, int pus_str_size);
+
 
 
 #ifdef __cplusplus

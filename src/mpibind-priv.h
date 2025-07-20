@@ -5,6 +5,8 @@
 #ifndef MPIBIND_PRIV_H_INCLUDED
 #define MPIBIND_PRIV_H_INCLUDED
 
+#include <hwloc.h>
+
 #define SHORT_STR_SIZE 32
 #define LONG_STR_SIZE 1024
 
@@ -23,6 +25,26 @@
   } while (0)
 
 #define PRINT(...) fprintf(stderr, __VA_ARGS__)
+
+
+static
+const char usage_str[] = "\n"
+  "Automatically map tasks/threads/kernels to heterogeneous systems\n"
+  "\n"
+  "Usage: mpibind=[args]\n"
+  "\n"
+  "where args is a comma separated list of one or more of the following:\n"
+  "  gpu[:0|1]         Enable(1)/disable(0) GPU-optimized mappings\n"
+  "  greedy[:0|1]      Allow(1)/disallow(0) multiple NUMAs per task\n"
+  "  h[elp]            Display this message\n"
+  "  off               Disable mpibind\n"
+  "  on                Enable mpibind\n"
+  "  omp_places        Do not set OMP_PLACES\n"
+  "  omp_proc_bind     Do not set OMP_PROC_BIND\n"
+  "  smt:<k>           Allow using k hardware threads per core\n"
+  "  v[erbose]         Print affinty for each task\n"
+  "  visdevs           Do not set VISIBLE_DEVICES\n"
+  "\n";
 
 
 /* 
