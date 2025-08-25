@@ -43,11 +43,11 @@ Hands-on exercises conducted in an AWS cluster environment ensure practical expo
 | Begin | End | Topic |
 |-:|-:|:-|
 | 13:30 | 13:50 | Introduction to Supercomputing |
-| 13:50 | 15:20 | Module 1: Linux + Parallel Programming |
+| 13:50 | 15:20 | Module 1: Parallel Computing with MPI |
 | *15:20* | *15:35* | *Break* |
 | 15:35 | 16:55 | Module 2: Computing Architecture and Topology |
 | *16:55* | *17:10* | *Break* |
-| 17:10 | 18:30 | Module 3: Mapping Applications to the Hardware |
+| 17:10 | 18:30 | Module 3: Hardware Affinity for Applications |
 
 </center>
 
@@ -76,7 +76,9 @@ srun -N1 -n1 mpi
 </p>
 
 
-1. [Linux + Parallel Programming](module1.md)
+1. [Parallel Computing with MPI](https://github.com/suzannepk/mpi_parallel)
+
+   Learn how to develop parallel applications using MPI (Message Passing Interface), a foundational tool in high-performance computing. This module introduces the principles of parallel thinking and guides participants through the transformation of serial code into parallel implementations using MPI. Through hands-on examples you’ll explore data distribution, rank-based processing, and communication overhead, while gaining practical experience running programs across multiple processes. By the end, you'll understand how to analyze performance, improve efficiency, and apply these techniques to more complex real-world problems.
 
 1. [Computing Architecture and Topology](module2.md)
 
@@ -89,7 +91,7 @@ srun -N1 -n1 mpi
    will identify local hardware resources, and will select resources
    using affinity masks.  
 
-1. [Mapping Applications to the Hardware](module3.md)
+1. Hardware Affinity for Applications
 
    Learn how to use the resource manager to map a parallel
    program to the
@@ -99,7 +101,9 @@ srun -N1 -n1 mpi
    manage CPU and GPU affinity concurrently to take advantage of local
    resources and reduce data movement.
 
-
+   1. [Mapping Processes to the Hardware](../eurosys25/module2.md)
+   
+   1. [Adding in GPU kernels](../eurosys25/module3.md)
 
 
 
