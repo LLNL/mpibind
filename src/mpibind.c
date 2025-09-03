@@ -32,6 +32,7 @@
 
 /************************************************
  * Functions defined in internals.c
+ * or hwloc_utils.c
  ************************************************/
 int get_smt_level(hwloc_topology_t topo);
 int discover_devices(hwloc_topology_t topo, 
@@ -50,6 +51,10 @@ int get_gpu_vendor_id(struct device **devs, int ndevs);
 char* get_gpu_vendor(struct device **devs, int ndevs);
 const hwloc_bitmap_t get_core_cpuset(hwloc_topology_t topo, int pu);
 void terminate_str(char *buf, int size);
+int filter_topology(hwloc_topology_t topology);
+int numas_have_intersecting_cpus(hwloc_topology_t topo);
+int restrict_numas_with_intersecting_cpus(hwloc_topology_t topo);
+int check_topology(hwloc_topology_t topo);
 
 
 /*********************************************
@@ -520,41 +525,39 @@ int mpibind_get_restrict_type(mpibind_t *handle)
 }
 
 
-/* 
- * Make sure the topology includes important components
- * like PCI devices and GPUs. 
- * This call should be executed between hwloc_topology_init 
- * and hwloc_topology_load. 
+
+
+/*
+ * Wrap hwloc_topology_load with extra filters
+ * to make sure the topology meets the criteria
+ * for mpibind's correct operation.
+ *
+ * Return 0 on success and 1 otherwise
  */ 
-int mpibind_filter_topology(hwloc_topology_t topology)
+int mpibind_load_topology(hwloc_topology_t topo)
 {
-  int rc = 0;
+  /* Make sure OS functions are actually called
+     when binding workers. Could also use HWLOC_THISSYSTEM=1,
+     but that applies to all hwloc clients */
+  if (hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
+    PRINT("WARN: OS binding may not be enforced\n");
   
-  /* Remove objects that do not add structure. 
-     Warning: This function can collapse the Core and PU levels
-     into the PU level. Functions that look for the Core level 
-     may break or behave differently!  
-     Leaving it in for now, because I have my own 'get_core_*' 
-     functions rather than using HWLOC_OBJ_CORE directly */ 
-  if ( (rc = hwloc_topology_set_all_types_filter(topology,
-						HWLOC_TYPE_FILTER_KEEP_STRUCTURE)) != 0 )
-    return rc; 
-    
-  /* OS devices are filtered by default, enable to see GPUs */ 
-  if ( (rc = hwloc_topology_set_type_filter(topology,
-					   HWLOC_OBJ_OS_DEVICE,
-					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
-    return rc; 
+  /* Make sure OS and PCI devices are not filtered out */
+  if (filter_topology(topo) < 0)
+    PRINT("WARN: Failed to incorporate key topology components\n");
 
-  /* Include PCI devices to determine whether two GPUs 
-     are the same device, i.e., opencl1d1 and cuda1 */ 
-  if ( (rc = hwloc_topology_set_type_filter(topology,
-					   HWLOC_OBJ_PCI_DEVICE,
-					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
-    return rc;
+  if (hwloc_topology_load(topo) < 0) {
+    PRINT("ERR: hwloc_topology_load failed\n");
+    return 1;
+  }
 
-  return rc; 
+  /* Remove NUMA domains with intersecting CPUs */
+  if ( numas_have_intersecting_cpus(topo) )
+    restrict_numas_with_intersecting_cpus(topo);
+
+  return 0;
 }
+
 
 
 /*
@@ -606,28 +609,10 @@ int mpibind(mpibind_t *hdl)
 
   if (hdl->topo == NULL) { 
     hwloc_topology_init(&hdl->topo);
-    /* Include important components like PCI devices */ 
-    if ( mpibind_filter_topology(hdl->topo) != 0 )
-      fprintf(stderr, "Warn: Could not filter the topology\n"); 
-    /* Detect the topology */ 
-    hwloc_topology_load(hdl->topo);
-    
-  } else {
+    mpibind_load_topology(hdl->topo);
+  } else
     /* Caller provides the hwloc topology */ 
-    hwloc_topology_check(hdl->topo);
-
-    enum hwloc_type_filter_e filter;
-    hwloc_topology_get_type_filter(hdl->topo, 
-				   HWLOC_OBJ_PCI_DEVICE, &filter);
-    if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT &&
-        filter != HWLOC_TYPE_FILTER_KEEP_ALL)
-      PRINT("Warn: User topology doesn't include PCI devices\n");
-    hwloc_topology_get_type_filter(hdl->topo, 
-				   HWLOC_OBJ_OS_DEVICE, &filter);
-    if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT && 
-        filter != HWLOC_TYPE_FILTER_KEEP_ALL)
-      PRINT("Warn: User topology doesn't include OS devices\n");
-  }
+    check_topology(hdl->topo);
 
 #if VERBOSE >= 1
   print_topo_brief(hdl->topo);
@@ -763,7 +748,7 @@ int mpibind_pop_cpus_ptask(mpibind_t *handle, int taskid, int ncpus)
   
   /* Update nthreads */
   handle->nthreads[taskid] = hwloc_bitmap_weight(cpuset);
-  
+
   return 0;
 }
 
