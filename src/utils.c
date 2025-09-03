@@ -24,6 +24,16 @@ char *trim(char *str);
  ************************************************/
 
 /*
+ * Get hwloc API version
+ */
+void mpibind_get_hwloc_version(char *ver)
+{
+  unsigned version = hwloc_get_api_version();
+  //printf("0x%x\n", version);
+  sprintf(ver, "%d.%d.%d", version>>16, (version>>8)&0xff, version&0xff);
+}
+
+/*
  * Calculate the number of ints in a given range. 
  * Output is 0 when range is invalid. 
  * Example:
@@ -270,80 +280,6 @@ int mpibind_cores_to_pus(hwloc_topology_t topo, char *cores,
   hwloc_bitmap_free(core_set);
   
   return 0;
-}
-
-
-/*
- *
- * Returns a string with the PUs that need to be used to 
- * restrict the topology. It takes into account the values of
- * enviroment variables as indicated by 'restr' and 'restr_type'
- * as well as the 'cores' the RM has allocated for this job. 
- * 
- * The output string needs to be freed. 
- */ 
-char* mpibind_calc_restrict_cpus(hwloc_topology_t topo, char *cores,
-				 const char *restr, const char *restr_type)
-{
-  /* Current model uses logical Cores to specify where this
-     job should run. Need to get the OS cpus (including all
-     the CPUs of an SMT core) to tell mpibind what it can use. */
-  char *pus = malloc(LONG_STR_SIZE);
-
-  /* Get the PUs associated with the given cores */ 
-  if (mpibind_cores_to_pus(topo, cores, pus, LONG_STR_SIZE) != 0) {
-    PRINT("cores_to_pus failed\n");
-    return NULL;
-  }
-
-  PRINT("RM given cores: %s\n", cores);
-  PRINT("Derived pus: %s\n", pus);
-  PRINT("Total #cores: %d",
-	hwloc_get_nbobjs_by_depth(topo,
-				  mpibind_get_core_depth(topo)));
-  PRINT("Total #pus: %d",
-	hwloc_get_nbobjs_by_type(topo,
-				 HWLOC_OBJ_PU));
-  
-  if (restr != NULL) {
-    /* Need non-const pointer */
-    char restr_str[LONG_STR_SIZE];
-    strncpy(restr_str, restr, LONG_STR_SIZE-1);
-
-    /* Get the restrict CPU or NUMA IDs directly or from a file */
-    if (mpibind_parse_restrict_ids(restr_str, LONG_STR_SIZE) == 0) {
-      PRINT("Restrict IDs read: <%s>", restr_str);
-	    
-      hwloc_bitmap_t genset = hwloc_bitmap_alloc();
-      hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
-
-      /* Calculate the restrict CPU set */
-      if (restr_type != NULL && strcmp(restr_type, "mem") == 0) {
-	hwloc_bitmap_list_sscanf(genset, restr_str);
-	hwloc_cpuset_from_nodeset(topo, cpuset, genset);
-      } else {
-	hwloc_bitmap_list_sscanf(cpuset, restr_str);
-      }
-
-      char str3[LONG_STR_SIZE];
-      hwloc_bitmap_list_snprintf(str3, sizeof(str3), cpuset);
-      PRINT("Restrict IDs to PUs: <%s>", str3);
-
-      /* Get the intersection of input pus and restrict var */  
-      hwloc_bitmap_list_sscanf(genset, pus);
-      hwloc_bitmap_and(genset, genset, cpuset);
-
-      if ( !hwloc_bitmap_iszero(genset) )
-	hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, genset);
-      else
-	PRINT("Restrict yields empty set thus ignoring");
-
-      hwloc_bitmap_free(genset);
-      hwloc_bitmap_free(cpuset);
-    }
-  }
-
-  return pus;
 }
 
 
