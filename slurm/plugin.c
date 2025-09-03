@@ -301,7 +301,7 @@ int parse_user_options(int val, const char *arg, int remote)
 			       &visdevs);
 
     if (msg) {
-      PRINT(msg);
+      PRINT("%s\n", msg);
       free(msg);
       free(str);
       exit(0);
@@ -690,6 +690,14 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     }
   }
 
+
+#if 1
+  if (mpibind_load_topology(topo) != 0) {
+    opt_enable = 0;
+    slurm_error("mpibind: mpibind_load_topology");
+    return ESPANK_ERROR;
+  }
+#else
   /* Make sure OS binding functions are actually called
      Could also use HWLOC_THISSYSTEM=1, but that applies
      globally to all hwloc clients */
@@ -712,6 +720,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 
   if (hwloc_topology_is_thissystem(topo) == 0)
     slurm_spank_log("mpibind: OS binding may not be enforced");
+#endif
 
   /* Restrict the topology to the cores allocated for the job.
      Note that restricting to current binding does not work
