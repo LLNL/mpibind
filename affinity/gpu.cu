@@ -20,7 +20,8 @@ int get_gpu_count()
   */ 
   int count=0;
 
-  cudaGetDeviceCount(&count);
+  if (cudaSuccess != cudaGetDeviceCount(&count))
+    fprintf(stderr, "GetDeviceCount failed\n");
 
   return count;
 }
@@ -41,7 +42,9 @@ int get_gpu_pci_id(int dev)
 int get_gpu_affinity(char *buf)
 {
   int count=0;
-  cudaGetDeviceCount(&count);
+
+  if (cudaSuccess != cudaGetDeviceCount(&count))
+    fprintf(stderr, "GetDeviceCount failed\n");
   
   int nc=0; 
   int i; 
@@ -56,8 +59,12 @@ int get_gpu_affinity(char *buf)
     nc += sprintf(buf+nc, "%04x:%02x ", prop.pciDomainID, prop.pciBusID);
 #else
     // [domain]:[bus]:[device].[function]
-    char pcibusid[64];
-    cudaDeviceGetPCIBusId(pcibusid, 64, i);
+    char pcibusid[SHORT_STR_SIZE];
+    cudaError_t err = cudaDeviceGetPCIBusId(pcibusid, sizeof(pcibusid), i);
+    if ( err ) {
+      fprintf(stderr, "Get device PCI Bus ID failed");
+      return -1;
+    }
     nc += sprintf(buf+nc, "%s ", pcibusid);
 #endif
   }
@@ -107,16 +114,26 @@ int get_gpu_info_all(char *buf)
   cudaError_t err; 
   int i, myid, count=0;
   int nc=0; 
-  
-  cudaGetDeviceCount(&count);
+
+  err = cudaGetDeviceCount(&count);
+  if ( err ) {
+    fprintf(stderr, "Get device count failed\n");
+    return -1;
+  }
+
   err = cudaGetDevice(&myid);
   if ( err ) {
-    fprintf(stderr, "Could not get default device\n");
+    fprintf(stderr, "Get default device failed\n");
     return -1; 
   }
 
   char pcibusid[SHORT_STR_SIZE];
-  cudaDeviceGetPCIBusId(pcibusid, sizeof(pcibusid), myid);
+  err = cudaDeviceGetPCIBusId(pcibusid, sizeof(pcibusid), myid);
+  if ( err ) {
+    fprintf(stderr, "Get device PCI Bus ID failed");
+    return -1;
+  }
+
   nc += sprintf(buf+nc, "\tDefault device: %s\n", pcibusid);
   
   for (i=0; i<count; i++) {

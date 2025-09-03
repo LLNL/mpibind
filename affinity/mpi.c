@@ -33,13 +33,13 @@ int main(int argc, char *argv[])
   MPI_Comm_size(MPI_COMM_WORLD, &np); 
   MPI_Get_processor_name(hostname, &size); 
 
-  nc += sprintf(buf+nc, "%-10s Task %3d/%3d running on %d CPUs: ",
-		hostname, rank, np, ncpus);
+  nc += sprintf(buf+nc, "%3d %s %3d CPUs: ",
+		rank, hostname, ncpus);
   nc += get_cpu_affinity(buf+nc);
 #ifdef HAVE_GPUS
   int ndevs = get_gpu_count();
-  nc += sprintf(buf+nc, "%10s Task %3d/%3d has %d GPUs: ",
-		"", rank, np, ndevs); 
+  nc += sprintf(buf+nc, "%3d %s %3d GPUs: ",
+		rank, hostname, ndevs);
   nc += get_gpu_affinity(buf+nc);
   if (verbose)
     nc += get_gpu_info_all(buf+nc);
