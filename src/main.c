@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
   mpibind_set_ntasks(handle, ntasks);
   //mpibind_set_nthreads(handle, 3);
   //mpibind_set_greedy(handle, 0);
-  mpibind_set_gpu_optim(handle, 0);
+  //mpibind_set_gpu_optim(handle, 0);
   //mpibind_set_smt(handle, 2);
   //params.restr_type = MEM; 
   //mpibind_set_restrict_type(handle, MPIBIND_RESTRICT_CPU);
@@ -104,10 +104,21 @@ int main(int argc, char *argv[])
   //mpibind_set_restrict_ids(handle, "24-35,72-83");
   //mpibind_set_restrict_ids(handle, "0-11,24-47");
 
+  char hver[64];
+  mpibind_get_hwloc_version(hver);
+  printf("hwloc version %s\n", hver);
 
   /* Use an hwloc topology file */
 #if 0
-  char xml[] = "../../hwloc/flash-v100.xml";
+  //char xml[] = "../../hwloc/flash-v100.xml";
+  //char xml[] = "../../hwloc/poodle.xml";
+  //char xml[] = "../../hwloc/tuo-fix-slingshot.xml";
+  //char xml[] = "../../hwloc/tuo-fix-cpx.xml";
+  //char xml[] = "../../hwloc/tuo-fix-tpx.xml";
+  //char xml[] = "../../hwloc/a100-bxi-topo.xml";
+  //char xml[] = "../../hwloc/venado-gh200.xml";
+  char xml[] = "../../hwloc/romeo-gh200.xml";
+  //char xml[] = "../../hwloc/milan-bxi-topo.xml";
   hwloc_topology_t etopo;
   if (hwloc_topology_init(&etopo) < 0) {
     fprintf(stderr, "hwloc_topology_init failed\n");
@@ -117,6 +128,10 @@ int main(int argc, char *argv[])
     fprintf(stderr, "hwloc_topology_set_xml(%s) failed\n", xml);
     return 0;
   }
+
+#if 1
+  mpibind_load_topology(etopo);
+#else
   if (mpibind_filter_topology(etopo) < 0) {
     fprintf(stderr, "mpibind_filter_topology failed\n");
     return 0;
@@ -125,6 +140,8 @@ int main(int argc, char *argv[])
     fprintf(stderr, "hwloc_topology_load failed");
     return 0;
   }
+#endif
+
   mpibind_set_topology(handle, etopo);
 #endif
 
