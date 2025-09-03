@@ -427,3 +427,167 @@ void print_topo_io(hwloc_topology_t topo)
       }
     }
 }  
+
+
+/*
+ * Check if NUMA domains have intersecting CPUs.
+ *
+ * Architectures like NVIDIA's GraceHopper have NUMAs
+ * with interesecting CPUs. On this architecture,
+ * both CPU and GPU memories are shown as NUMA domains.
+ * The first package, for example, has two NUMAs:
+ * One for the CPU and one for the GPU covering the same CPUs.
+ *
+ * Return 0 if no intersecting CPUs and 1 otherwise.
+ */
+int numas_have_intersecting_cpus(hwloc_topology_t topo)
+{
+  int rc = 0;
+
+#if HWLOC_API_VERSION >= 0x00020c00
+  // Need support for HWLOC_LOCAL_NUMANODE_FLAG_INTERSECT_LOCALITY
+
+  int nnumas = hwloc_get_nbobjs_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE);
+#if VERBOSE >= 1
+  int i;
+  PRINT("Total NUMA domains: %d\n", nnumas);
+#endif
+
+  struct hwloc_location loc;
+  loc.type = HWLOC_LOCATION_TYPE_OBJECT;
+  //loc.location.object = hwloc_get_root_obj(topo);
+  //loc.location.object = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, 0);
+  unsigned nnodes = nnumas;
+  hwloc_obj_t nodes[nnumas];
+
+  hwloc_obj_t numa = NULL;
+  while ((numa=hwloc_get_next_obj_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE,
+					   numa)) != NULL) {
+    loc.location.object = numa;
+    hwloc_get_local_numanode_objs(topo, &loc, &nnodes, nodes,
+				  HWLOC_LOCAL_NUMANODE_FLAG_INTERSECT_LOCALITY);
+
+#if VERBOSE >= 1
+    PRINT("  NUMA %d intersect: ", numa->os_index);
+    for (i=0; i<nnodes; i++)
+      PRINT("%d ", nodes[i]->os_index);
+    PRINT("\n");
+#endif
+
+    if (nnodes > 1)
+      rc++;
+  }
+#endif
+
+  return rc;
+}
+
+
+/*
+ * If NUMA domains have intersecting CPUs,
+ * restrict the topology to NUMAS with non-intersecting CPUs
+ */
+int restrict_numas_with_intersecting_cpus(hwloc_topology_t topo)
+{
+#if HWLOC_API_VERSION >= 0x00020c00
+  // Need supoort for hwloc_topology_get_default_nodeset
+
+  hwloc_bitmap_t nodeset = hwloc_bitmap_alloc();
+  hwloc_topology_get_default_nodeset(topo, nodeset, 0);
+
+  char str[SHORT_STR_SIZE];
+  hwloc_bitmap_list_snprintf(str, sizeof(str), nodeset);
+#if VERBOSE >= 1
+  PRINT("Non-intersecting NUMAs: %s\n", str);
+#endif
+
+  int rc =
+    hwloc_topology_restrict(topo, nodeset, HWLOC_RESTRICT_FLAG_BYNODESET);
+  hwloc_bitmap_free(nodeset);
+
+  if (rc != 0) {
+    PRINT("WARN: Failed to restrict topology to NUMAs %s\n", str);
+    return rc;
+  }
+#endif
+
+  return 0;
+}
+
+
+/*
+ * Check the topology for correct operation with mpibind
+ *
+ * Return 0 if topology is okay, 1 otherwise
+ */
+int check_topology(hwloc_topology_t topo)
+{
+  int rc = 0;
+  hwloc_topology_check(topo);
+
+  enum hwloc_type_filter_e filter;
+  hwloc_topology_get_type_filter(topo,
+				 HWLOC_OBJ_PCI_DEVICE, &filter);
+  if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT &&
+      filter != HWLOC_TYPE_FILTER_KEEP_ALL) {
+    PRINT("WARN: Topology doesn't include PCI devices\n");
+    rc = 1;
+  }
+
+  hwloc_topology_get_type_filter(topo,
+				 HWLOC_OBJ_OS_DEVICE, &filter);
+  if (filter != HWLOC_TYPE_FILTER_KEEP_IMPORTANT &&
+      filter != HWLOC_TYPE_FILTER_KEEP_ALL) {
+    PRINT("WARN: Topology doesn't include OS devices\n");
+    rc = 1;
+  }
+
+  if (hwloc_topology_is_thissystem(topo) == 0) {
+    PRINT("WARN: OS binding may not be enforced\n");
+    rc = 1;
+  }
+
+  if ( numas_have_intersecting_cpus(topo) ) {
+    PRINT("WARN: NUMA domains have intersecting CPUs\n");
+    rc = 1;
+  }
+
+  return rc;
+}
+
+
+/*
+ * Make sure the topology includes important components
+ * like PCI devices and GPUs.
+ * This call should be executed between hwloc_topology_init
+ * and hwloc_topology_load.
+ */
+int filter_topology(hwloc_topology_t topology)
+{
+  int rc = 0;
+
+  /* Remove objects that do not add structure.
+     Warning: This function can collapse the Core and PU levels
+     into the PU level. Functions that look for the Core level
+     may break or behave differently!
+     Leaving it in for now, because I have my own 'get_core_*'
+     functions rather than using HWLOC_OBJ_CORE directly */
+  if ( (rc = hwloc_topology_set_all_types_filter(topology,
+						HWLOC_TYPE_FILTER_KEEP_STRUCTURE)) != 0 )
+    return rc;
+
+  /* OS devices are filtered by default, enable to see GPUs */
+  if ( (rc = hwloc_topology_set_type_filter(topology,
+					   HWLOC_OBJ_OS_DEVICE,
+					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
+    return rc;
+
+  /* Include PCI devices to determine whether two GPUs
+     are the same device, i.e., opencl1d1 and cuda1 */
+  if ( (rc = hwloc_topology_set_type_filter(topology,
+					   HWLOC_OBJ_PCI_DEVICE,
+					   HWLOC_TYPE_FILTER_KEEP_IMPORTANT)) != 0 )
+    return rc;
+
+  return rc;
+}
