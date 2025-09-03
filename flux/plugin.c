@@ -422,6 +422,81 @@ out:
 
 
 /*
+ *
+ * Returns a string with the PUs that need to be used to
+ * restrict the topology. It takes into account the values of
+ * enviroment variables as indicated by 'restr' and 'restr_type'
+ * as well as the 'cores' the RM has allocated for this job.
+ *
+ * The output string needs to be freed.
+ */
+static
+char* calc_restrict_cpus(hwloc_topology_t topo, char *cores,
+			 const char *restr, const char *restr_type)
+{
+  /* Current model uses logical Cores to specify where this
+     job should run. Need to get the OS cpus (including all
+     the CPUs of an SMT core) to tell mpibind what it can use. */
+  char *pus = malloc(LONG_STR_SIZE);
+
+  /* Get the PUs associated with the given cores */
+  if (mpibind_cores_to_pus(topo, cores, pus, LONG_STR_SIZE) != 0) {
+    shell_debug("cores_to_pus failed");
+    return NULL;
+  }
+
+  shell_debug("Flux given cores: %s", cores);
+  shell_debug("Derived pus: %s", pus);
+  shell_debug("Total #cores: %d",
+	hwloc_get_nbobjs_by_depth(topo,
+				  mpibind_get_core_depth(topo)));
+  shell_debug("Total #pus: %d",
+	hwloc_get_nbobjs_by_type(topo,
+				 HWLOC_OBJ_PU));
+
+  if (restr != NULL) {
+    /* Need non-const pointer */
+    char restr_str[LONG_STR_SIZE];
+    strncpy(restr_str, restr, LONG_STR_SIZE-1);
+
+    /* Get the restrict CPU or NUMA IDs directly or from a file */
+    if (mpibind_parse_restrict_ids(restr_str, LONG_STR_SIZE) == 0) {
+      shell_debug("Restrict IDs read: <%s>", restr_str);
+
+      hwloc_bitmap_t genset = hwloc_bitmap_alloc();
+      hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+
+      /* Calculate the restrict CPU set */
+      if (restr_type != NULL && strcmp(restr_type, "mem") == 0) {
+	hwloc_bitmap_list_sscanf(genset, restr_str);
+	hwloc_cpuset_from_nodeset(topo, cpuset, genset);
+      } else {
+	hwloc_bitmap_list_sscanf(cpuset, restr_str);
+      }
+
+      char str3[LONG_STR_SIZE];
+      hwloc_bitmap_list_snprintf(str3, sizeof(str3), cpuset);
+      shell_debug("Restrict IDs to PUs: <%s>", str3);
+
+      /* Get the intersection of input pus and restrict var */
+      hwloc_bitmap_list_sscanf(genset, pus);
+      hwloc_bitmap_and(genset, genset, cpuset);
+
+      if ( !hwloc_bitmap_iszero(genset) )
+	hwloc_bitmap_list_snprintf(pus, LONG_STR_SIZE, genset);
+      else
+	shell_debug("Restrict yields empty set thus ignoring");
+
+      hwloc_bitmap_free(genset);
+      hwloc_bitmap_free(cpuset);
+    }
+  }
+
+  return pus;
+}
+
+
+/*
  * The entry function to the mpibind plugin.
  * This function initializes and calls mpibind.
  */
@@ -519,6 +594,10 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     }
   }
 
+#if 1
+  if (mpibind_load_topology(topo) != 0)
+    return shell_log_errno("mpibind_load_topology");
+#else
   /* Make sure the OS binding functions are actually called */
   /* Could also use HWLOC_THISSYSTEM=1, but that applies
      globally to all hwloc clients */
@@ -536,6 +615,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
     shell_log_error("Binding is not enforced");
     return 1;
   }
+#endif
 
   if (restrict_topo && topo_restrict (topo) < 0)
     return shell_log_errno ("Failed to restrict topology");
@@ -547,11 +627,11 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
    * Among others, useful for thread or core specialization.
    */
   char *pus =
-    mpibind_calc_restrict_cpus(topo, cores,
-			       flux_shell_getenv(shell,
-						 "MPIBIND_RESTRICT"),
-			       flux_shell_getenv(shell,
-						 "MPIBIND_RESTRICT_TYPE"));
+    calc_restrict_cpus(topo, cores,
+		       flux_shell_getenv(shell,
+					 "MPIBIND_RESTRICT"),
+		       flux_shell_getenv(shell,
+					 "MPIBIND_RESTRICT_TYPE"));
 
   if ( mpibind_set_ntasks(mph, ntasks) != 0 ||
        mpibind_set_topology(mph, topo) != 0 ||
