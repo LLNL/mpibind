@@ -19,8 +19,8 @@ Lawrence Livermore National Laboratory
    1. [Example mappings](#example-mappings)
    1. [Reporting affinity](#reporting-affinity)
    1. [Extra exercises](#extra-exercises)
-   1. [References](#references)
-1.[Mapping applications to the hardware](module3.md)
+   1. [References](#references) 
+1. [Mapping applications to the hardware](module3.md)
 
 
 
@@ -444,6 +444,25 @@ Machine (503GB total)
 
 </details>
 
+#### Hands-on exercise A: `lstopo` vs. `lstopo-no-graphics`
+
+When graphics are enabled, `lstopo` creates images and `lstopo-no-graphics` shows text outputs.
+
+On systems where graphics aren't enabled -- like the AWS clusters where we're working today -- they both provide text output.
+
+Try running
+
+```
+lstopo
+```
+
+and
+
+```
+lstopo-no-graphics
+```
+
+From here on out, we'll stick with `lstopo` on our AWS instances!
 
 ### Using synthetic topologies 
 
@@ -462,16 +481,16 @@ rzadams.xml
 Using these files, you should be able to create the outputs for `lstopo-no-graphics` that you'd see on these respective machines, simply by adding `--input <machine name>.xml` to the commands shown above; as an example, 
 
 ```
-lstopo-no-graphics --input /home/tutorial/topo-xml/rzadams.xml
+lstopo --input /home/tutorial/topo-xml/rzadams.xml
 ```
 
 should allow you to "see" `RZAdams`'s MI300A architecture, without needing access to `RZAdams` itself.
 
 In another environment, `lstopo` would allow you to re-create the images shown above, but we only have the text-output version of this function working on AWS. For that reason, `lstopo` defaults to `lstopo-no-graphics` for this tutorial.
 
-#### Hands-on exercise A: Experimenting with `lstopo`
+#### Hands-on exercise B: Experimenting with `lstopo`
 
-By default, `lstopo` and `lstopo-no-graphics` show the topology of the machine you're logged into. Alternatively, you can pass an `.xml` file describing the topology of a *different* machine to see the topology of that machine.
+By default, `lstopo` shows the topology of the machine you're logged into. Alternatively, you can pass an `.xml` file describing the topology of a *different* machine to see the topology of that machine.
 
 From your AWS desktop, try the following:
 
@@ -479,30 +498,337 @@ From your AWS desktop, try the following:
 lstopo --input /home/tutorial/topo-xml/rzadams.xml
 ```
 
-and then try:
+See how this changes the outpput you get simply running `lstopo`!
 
-```
-lstopo-no-graphics -i /home/tutorial/topo-xml/rzadams.xml
-```
+#### Hands-on exercise C: Investigating AWS nodes with `lstopo`
 
-These should give the same result!
-
-#### Hands-on exercise B: Investigating AWS nodes with `lstopo`
-
-Let's use `lstopo` to show the topology of the nodes we can see through AWS. First, try running
+Let's use `lstopo` again to show the topology of the nodes we can see through AWS. First, try running
 
 
 ```
 lstopo
 ```
 
-The node you see immediately after logging in doesn't have the most interesting topology, but the nodes waiting for you in the "queue" have more features. To see the topology of one of these nodes, use the following command:
+When you run `lstopo`, you're investigating the hardware of the "login node" -- the node you see immediately after logging in. The login node here doesn't have the most interesting topology, but we have a second type of node, with different hardware, waiting for you in the "queue". To see the topology of one of these nodes, use the following command:
 
 ```
-srun -t1 lstopo
+srun lstopo
 ```
 
-Identify at least one way the features of the node described by `lstopo`'s output differ from those described by `srun -t1 lstopo`.
+When you preceded a command with `srun`, you're choosing to grab one of the nodes from the queue -- which are normally more powerful -- to run your command.
+
+The output from `srun lstopo` should be different than `lstopo` because the nodes have different hardware. Identify at least one way the features of the node described by `lstopo`'s output differ from those described by `srun lstopo`.
+
+**What you should see**
+
+<details>
+<summary>
+
+```
+[username2@ip-10-0-0-13 scripts]$ lstopo
+```
+
+</summary>
+
+```
+Machine (124GB total)
+  Package L#0
+    NUMANode L#0 (P#0 124GB)
+    L3 L#0 (36MB)
+      L2 L#0 (1024KB) + L1d L#0 (32KB) + L1i L#0 (32KB) + Core L#0
+        PU L#0 (P#0)
+        PU L#1 (P#16)
+      L2 L#1 (1024KB) + L1d L#1 (32KB) + L1i L#1 (32KB) + Core L#1
+        PU L#2 (P#1)
+        PU L#3 (P#17)
+      L2 L#2 (1024KB) + L1d L#2 (32KB) + L1i L#2 (32KB) + Core L#2
+        PU L#4 (P#2)
+        PU L#5 (P#18)
+      L2 L#3 (1024KB) + L1d L#3 (32KB) + L1i L#3 (32KB) + Core L#3
+        PU L#6 (P#3)
+        PU L#7 (P#19)
+      L2 L#4 (1024KB) + L1d L#4 (32KB) + L1i L#4 (32KB) + Core L#4
+        PU L#8 (P#4)
+        PU L#9 (P#20)
+      L2 L#5 (1024KB) + L1d L#5 (32KB) + L1i L#5 (32KB) + Core L#5
+        PU L#10 (P#5)
+        PU L#11 (P#21)
+      L2 L#6 (1024KB) + L1d L#6 (32KB) + L1i L#6 (32KB) + Core L#6
+        PU L#12 (P#6)
+        PU L#13 (P#22)
+      L2 L#7 (1024KB) + L1d L#7 (32KB) + L1i L#7 (32KB) + Core L#7
+        PU L#14 (P#7)
+        PU L#15 (P#23)
+      L2 L#8 (1024KB) + L1d L#8 (32KB) + L1i L#8 (32KB) + Core L#8
+        PU L#16 (P#8)
+        PU L#17 (P#24)
+      L2 L#9 (1024KB) + L1d L#9 (32KB) + L1i L#9 (32KB) + Core L#9
+        PU L#18 (P#9)
+        PU L#19 (P#25)
+      L2 L#10 (1024KB) + L1d L#10 (32KB) + L1i L#10 (32KB) + Core L#10
+        PU L#20 (P#10)
+        PU L#21 (P#26)
+      L2 L#11 (1024KB) + L1d L#11 (32KB) + L1i L#11 (32KB) + Core L#11
+        PU L#22 (P#11)
+        PU L#23 (P#27)
+      L2 L#12 (1024KB) + L1d L#12 (32KB) + L1i L#12 (32KB) + Core L#12
+        PU L#24 (P#12)
+        PU L#25 (P#28)
+      L2 L#13 (1024KB) + L1d L#13 (32KB) + L1i L#13 (32KB) + Core L#13
+        PU L#26 (P#13)
+        PU L#27 (P#29)
+      L2 L#14 (1024KB) + L1d L#14 (32KB) + L1i L#14 (32KB) + Core L#14
+        PU L#28 (P#14)
+        PU L#29 (P#30)
+      L2 L#15 (1024KB) + L1d L#15 (32KB) + L1i L#15 (32KB) + Core L#15
+        PU L#30 (P#15)
+        PU L#31 (P#31)
+  HostBridge
+    PCI 00:01.3 (Other)
+    PCI 00:03.0 (VGA)
+    PCI 00:04.0 (NVMExp)
+      Block(Disk) "nvme0n1"
+    PCI 00:05.0 (Ethernet)
+      Net "ens5"
+    PCI 00:1e.0 (3D)
+      CoProc(CUDA) "cuda0"
+      GPU(NVML) "nvml0"
+    PCI 00:1f.0 (NVMExp)
+      Block(Disk) "nvme1n1"
+    CoProc(OpenCL) "opencl0d0"
+```
+</details>
+
+<details>
+<summary>
+
+```
+[username2@ip-10-0-0-13 scripts]$ srun lstopo
+```
+
+</summary>
+
+```
+Machine (378GB total)
+  Package L#0
+    NUMANode L#0 (P#0 189GB)
+    L3 L#0 (36MB)
+      L2 L#0 (1024KB) + L1d L#0 (32KB) + L1i L#0 (32KB) + Core L#0
+        PU L#0 (P#0)
+        PU L#1 (P#48)
+      L2 L#1 (1024KB) + L1d L#1 (32KB) + L1i L#1 (32KB) + Core L#1
+        PU L#2 (P#1)
+        PU L#3 (P#49)
+      L2 L#2 (1024KB) + L1d L#2 (32KB) + L1i L#2 (32KB) + Core L#2
+        PU L#4 (P#2)
+        PU L#5 (P#50)
+      L2 L#3 (1024KB) + L1d L#3 (32KB) + L1i L#3 (32KB) + Core L#3
+        PU L#6 (P#3)
+        PU L#7 (P#51)
+      L2 L#4 (1024KB) + L1d L#4 (32KB) + L1i L#4 (32KB) + Core L#4
+        PU L#8 (P#4)
+        PU L#9 (P#52)
+      L2 L#5 (1024KB) + L1d L#5 (32KB) + L1i L#5 (32KB) + Core L#5
+        PU L#10 (P#5)
+        PU L#11 (P#53)
+      L2 L#6 (1024KB) + L1d L#6 (32KB) + L1i L#6 (32KB) + Core L#6
+        PU L#12 (P#6)
+        PU L#13 (P#54)
+      L2 L#7 (1024KB) + L1d L#7 (32KB) + L1i L#7 (32KB) + Core L#7
+        PU L#14 (P#7)
+        PU L#15 (P#55)
+      L2 L#8 (1024KB) + L1d L#8 (32KB) + L1i L#8 (32KB) + Core L#8
+        PU L#16 (P#8)
+        PU L#17 (P#56)
+      L2 L#9 (1024KB) + L1d L#9 (32KB) + L1i L#9 (32KB) + Core L#9
+        PU L#18 (P#9)
+        PU L#19 (P#57)
+      L2 L#10 (1024KB) + L1d L#10 (32KB) + L1i L#10 (32KB) + Core L#10
+        PU L#20 (P#10)
+        PU L#21 (P#58)
+      L2 L#11 (1024KB) + L1d L#11 (32KB) + L1i L#11 (32KB) + Core L#11
+        PU L#22 (P#11)
+        PU L#23 (P#59)
+      L2 L#12 (1024KB) + L1d L#12 (32KB) + L1i L#12 (32KB) + Core L#12
+        PU L#24 (P#12)
+        PU L#25 (P#60)
+      L2 L#13 (1024KB) + L1d L#13 (32KB) + L1i L#13 (32KB) + Core L#13
+        PU L#26 (P#13)
+        PU L#27 (P#61)
+      L2 L#14 (1024KB) + L1d L#14 (32KB) + L1i L#14 (32KB) + Core L#14
+        PU L#28 (P#14)
+        PU L#29 (P#62)
+      L2 L#15 (1024KB) + L1d L#15 (32KB) + L1i L#15 (32KB) + Core L#15
+        PU L#30 (P#15)
+        PU L#31 (P#63)
+      L2 L#16 (1024KB) + L1d L#16 (32KB) + L1i L#16 (32KB) + Core L#16
+        PU L#32 (P#16)
+        PU L#33 (P#64)
+      L2 L#17 (1024KB) + L1d L#17 (32KB) + L1i L#17 (32KB) + Core L#17
+        PU L#34 (P#17)
+        PU L#35 (P#65)
+      L2 L#18 (1024KB) + L1d L#18 (32KB) + L1i L#18 (32KB) + Core L#18
+        PU L#36 (P#18)
+        PU L#37 (P#66)
+      L2 L#19 (1024KB) + L1d L#19 (32KB) + L1i L#19 (32KB) + Core L#19
+        PU L#38 (P#19)
+        PU L#39 (P#67)
+      L2 L#20 (1024KB) + L1d L#20 (32KB) + L1i L#20 (32KB) + Core L#20
+        PU L#40 (P#20)
+        PU L#41 (P#68)
+      L2 L#21 (1024KB) + L1d L#21 (32KB) + L1i L#21 (32KB) + Core L#21
+        PU L#42 (P#21)
+        PU L#43 (P#69)
+      L2 L#22 (1024KB) + L1d L#22 (32KB) + L1i L#22 (32KB) + Core L#22
+        PU L#44 (P#22)
+        PU L#45 (P#70)
+      L2 L#23 (1024KB) + L1d L#23 (32KB) + L1i L#23 (32KB) + Core L#23
+        PU L#46 (P#23)
+        PU L#47 (P#71)
+    HostBridge
+      PCI 00:11.5 (SATA)
+      PCI 00:17.0 (SATA)
+    HostBridge
+      PCIBridge
+        PCI 18:00.0 (3D)
+          CoProc(CUDA) "cuda0"
+          CoProc(OpenCL) "opencl0d0"
+          GPU(NVML) "nvml0"
+      PCIBridge
+        PCI 19:00.0 (3D)
+          CoProc(CUDA) "cuda1"
+          CoProc(OpenCL) "opencl0d1"
+          GPU(NVML) "nvml1"
+    HostBridge
+      PCIBridge
+        PCI 35:00.0 (3D)
+          CoProc(CUDA) "cuda2"
+          CoProc(OpenCL) "opencl0d2"
+          GPU(NVML) "nvml2"
+      PCIBridge
+        PCI 36:00.0 (3D)
+          CoProc(CUDA) "cuda3"
+          CoProc(OpenCL) "opencl0d3"
+          GPU(NVML) "nvml3"
+    HostBridge
+      PCIBridge
+        PCIBridge
+          PCIBridge
+            PCI a0:00.0 (NVMExp)
+              Block(Disk) "nvme0n1"
+      PCIBridge
+        PCI bf:00.0 (NVMExp)
+          Block(Disk) "nvme1n1"
+        PCI bf:00.1 (NVMExp)
+          Block(Disk) "nvme2n1"
+  Package L#1
+    NUMANode L#1 (P#1 189GB)
+    L3 L#1 (36MB)
+      L2 L#24 (1024KB) + L1d L#24 (32KB) + L1i L#24 (32KB) + Core L#24
+        PU L#48 (P#24)
+        PU L#49 (P#72)
+      L2 L#25 (1024KB) + L1d L#25 (32KB) + L1i L#25 (32KB) + Core L#25
+        PU L#50 (P#25)
+        PU L#51 (P#73)
+      L2 L#26 (1024KB) + L1d L#26 (32KB) + L1i L#26 (32KB) + Core L#26
+        PU L#52 (P#26)
+        PU L#53 (P#74)
+      L2 L#27 (1024KB) + L1d L#27 (32KB) + L1i L#27 (32KB) + Core L#27
+        PU L#54 (P#27)
+        PU L#55 (P#75)
+      L2 L#28 (1024KB) + L1d L#28 (32KB) + L1i L#28 (32KB) + Core L#28
+        PU L#56 (P#28)
+        PU L#57 (P#76)
+      L2 L#29 (1024KB) + L1d L#29 (32KB) + L1i L#29 (32KB) + Core L#29
+        PU L#58 (P#29)
+        PU L#59 (P#77)
+      L2 L#30 (1024KB) + L1d L#30 (32KB) + L1i L#30 (32KB) + Core L#30
+        PU L#60 (P#30)
+        PU L#61 (P#78)
+      L2 L#31 (1024KB) + L1d L#31 (32KB) + L1i L#31 (32KB) + Core L#31
+        PU L#62 (P#31)
+        PU L#63 (P#79)
+      L2 L#32 (1024KB) + L1d L#32 (32KB) + L1i L#32 (32KB) + Core L#32
+        PU L#64 (P#32)
+        PU L#65 (P#80)
+      L2 L#33 (1024KB) + L1d L#33 (32KB) + L1i L#33 (32KB) + Core L#33
+        PU L#66 (P#33)
+        PU L#67 (P#81)
+      L2 L#34 (1024KB) + L1d L#34 (32KB) + L1i L#34 (32KB) + Core L#34
+        PU L#68 (P#34)
+        PU L#69 (P#82)
+      L2 L#35 (1024KB) + L1d L#35 (32KB) + L1i L#35 (32KB) + Core L#35
+        PU L#70 (P#35)
+        PU L#71 (P#83)
+      L2 L#36 (1024KB) + L1d L#36 (32KB) + L1i L#36 (32KB) + Core L#36
+        PU L#72 (P#36)
+        PU L#73 (P#84)
+      L2 L#37 (1024KB) + L1d L#37 (32KB) + L1i L#37 (32KB) + Core L#37
+        PU L#74 (P#37)
+        PU L#75 (P#85)
+      L2 L#38 (1024KB) + L1d L#38 (32KB) + L1i L#38 (32KB) + Core L#38
+        PU L#76 (P#38)
+        PU L#77 (P#86)
+      L2 L#39 (1024KB) + L1d L#39 (32KB) + L1i L#39 (32KB) + Core L#39
+        PU L#78 (P#39)
+        PU L#79 (P#87)
+      L2 L#40 (1024KB) + L1d L#40 (32KB) + L1i L#40 (32KB) + Core L#40
+        PU L#80 (P#40)
+        PU L#81 (P#88)
+      L2 L#41 (1024KB) + L1d L#41 (32KB) + L1i L#41 (32KB) + Core L#41
+        PU L#82 (P#41)
+        PU L#83 (P#89)
+      L2 L#42 (1024KB) + L1d L#42 (32KB) + L1i L#42 (32KB) + Core L#42
+        PU L#84 (P#42)
+        PU L#85 (P#90)
+      L2 L#43 (1024KB) + L1d L#43 (32KB) + L1i L#43 (32KB) + Core L#43
+        PU L#86 (P#43)
+        PU L#87 (P#91)
+      L2 L#44 (1024KB) + L1d L#44 (32KB) + L1i L#44 (32KB) + Core L#44
+        PU L#88 (P#44)
+        PU L#89 (P#92)
+      L2 L#45 (1024KB) + L1d L#45 (32KB) + L1i L#45 (32KB) + Core L#45
+        PU L#90 (P#45)
+        PU L#91 (P#93)
+      L2 L#46 (1024KB) + L1d L#46 (32KB) + L1i L#46 (32KB) + Core L#46
+        PU L#92 (P#46)
+        PU L#93 (P#94)
+      L2 L#47 (1024KB) + L1d L#47 (32KB) + L1i L#47 (32KB) + Core L#47
+        PU L#94 (P#47)
+        PU L#95 (P#95)
+    HostBridge
+      PCIBridge
+        PCIBridge
+          PCIBridge
+            PCI c5:00.0 (Ethernet)
+          PCIBridge
+            PCI c6:00.0 (Ethernet)
+              Net "enp198s0"
+    HostBridge
+      PCIBridge
+        PCI e7:00.0 (3D)
+          CoProc(CUDA) "cuda4"
+          CoProc(OpenCL) "opencl0d4"
+          GPU(NVML) "nvml4"
+      PCIBridge
+        PCI e8:00.0 (3D)
+          CoProc(CUDA) "cuda5"
+          CoProc(OpenCL) "opencl0d5"
+          GPU(NVML) "nvml5"
+    HostBridge
+      PCIBridge
+        PCI f4:00.0 (3D)
+          CoProc(CUDA) "cuda6"
+          CoProc(OpenCL) "opencl0d6"
+          GPU(NVML) "nvml6"
+      PCIBridge
+        PCI f5:00.0 (3D)
+          CoProc(CUDA) "cuda7"
+          CoProc(OpenCL) "opencl0d7"
+          GPU(NVML) "nvml7"
+```
+
+</details>
 
 ### Customizing `lstopo` output
 
@@ -652,35 +978,90 @@ janeh@tioga20:~$ lstopo --no-useless-caches --no-io --physical
 
 <img src="../figures/tioga/tioga-no-cache-io-physical.png" width="750"/>
 
+#### Hands-on exercise D: Investigating AWS nodes with `--only`
 
-
-#### Hands on Exercise C: Experimenting with `--only`
-
-Run
+First, run the command
 
 ```
-lstopo-no-graphics  --input /home/tutorial/topo-xml/rzadams.xml --only core
+lstopo --only core
+```
+
+to see the number of cores on the login node and
+
+```
+srun lstopo --only core
+```
+
+to see the number of cores on the compute nodes in our queue.
+
+How are the outputs different? Which type of node has more cores?
+
+#### Hands-on exercise E: Investigating AWS nodes: How many PUs per core?
+
+You can add `| wc -l` to a command to count the number of lines in its output. Modifying the commands from the last exercise, you should get a single number if you try `lstopo --only core | wc -l` and `srun lstopo --only core | wc -l`. Here you're counting the number of cores (one per line) on each node!
+
+Determine the number of cores and PUs (hardware threads) on an AWS compute node by running the following:
+
+```
+srun lstopo --only core | wc -l
 ```
 
 and
 
 ```
-lstopo-no-graphics  --input /home/tutorial/topo-xml/rzadams.xml --only core | wc -l
+srun lstopo --only PU | wc -l
 ```
 
-to see the first the full list of cores on `RZAdams`'s nodes and then to tally them.
+How many hardware threads exist per core? Do these nodes support Simultaneous Multi-Threading (SMT)? (In other words, are there multiple PUs for every core?)
+
+<details>
+<summary>
+
+Answer
+
+</summary>
+
+```
+[username2@ip-10-0-0-11 ~]$ srun lstopo --only core | wc -l
+48
+[username2@ip-10-0-0-11 ~]$ srun lstopo --only PU | wc -l
+96
+
+We have 48 cores and 96 PUs. Because we have 2x as many PUs as cores, these nodes
+do support SMT!
+
+```
+
+</details>
+
+
+#### Hands on Exercise F: Experimenting with `--only` on synthetic topologies
+
+Run
+
+```
+lstopo  --input /home/tutorial/topo-xml/rzadams.xml --only core
+```
+
+and
+
+```
+lstopo  --input /home/tutorial/topo-xml/rzadams.xml --only core | wc -l
+```
+
+to see the full list of cores on `RZAdams`'s nodes and then to tally them.
 
 Now try
 
 ```
-lstopo-no-graphics  --input /home/tutorial/topo-xml/rzadams.xml --only PU | wc -l
+lstopo  --input /home/tutorial/topo-xml/rzadams.xml --only PU | wc -l
 ```
 
 to see how many hardware threads there are on the same node. 
 
 For contrast, repeat the above using the file `tioga.xml`. 
 
-How many hardware threads are there per node on Tioga and RZAdams?
+How many hardware threads are there per node on RZAdams and Tioga?
 
 **A)** 192 & 128
 
@@ -702,7 +1083,7 @@ janeh@rzadams1005:~$ lstopo-no-graphics --only PU | wc -l
 192
 ```
 
-The same is true on Tioga, but there are only 64
+The same is true on Tioga, but there are only 64 cores and 128 hardware threads
 
 ```
 janeh@tioga20:~$ lstopo --only core | wc -l
@@ -715,43 +1096,11 @@ Note that `tioga20` and `rzadams1005` are both compute nodes!
 
 </details>
 
-#### Hands-on exercise D: Investigating AWS nodes with `--only`
-
-Use the commands
-
-```
-srun -t1 lstopo-no-graphics --only core | wc -l
-```
-and
-
-```
-srun -t1 lstopo-no-graphics --only PU | wc -l
-```
-
-to identify the number of cores and PUs on our AWS nodes. Do these nodes support Simultaneous Multi-Threading (SMT)? How many hardware threads exist per core?
-
-<details>
-<summary>
-
-Answer
-
-</summary>
-
-```
-[username2@ip-10-0-0-11 ~]$ srun -t1 lstopo-no-graphics --only core | wc -l
-48
-[username2@ip-10-0-0-11 ~]$ srun -t1 lstopo-no-graphics --only PU | wc -l
-96
-
-We have 48 cores and 96 PUs. Because we have 2x as many PUs as cores, these nodes
-do support SMT!
-
-```
-
-</details>
 
 
-## Calculating CPU masks
+## Using hwloc-calc
+
+### hwloc-calc with --intersect
 
 Another tool provided by `hwloc` is `hwloc-calc`, which allows you to create CPU masks. (In case this is an unfamiliar term -- this is basically a hexadecimal string that can be interpreted as a list identifying particular CPUs.) These masks can then be used as inputs to another `hwloc` function, `hwloc-bind`, as we'll see below.
 
@@ -776,6 +1125,71 @@ janeh@tioga20:~$ hwloc-calc NUMAnode:0.core:8 --intersect PU --physical
 8,72
 ```
 
+#### Hands-on exercise G: Determine the cores on a given NUMAnode (AWS)
+
+Run the following to see the list of cores on the AWS login node:
+
+```
+hwloc-calc NUMAnode:0 --intersect core
+```
+
+and run these to see how many are on the compute node, spread across two NUMAnodes:
+
+```
+srun hwloc-calc NUMAnode:0 --intersect core
+srun hwloc-calc NUMAnode:1 --intersect core
+```
+
+<details>
+<summary>
+
+Expected output
+
+</summary>
+
+```
+$ hwloc-calc NUMAnode:0 --intersect core
+0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+$ srun hwloc-calc NUMAnode:0 --intersect core
+0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23
+$ srun hwloc-calc NUMAnode:1 --intersect core
+24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+```
+
+</details>
+
+#### Hands-on exercise H: Determine the PUs associated with a given core (synthetic topologies)
+
+Using `hwloc-calc` with the flag `-i` to specify the RZAdams input file, determine the PUs associated with core 4 on NUMAnode 1 of a `RZAdams` node.
+
+<details>
+<summary>
+
+Hint
+
+</summary>
+
+```
+hwloc-calc -i /home/tutorial/topo-xml/rzadams.xml <specify core 4 here> --intersect <what are you trying to determine on core 4?>
+```
+
+</details>
+
+<details>
+<summary>
+
+Answer
+
+</summary>
+
+```
+$ hwloc-calc -i /home/tutorial/topo-xml/rzadams.xml NUMA:1.core:4 --intersect PU
+56,57
+```
+
+</details>
+
+### Calculating CPU masks
 
 If we drop the `--intersect` flag and instead simply run `hwloc-calc <compute resource>:<index>.<compute resource>.<index>`, we'll get a CPU mask in hexadecimal:
 
@@ -822,22 +1236,26 @@ janeh@tioga22:~$ hwloc-calc NUMAnode:0 --taskset
 
 The default mask format is specific to `hwloc`, whereas `--taskset` displays the mask in the format recognized by the taskset command-line program (an alternative command line tool for binding).
 
-#### Hands-on exercise E: Determine the PUs associated with a given core
+#### Hands-on exercise I: Calculating CPU masks on AWS
 
-Using `hwloc-calc` with the flag `-i` to specify an input file, determine the PUs associated with core 4 on the second NUMA domain of a `RZAdams` node.
-
-<details>
-<summary>
-
-Hint
-
-</summary>
+Start with a simple command to calculate the CPU mask for core 23 on NUMAnode 0 of an AWS compute node:
 
 ```
-hwloc-calc -i /home/tutorial/topo-xml/rzadams.xml <specify core 4 here> --intersect <what are you trying to determine on core 4?>
+srun hwloc-calc NUMAnode:0.core:23
 ```
 
-</details>
+Using the CPU mask you get as output, you can use the intersect flag to sanity check you got what you expected:
+
+```
+srun hwloc-calc <CPU mask> --intersect core
+```
+
+What do you see if you remove `srun` and instead run
+
+```
+hwloc-calc <CPU mask> --intersect core
+```
+?
 
 <details>
 <summary>
@@ -846,9 +1264,78 @@ Answer
 
 </summary>
 
+Below is the output you should see. Note that when you try to investigate the compute node's mask for core 23 on a login node, you get an unexpected result (core 7):
+
 ```
-$ hwloc-calc -i /home/tutorial/topo-xml/rzadams.xml NUMA:1.core:4 --intersect PU
-56,57
+[username2@ip-10-0-0-13 scripts]$ srun hwloc-calc NUMAnode:0.core:23
+0x00000080,,0x00800000
+[username2@ip-10-0-0-13 scripts]$ srun hwloc-calc 0x00000080,,0x00800000 --intersect core
+23
+[username2@ip-10-0-0-13 scripts]$ hwloc-calc 0x00000080,,0x00800000 --intersect core
+7
+```
+
+There are only 16 cores on the login node
+
+```
+[username2@ip-10-0-0-13 scripts]$ hwloc-calc NUMAnode:0 --intersect core
+0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+```
+
+so on the login node, the mask for a 23rd core is misinterpreted!
+
+</details>
+
+#### Hands-on exercise J: Adding CPU masks together
+
+Say that you want to calculate the joint mask for a set of cores. You can list each of the cores explicitly using the syntax `NUMAnode:<#>.core:<#>` and pass these as inputs to `hwloc-calc`. You can also pass multiple masks for cores or sets of cores to `hwloc-calc`, which will add those masks together.
+
+Try the following:
+
+```
+hwloc-calc NUMAnode:0.core:1 NUMAnode:0.core:6
+```
+
+Then calculate the individual masks and add them together:
+
+```
+hwloc-calc NUMAnode:0.core:1
+hwloc-calc NUMAnode:0.core:6
+hwloc-calc <mask for core 1> <mask for core 6>
+```
+
+Do you get the same result with
+
+```
+hwloc-calc NUMAnode:0.core:1-6 ~NUMAnode:0.core:2-5
+```
+?
+
+<details>
+<summary>
+
+What this should look like
+
+</summary>
+
+These yield the same result:
+
+```
+[username2@ip-10-0-0-25 ~]$ hwloc-calc NUMAnode:0.core:1 NUMAnode:0.core:6
+0x00420042
+[username2@ip-10-0-0-25 ~]$ hwloc-calc NUMAnode:0.core:1-6 ~NUMAnode:0.core:2-5
+0x00420042
+```
+
+Separately grabbing and adding the masks for cores 1 and 6:
+
+```
+[username2@ip-10-0-0-25 ~]$ hwloc-calc NUMAnode:0.core:1
+0x00020002
+[username2@ip-10-0-0-25 ~]$ hwloc-calc NUMAnode:0.core:6
+0x00400040
+[username2@ip-10-0-0-25 ~]$ hwloc-calc 0x00020002 0x00400040
+0x00420042
 ```
 
 </details>
@@ -921,7 +1408,54 @@ hwloc-bind NUMAnode:1 --membind NUMAnode:0 -- sh
 
 specifies that the task created by `sh` should be run on the compute resources of the 2nd NUMA domain, whereas it should use memory from the resources on the first NUMA domain.
 
-#### Hands-on exercise F: Determine the compute resources associated with a given task
+#### Hands-on exercise K: On AWS, get the compute resources for a given task
+
+On your AWS instance, run
+
+```
+hwloc-bind core:0 core:6 -- sh
+```
+
+to bind a process to cores 0 and 6,
+
+```
+hwloc-bind --get
+```
+
+to get the mask of the resources where the last process was bound, and
+
+```
+hwloc-calc <MASK> --intersect core
+```
+
+to confirm that process ran on the expected cores.
+
+<details>
+<summary>
+
+What this will look like
+
+</summary>
+
+```
+[user2@ip-10-0-0-141 topo-xml]$ hwloc-bind core:0 core:6 -- sh
+sh-4.2$ hwloc-bind --get
+0x00410041
+sh-4.2$ hwloc-calc 0x00410041 --intersect core
+0,6
+```
+
+Alternatively, you might do
+
+```
+[user2@ip-10-0-0-141 topo-xml]$ hwloc-bind core:0 core:6 -- sh
+sh-4.2$ hwloc-calc $(hwloc-bind --get) --intersect core
+0,6
+```
+
+</details>
+
+#### Hands-on exercise L: Determine the compute resources associated with a given task
 
 To *which cores* was the last task bound with `hwloc-bind`? Determine how we can specify cores to replace `<complete this with keyword args>` in the following:
 
@@ -968,52 +1502,7 @@ janeh@rzadams1005:~$ hwloc-bind --get
 
 </details>
 
-#### Hands-on exercise G: On AWS, get the compute resources for a given task
 
-On your AWS instance, run
-
-```
-hwloc-bind core:0 core:6 -- sh
-```
-
-to bind a process to cores 0 and 6,
-
-```
-hwloc-bind --get
-```
-
-to get the mask of the resources where the last process was bound, and
-
-```
-hwloc-calc <MASK> --intersect core
-```
-
-to confirm that process ran on the expected cores.
-
-<details>
-<summary>
-
-What this will look like
-
-</summary>
-
-```
-[user2@ip-10-0-0-141 topo-xml]$ hwloc-bind core:0 core:6 -- sh
-sh-4.2$ hwloc-bind --get
-0x00410041
-sh-4.2$ hwloc-calc 0x00410041 --intersect core
-0,6
-```
-
-Alternatively, you might do
-
-```
-[user2@ip-10-0-0-141 topo-xml]$ hwloc-bind core:0 core:6 -- sh
-sh-4.2$ hwloc-calc $(hwloc-bind --get) --intersect core
-0,6
-```
-
-</details>
 
 ## Definitions
 
@@ -1150,6 +1639,69 @@ tioga12    Task   3/  4 running on 32 CPUs: 48-63,112-127
 
 </details>
 
+#### Hands-on exercise M: Try out `mpi` and `mpi+gpu`
+
+First, use `which` to see where we've installed the `mpi` and `mpi+gpu` binaries in your AWS environment:
+
+```
+which mpi
+which mpi+gpu
+```
+
+Next, look at the difference in output when you run either of these with a single task on a single node:
+
+```
+srun -N1 -n1 mpi
+srun -N1 -n1 mpi+gpu
+```
+
+<details>
+<summary>
+
+What you should see
+
+</summary>
+
+With `mpi` we see that all 96 cores on the node get assigned to the single task.
+
+The `mpi+gpu` also detects the node's 8 GPUs, all of which get assigned to the same task:
+
+```
+[username2@ip-10-0-0-13 scripts]$ srun -N1 -n1 mpi
+  0 gpu-st-g4dnmetal-1  96 CPUs: 0-95
+[username2@ip-10-0-0-13 scripts]$ srun -N1 -n1 mpi+gpu
+  0 gpu-st-g4dnmetal-1  96 CPUs: 0-95
+  0 gpu-st-g4dnmetal-1   8 GPUs: 0000:18:00.0 0000:19:00.0 0000:35:00.0 0000:36:00.0 0000:E7:00.0 0000:E8:00.0 0000:F4:00.0 0000:F5:00.0
+```
+
+</details>
+
+
+#### Hands-on exercise N: How do tasks spread across multiple nodes?
+
+When you run a single task on a single node, all cores share the same task.
+
+When you run two tasks across two nodes, does each task have access to both nodes, or does each task get its own node? Try
+
+```
+srun -N2 -n2 mpi
+```
+
+<details>
+<summary>
+Answer
+</summary>
+
+Each task gets its own node:
+
+```
+[username2@ip-10-0-0-13 scripts]$ srun -N2 -n2 mpi
+  0 gpu-st-g4dnmetal-1  96 CPUs: 0-95
+  1 gpu-st-g4dnmetal-2  96 CPUs: 0-95
+```
+
+</details>
+
 
 ##### Example 7
 
@@ -1220,7 +1772,7 @@ srun -t1 -N1 -n6 mpi
 
 asks for six tasks on a single node.
 
-Run `mpi` with 2 and then 3 tasks. How many CPUs are assigned to each task in each case? How does this number change as the number of tasks increases?
+Run `mpi` with 2 and then 3 tasks. How many CPUs are assigned to each task in each case? Does the number of CPUs per tasks change as the number of tasks increases?
 
 
 ## References
