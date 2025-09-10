@@ -1,6 +1,6 @@
 /***********************************************************
  * Edgar A. Leon
- * Lawrence Livermore National Laboratory 
+ * Lawrence Livermore National Laboratory
  ***********************************************************/
 
 #include <stdio.h>
@@ -8,30 +8,29 @@
 #include <mpi.h>
 #include "affinity.h"
 
-
 int main(int argc, char *argv[])
 {
   char buf[LONG_STR_SIZE];
-  char hostname[MPI_MAX_PROCESSOR_NAME]; 
+  char hostname[MPI_MAX_PROCESSOR_NAME];
   int rank, np, size, i;
-  int verbose = 0; 
-  int ncpus = get_num_cpus(); 
-  int nc = 0; 
+  int verbose = 0;
+  int ncpus = get_num_cpus();
+  int nc = 0;
 
   /* Get rid of compiler warning. Ay. */
-  (void) verbose; 
-  
+  (void) verbose;
+
   /* Command-line options */
-  if (argc > 1) 
+  if (argc > 1)
     for (i=1; i<argc; i++) {
       if ( strcmp(argv[i], "-v") == 0 )
-	verbose = 1; 
+	verbose = 1;
     }
-  
-  MPI_Init(&argc, &argv); 
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
-  MPI_Comm_size(MPI_COMM_WORLD, &np); 
-  MPI_Get_processor_name(hostname, &size); 
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &np);
+  MPI_Get_processor_name(hostname, &size);
 
   nc += sprintf(buf+nc, "%3d %s %3d CPUs: ",
 		rank, hostname, ncpus);
@@ -44,11 +43,11 @@ int main(int argc, char *argv[])
   if (verbose)
     nc += get_gpu_info_all(buf+nc);
 #endif
-  
-  /* Print per-task information */ 
-  printf("%s", buf);
-  
-  MPI_Finalize(); 
 
-  return 0; 
+  /* Print per-task information */
+  printf("%s", buf);
+
+  MPI_Finalize();
+
+  return 0;
 }
