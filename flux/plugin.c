@@ -73,7 +73,6 @@
 #define MAX_NUMA_DOMAINS 32
 #define PRINT_MAP_BUF_SIZE (1024*5)
 
-
 /*
  * Structure to pass parameters from flux_plugin_init()
  * to mpibind_shell_init().
@@ -89,16 +88,14 @@ struct usr_opts {
   int visible_devices;
 };
 
-
-/* 
+/*
  * Structure to pass parameters from flux_plugin_add_handler()
  * to mpibind_task_init()
  */
 struct handle_and_opts {
   mpibind_t *mph;
-  struct usr_opts *opts; 
-}; 
-
+  struct usr_opts *opts;
+};
 
 /*  Return task id for a shell task
  */
@@ -111,7 +108,6 @@ int flux_shell_task_getid(flux_shell_task_t *task)
 
     return id;
 }
-
 
 /*  Return the current task id when running in task.* context.
  */
@@ -129,7 +125,6 @@ int get_taskid(flux_plugin_t *p)
     return flux_shell_task_getid(task);
 }
 
-
 /*
  * Set an environment variable for a task.
  */
@@ -146,7 +141,6 @@ int plugin_task_setenv(flux_plugin_t *p, const char *var, const char *val)
   return 0;
 }
 
-
 /*
  * Handler for task.init.
  * Sets environment variables for each task based on the mpibind mapping.
@@ -157,17 +151,17 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
 {
   int nvars, i;
   char **env_var_values;
-  
+
   //mpibind_t *mph = data;
-  struct handle_and_opts *hdl = data; 
-  //todo: hdl->opts 
-  
+  struct handle_and_opts *hdl = data;
+  //todo: hdl->opts
+
   int taskid = get_taskid(p);
   char **env_var_names = mpibind_get_env_var_names(hdl->mph,
 						   &nvars);
-  
+
   for (i=0; i<nvars; i++) {
-    /* Tell mpibind to not set a variable */ 
+    /* Tell mpibind to not set a variable */
     if ( (!strcmp(env_var_names[i], "OMP_PLACES") &&
 	  hdl->opts->omp_places) ||
 	 (!strcmp(env_var_names[i], "OMP_PROC_BIND") &&
@@ -175,7 +169,7 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
 	 (strstr(env_var_names[i], "VISIBLE_DEVICES") &&
 	  hdl->opts->visible_devices) )
       continue;
-    
+
     env_var_values = mpibind_get_env_var_values(hdl->mph,
 						env_var_names[i]);
     if (env_var_values[taskid]) {
@@ -184,10 +178,9 @@ int mpibind_task_init(flux_plugin_t *p, const char *topic,
       plugin_task_setenv(p, env_var_names[i], env_var_values[taskid]);
     }
   }
-  
+
   return 0;
 }
-
 
 /*
  * Printing mpibind's mapping:
@@ -238,7 +231,6 @@ int mpibind_task(flux_plugin_t *p, const char *topic,
 
   return 0;
 }
-
 
 /*
  * Parse mpibind options from the command line
@@ -336,7 +328,6 @@ bool mpibind_getopt(flux_shell_t *shell,
   return disabled == 0;
 }
 
-
 /*
  * Free mpibind resources.
  * hwloc topology isn't freed by mpibind_finalize.
@@ -345,16 +336,15 @@ static
 void mpibind_destroy(void *arg)
 {
   //mpibind_t *mph = arg;
-  struct handle_and_opts *hdl = arg; 
+  struct handle_and_opts *hdl = arg;
   hwloc_topology_t topo = mpibind_get_topology(hdl->mph);
 
   mpibind_finalize(hdl->mph);
   hwloc_topology_destroy(topo);
-  
-  free(hdl->opts);
-  free(hdl); 
-}
 
+  free(hdl->opts);
+  free(hdl);
+}
 
 /*
  * Distribute workers over domains
@@ -379,7 +369,6 @@ void distrib(int wks, int doms, int *wk_arr) {
 }
 #endif
 
-
 #if 0
 static
 void print_array(int *arr, int size, char *label)
@@ -393,7 +382,6 @@ void print_array(int *arr, int size, char *label)
   shell_debug("%s: %s\n", label, str);
 }
 #endif
-
 
 /*  Restrict hwloc topology to the cpu affinity mask of the current
  *  proces. This is required for handling nested jobs in Flux, since
@@ -419,7 +407,6 @@ out:
   hwloc_bitmap_free (rset);
   return rc;
 }
-
 
 /*
  *
@@ -495,7 +482,6 @@ char* calc_restrict_cpus(hwloc_topology_t topo, char *cores,
   return pus;
 }
 
-
 /*
  * The entry function to the mpibind plugin.
  * This function initializes and calls mpibind.
@@ -512,7 +498,6 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
   bool restrict_topo = true;
   const char *xml;
   flux_shell_t *shell = flux_plugin_get_shell(p);
-
 
   if ( mpibind_init(&mph) != 0 || mph == NULL ) {
     shell_die(1, "mpibind_init failed");
@@ -663,7 +648,7 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   struct handle_and_opts *hdl = malloc(sizeof(struct handle_and_opts));
   hdl->mph = mph;
-  hdl->opts = opts; 
+  hdl->opts = opts;
 
   /* Set mpibind handle in shell aux data for auto-destruction */
   flux_shell_aux_set(shell, "mpibind", hdl, (flux_free_f) mpibind_destroy);
@@ -710,12 +695,11 @@ int mpibind_shell_init(flux_plugin_t *p, const char *s,
 
   /* Clean up */
   free(pus);
-  /* Can't free opts here since it will be used by mpibind_task_init */ 
+  /* Can't free opts here since it will be used by mpibind_task_init */
   //free(opts);
 
   return 0;
 }
-
 
 #if 0
 static
@@ -724,14 +708,12 @@ const struct flux_plugin_handler handlers[] = {
     { NULL, NULL, NULL },
 };
 
-
 void flux_plugin_init (flux_plugin_t *p)
 {
     if (flux_plugin_register (p, PLUGIN_NAME, handlers) < 0)
         shell_die (1, "failed to register handlers");
 }
 #endif
-
 
 /*
  * Register the mpibind plugin.
@@ -777,8 +759,8 @@ void flux_plugin_init(flux_plugin_t *p)
      (do not disable setting the variables) */
   opts->omp_proc_bind = 0;
   opts->omp_places = 0;
-  opts->visible_devices = 0; 
-  
+  opts->visible_devices = 0;
+
   /* Get mpibind user-specified options */
   if ( !mpibind_getopt(shell,
 		       &opts->smt,
@@ -806,6 +788,3 @@ void flux_plugin_init(flux_plugin_t *p)
   if (flux_shell_setopt_pack(shell, "gpu-affinity", "s", "off") < 0)
     shell_die_errno(1, "flux_shell_setopt_pack: gpu-affinity=off");
 }
-
-
-
