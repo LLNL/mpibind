@@ -1,6 +1,6 @@
 /******************************************************
  * Edgar A Leon
- * Lawrence Livermore National Laboratory 
+ * Lawrence Livermore National Laboratory
  ******************************************************/
 #ifndef HWLOC_UTILS_H_INCLUDED
 #define HWLOC_UTILS_H_INCLUDED
@@ -11,11 +11,11 @@
 extern "C" {
 #endif
 
-int pci_busid_snprintf(char *buf, size_t size, hwloc_obj_t io); 
+int pci_busid_snprintf(char *buf, size_t size, hwloc_obj_t io);
 
-int gpu_uuid_snprintf(char *buf, size_t size, hwloc_obj_t dev); 
+int gpu_uuid_snprintf(char *buf, size_t size, hwloc_obj_t dev);
 
-void tree_walk_io(void (*apply)(hwloc_obj_t, void*, int), 
+void tree_walk_io(void (*apply)(hwloc_obj_t, void*, int),
                   hwloc_obj_t root, void *args, int depth);
 
 void print_obj_info(hwloc_obj_t obj);

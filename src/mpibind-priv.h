@@ -1,6 +1,6 @@
 /******************************************************
  * Edgar A Leon
- * Lawrence Livermore National Laboratory 
+ * Lawrence Livermore National Laboratory
  ******************************************************/
 #ifndef MPIBIND_PRIV_H_INCLUDED
 #define MPIBIND_PRIV_H_INCLUDED
@@ -26,7 +26,6 @@
 
 #define PRINT(...) fprintf(stderr, __VA_ARGS__)
 
-
 static
 const char usage_str[] = "\n"
   "Automatically map tasks/threads/kernels to heterogeneous systems\n"
@@ -46,29 +45,28 @@ const char usage_str[] = "\n"
   "  visdevs           Do not set VISIBLE_DEVICES\n"
   "\n";
 
-
-/* 
- * An environment variable with one value per task 
- */ 
+/*
+ * An environment variable with one value per task
+ */
 typedef struct {
-  int size; 
+  int size;
   char *name;
   char **values;
 } mpibind_env_var;
 
-/* 
- * The type of I/O devices 
- */ 
-enum { 
-    DEV_GPU,    
+/*
+ * The type of I/O devices
+ */
+enum {
+    DEV_GPU,
     DEV_NIC,
-}; 
+};
 
 /*
- * The various I/O device IDs. 
- * GPU devices are different from other I/O devices 
- * by having visdevs (and optionally smi) set 
- * to a non-negative integer. 
+ * The various I/O device IDs.
+ * GPU devices are different from other I/O devices
+ * by having visdevs (and optionally smi) set
+ * to a non-negative integer.
  */
 struct device {
   char name[SHORT_STR_SIZE];   // Device name
@@ -77,44 +75,43 @@ struct device {
   hwloc_obj_t ancestor;        // First (smallest) non-I/O ancestor object
   int type;                    // Type of I/O device, e.g., DEV_GPU
   int vendor_id;               // Device vendor
-  /* GPU specific */ 
+  /* GPU specific */
   int smi;                     // System management ID (RSMI and NVML)
   char vendor[SHORT_STR_SIZE]; // Vendor of GPU/COPROC devices
   char model[SHORT_STR_SIZE];  // Model of GPU/COPROC devices
-}; 
+};
 
-/* 
- * The mpibind handle 
- */ 
+/*
+ * The mpibind handle
+ */
 struct mpibind_t {
-  /* Input parameters */ 
+  /* Input parameters */
   int ntasks;
   int in_nthreads;
-  int greedy; 
-  int gpu_optim; 
+  int greedy;
+  int gpu_optim;
   int smt;
   char *restr_set;
   int restr_type;
-  
-  /* Input/Output parameters */ 
+
+  /* Input/Output parameters */
   hwloc_topology_t topo;
-  
+
   /* Output parameters */
   int *nthreads;
-  hwloc_bitmap_t *cpus; 
+  hwloc_bitmap_t *cpus;
   hwloc_bitmap_t *gpus;
-  char ***gpus_usr; 
+  char ***gpus_usr;
   int **cpus_usr;
 
   /* Environment variables */
   int nvars;
-  char **names; 
-  mpibind_env_var *env_vars; 
+  char **names;
+  mpibind_env_var *env_vars;
 
   /* IDs of I/O devices */
-  int ndevs;  
+  int ndevs;
   struct device **devs;
 };
-
 
 #endif // MPIBIND_PRIV_H_INCLUDED
