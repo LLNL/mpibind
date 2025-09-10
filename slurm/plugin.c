@@ -6,41 +6,38 @@
 #include <hwloc.h>
 #include <mpibind.h>
 
-
-/* 
- * Notes 
+/*
+ * Notes
  *
- * In some cases, the plugin hangs when not using an XML 
- * topology file. The hang is triggered by hwloc when enabling 
- * OS devices and discovering the topology. This is not an 
- * mpibind or hwloc issue. 
- * See TOSS-6198. 
- * 
+ * In some cases, the plugin hangs when not using an XML
+ * topology file. The hang is triggered by hwloc when enabling
+ * OS devices and discovering the topology. This is not an
+ * mpibind or hwloc issue.
+ * See TOSS-6198.
+ *
  */
 
-/* 
- * SPANK errors 
+/*
+ * SPANK errors
  *
- * ESPANK_ERROR 
- * ESPANK_BAD_ARG, 
+ * ESPANK_ERROR
+ * ESPANK_BAD_ARG,
  * ESPANK_NOT_TASK,
- * ESPANK_ENV_EXISTS, 
+ * ESPANK_ENV_EXISTS,
  * ESPANK_ENV_NOEXIST,
  * ESPANK_NOSPACE,
  * ESPANK_NOT_REMOTE,
  * ESPANK_NOEXIST,
  * ESPANK_NOT_EXECD,
  * ESPANK_NOT_AVAIL,
- * ESPANK_NOT_LOCAL, 
+ * ESPANK_NOT_LOCAL,
  *
- */ 
+ */
 
-
-/* 
- * Spank plugin name and version 
- */ 
-SPANK_PLUGIN(mpibind, 2); 
-
+/*
+ * Spank plugin name and version
+ */
+SPANK_PLUGIN(mpibind, 2);
 
 #define STR(x) #x
 #define XSTR(x) STR(x)
@@ -63,21 +60,20 @@ SPANK_PLUGIN(mpibind, 2);
 //#define S_ALLOC_CORES  S_JOB_ALLOC_CORES
 #define S_ALLOC_CORES  S_STEP_ALLOC_CORES
 
-
 /************************************************
- * Global variables 
+ * Global variables
  ************************************************/
 
 /* mpibind options */
-/* -1 indicates not set by user, i.e., use mpibind defaults */ 
-static int opt_gpu = -1; 
+/* -1 indicates not set by user, i.e., use mpibind defaults */
+static int opt_gpu = -1;
 static int opt_smt = -1;
-/* Enable greedy by default */ 
-static int opt_greedy = 1; 
+/* Enable greedy by default */
+static int opt_greedy = 1;
 
 /* mpibind plugin options */
 static int opt_verbose = 0;
-static int opt_debug = 0; 
+static int opt_debug = 0;
 static int opt_enable = 1;
 
 /* plugstack.conf: if 'default_off' then 1, else 0 */
@@ -88,34 +84,30 @@ static int opt_exclusive_only = 1;
 /* if '--mpibind=on' then 1, elif '--mpibind=off' then 0, else -1 */
 static int opt_user_specified = -1;
 
-/* mpibind vars */ 
+/* mpibind vars */
 static mpibind_t *mph = NULL;
 static hwloc_topology_t topo = NULL;
 
-
+/************************************************
+ * Forward declarations
+ ************************************************/
+static int parse_user_options(int val, const char *optarg, int remote);
 
 /************************************************
- * Forward declarations 
- ************************************************/ 
-static int parse_user_options(int val, const char *optarg, int remote); 
-
-
-/************************************************ 
  * Spank plugin options
  ************************************************/
 struct spank_option spank_options [] =
   {
    { "mpibind", "[args]",
-     "Memory-driven mapping algorithm for supercomputers " 
+     "Memory-driven mapping algorithm for supercomputers "
      "(args=help for more info)",
-     2, 0, (spank_opt_cb_f) parse_user_options 
+     2, 0, (spank_opt_cb_f) parse_user_options
    },
    SPANK_OPTIONS_TABLE_END
   };
 
-
-/************************************************ 
- * Functions 
+/************************************************
+ * Functions
  ************************************************/
 
 /*
@@ -127,7 +119,7 @@ struct spank_option spank_options [] =
  * S_JOB_NODEID: Relative id of this node (uint32_t *)
  * S_JOB_STEPID: Slurm job step id (uint32_t *)
  *
- */ 
+ */
 static
 void print_spank_items(spank_t sp)
 {
@@ -151,7 +143,7 @@ void print_spank_items(spank_t sp)
     return;
   }
   PRINT(XSTR(SI_NAME1) "=%s\n", s1);
-  
+
   /*
      S_STEP_ALLOC_CORES
      Step alloc'd cores in list format  (char **)
@@ -199,19 +191,19 @@ void print_spank_items(spank_t sp)
   PRINT(XSTR(SI_NAME4) "=%d\n", vu16);
 }
 
-/* 
- * Print Slurm context, e.g., local, remote. 
+/*
+ * Print Slurm context, e.g., local, remote.
  */
 #if 0
 static
 void print_context(char *note)
 {
-  int nc = 0; 
-  char str[128]; 
+  int nc = 0;
+  char str[128];
 
-  if (note != NULL) 
-    nc += snprintf(str, sizeof(str), "%s: ", note); 
-  
+  if (note != NULL)
+    nc += snprintf(str, sizeof(str), "%s: ", note);
+
   switch(spank_context()) {
   case S_CTX_LOCAL:
     nc += snprintf(str+nc, sizeof(str)-nc,
@@ -232,20 +224,20 @@ void print_context(char *note)
   case S_CTX_JOB_SCRIPT:
     nc += snprintf(str+nc, sizeof(str)-nc,
 		   "Prolog/epilog context");
-    break; 
+    break;
   case S_CTX_ERROR:
     nc += snprintf(str+nc, sizeof(str)-nc,
 		   "Error obtaining current context");
-    break; 
+    break;
   default :
     nc += snprintf(str+nc, sizeof(str)-nc,
 		   "Invalid context");
   }
-  nc+= snprintf(str+nc, sizeof(str)-nc, "\n"); 
-  
+  nc+= snprintf(str+nc, sizeof(str)-nc, "\n");
+
   PRINT(str);
 }
-#endif 
+#endif
 
 static
 void print_user_options()
@@ -260,7 +252,6 @@ void print_user_options()
 	  opt_gpu, opt_smt, opt_greedy);
 }
 
-
 /*
  * User optios passed via '--mpibind' on srun command line
  */
@@ -268,24 +259,24 @@ static
 int parse_user_options(int val, const char *arg, int remote)
 {
   //fprintf(stderr, "mpibind option specified\n");
-  const char delim[] = ","; 
-  
+  const char delim[] = ",";
+
   /* '--mpibind' with no args enables the plugin */
   if (arg == NULL) {
     opt_user_specified = 1;
     return 0;
   }
-  
-  /* Don't overwrite the original string */ 
+
+  /* Don't overwrite the original string */
   char *str = strdup(arg);
 
-  /* First token */ 
+  /* First token */
   char *token = strtok(str, delim);
 
   char *msg;
   /* Options not implemented yet */
   int master=-1, omp_places=-1, omp_proc_bind=-1, visdevs=-1;
-  
+
   while (token != NULL) {
     //fprintf(stderr, "%s\n", token);
     msg = mpibind_parse_option(token,
@@ -307,33 +298,33 @@ int parse_user_options(int val, const char *arg, int remote)
       exit(0);
     }
 
-    token = strtok(NULL, delim); 
+    token = strtok(NULL, delim);
   }
 
-  free(str); 
+  free(str);
 
   return 0;
 }
 
-/* 
- * Parse plugstack.conf options. 
- */ 
+/*
+ * Parse plugstack.conf options.
+ */
 static
 int parse_conf_options(int argc, char *argv[], int remote)
 {
   int i;
-  
+
   for (i=0; i<argc; i++) {
     //fprintf(stderr, "confopt=%s\n", argv[i]);
-    
+
     if (strcmp(argv[i], "default_off") == 0)
       opt_conf_disabled = 1;
     else if (strcmp(argv[i], "exclusive_only_off") == 0)
       opt_exclusive_only = 0;
-    else { 
+    else {
       PRINT("mpibind: Invalid plugstack.conf argument %s\n",
 	      argv[i]);
-      return -1; 
+      return -1;
     }
   }
 
@@ -359,7 +350,6 @@ int get_ncores_on_node()
 
   return ncores;
 }
-
 
 static
 int restrict_to_allocated_cores(spank_t sp, hwloc_topology_t topo)
@@ -388,7 +378,6 @@ int restrict_to_allocated_cores(spank_t sp, hwloc_topology_t topo)
   return rc;
 }
 
-
 static
 int get_ncores_allocated(spank_t sp)
 {
@@ -406,56 +395,56 @@ int get_ncores_allocated(spank_t sp)
 static
 uint32_t get_nnodes(spank_t sp)
 {
-  uint32_t nnodes = 0; 
-  spank_err_t rc; 
-  
+  uint32_t nnodes = 0;
+  spank_err_t rc;
+
   if ( (rc=spank_get_item(sp, S_JOB_NNODES, &nnodes)) !=
-       ESPANK_SUCCESS ) 
+       ESPANK_SUCCESS )
     PRINT("mpibind: Failed to get node count: %s",
-	    spank_strerror(rc)); 
-  
+	    spank_strerror(rc));
+
   return nnodes;
 }
 
 static
 uint32_t get_nodeid(spank_t sp)
 {
-  uint32_t nodeid = -1; 
-  spank_err_t rc; 
-  
+  uint32_t nodeid = -1;
+  spank_err_t rc;
+
   if ( (rc=spank_get_item(sp, S_JOB_NODEID, &nodeid)) !=
-       ESPANK_SUCCESS ) 
+       ESPANK_SUCCESS )
     PRINT("mpibind: Failed to get node id: %s",
-	    spank_strerror(rc)); 
-  
+	    spank_strerror(rc));
+
   return nodeid;
 }
 
 static
 uint32_t get_local_ntasks(spank_t sp)
 {
-  uint32_t ntasks = 0; 
-  spank_err_t rc; 
-  
+  uint32_t ntasks = 0;
+  spank_err_t rc;
+
   if ( (rc=spank_get_item(sp, S_JOB_LOCAL_TASK_COUNT, &ntasks)) !=
-       ESPANK_SUCCESS ) 
+       ESPANK_SUCCESS )
     PRINT("mpibind: Failed to get local task count: %s",
-	    spank_strerror(rc)); 
+	    spank_strerror(rc));
 
   return ntasks;
 }
 
-static 
+static
 int get_local_taskid(spank_t sp)
 {
-  int taskid = -1; 
-  spank_err_t rc; 
-  
+  int taskid = -1;
+  spank_err_t rc;
+
   if ( (rc=spank_get_item(sp, S_TASK_ID, &taskid)) !=
-       ESPANK_SUCCESS ) 
+       ESPANK_SUCCESS )
     PRINT("mpibind: Failed to get local task id: %s",
-	    spank_strerror(rc)); 
-  
+	    spank_strerror(rc));
+
   return taskid;
 }
 
@@ -464,14 +453,14 @@ int get_omp_num_threads(spank_t sp)
 {
   const char var[] = "OMP_NUM_THREADS";
   char str[16];
-  int val; 
-  
-  if (spank_getenv(sp, var, str, sizeof(str)) != ESPANK_SUCCESS) 
+  int val;
+
+  if (spank_getenv(sp, var, str, sizeof(str)) != ESPANK_SUCCESS)
     return -1;
-  
+
   if ((val = atoi(str)) <= 0)
-    return -1; 
-  
+    return -1;
+
   return val;
 }
 
@@ -539,32 +528,31 @@ static
 int clean_up(mpibind_t *mph, hwloc_topology_t topo)
 {
   int rc=0;
-  
+
   if ((rc=mpibind_finalize(mph)) != 0)
     PRINT("mpibind: mpibind_finalize failed\n");
-  
-  hwloc_topology_destroy(topo); 
-  
-  return rc; 
+
+  hwloc_topology_destroy(topo);
+
+  return rc;
 }
 
-
-/************************************************ 
- * SPANK callback functions 
+/************************************************
+ * SPANK callback functions
  ************************************************/
 
-/* 
+/*
  * Local context (srun)
  * Called once.
- * 
- * This code might be executing with root priviledges. 
- * 
+ *
+ * This code might be executing with root priviledges.
+ *
  * Do not initialize the mpibind or hwloc topology handles
- * here, because sbatch jobs would not complete. Perhaps, 
- * due to priviledge execution. 
+ * here, because sbatch jobs would not complete. Perhaps,
+ * due to priviledge execution.
  *
  * Cannot print to the console.
- */ 
+ */
 int slurm_spank_init(spank_t sp, int ac, char *argv[])
 {
 #if 0
@@ -580,18 +568,18 @@ int slurm_spank_init(spank_t sp, int ac, char *argv[])
 
 /*
  * Local context (srun)
- * Called once. 
+ * Called once.
  *
  * Cannot print to the console, but output does show
- * in the sbatch output file.   
- */ 
+ * in the sbatch output file.
+ */
 int slurm_spank_exit(spank_t sp, int ac, char *argv[])
 {
 #if 0
   char name[] = "slurm_spank_exit";
-  print_context(name); 
+  print_context(name);
 #endif
-  
+
   if (!spank_remote(sp))
     return ESPANK_SUCCESS;
 
@@ -600,8 +588,8 @@ int slurm_spank_exit(spank_t sp, int ac, char *argv[])
 
 /*
  * Remote context (slurmstepd)
- * Called once per node. 
- * 
+ * Called once per node.
+ *
  */
 int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
 {
@@ -613,8 +601,8 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   if (!spank_remote(sp))
     return ESPANK_SUCCESS;
 
-  /* I could do this in slurm_spank_init, but can't 
-     print to the console there if there's an error */ 
+  /* I could do this in slurm_spank_init, but can't
+     print to the console there if there's an error */
   if (parse_conf_options(ac, argv, spank_remote(sp)) < 0) {
     opt_enable = 0;
     return ESPANK_ERROR;
@@ -623,11 +611,11 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   /* Disable mpibind in salloc/sbatch commands */
   /* The side effect of calling mpibind with salloc is that
      env vars set by mpibind continue to be set (and presumably
-     the cpu bindings). For example, if OMP_NUM_THREADS is set to 
-     all CPUs, that has an effect on subsequent srun calls with 
-     mpibind. To check whether salloc is calling mpibind after 
-     the nodes are allocated, check the value of OMP_NUM_THREADS */ 
-  if (job_is_alloc(sp) == 1) { 
+     the cpu bindings). For example, if OMP_NUM_THREADS is set to
+     all CPUs, that has an effect on subsequent srun calls with
+     mpibind. To check whether salloc is calling mpibind after
+     the nodes are allocated, check the value of OMP_NUM_THREADS */
+  if (job_is_alloc(sp) == 1) {
     opt_enable = 0;
     PRINT_DEBUG("Disabling mpibind for salloc/sbatch\n");
     return ESPANK_SUCCESS;
@@ -637,8 +625,8 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   //opt_exclusive_only = 1;
   //opt_conf_disabled = 0;
 
-  char header[16];  
-  uint32_t nodeid = get_nodeid(sp); 
+  char header[16];
+  uint32_t nodeid = get_nodeid(sp);
   uint32_t nnodes = get_nnodes(sp);
   sprintf(header, "Node %d/%d", nodeid, nnodes);
 
@@ -646,7 +634,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     print_spank_items(sp);
     print_user_options();
   }
-  
+
   /* Determine if mpibind should be on or off */
   int exclusive = job_is_exclusive(sp);
   if ( !(opt_enable = mpibind_is_on(exclusive)) ) {
@@ -657,7 +645,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
   uint32_t ntasks = get_local_ntasks(sp);
   int nthreads = get_omp_num_threads(sp);
 
-  /* 
+  /*
    * Set the topology
    */
 #if 1
@@ -690,7 +678,6 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     }
   }
 
-
 #if 1
   if (mpibind_load_topology(topo) != 0) {
     opt_enable = 0;
@@ -711,7 +698,7 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     slurm_error("mpibind: Failed to incorporate key topology components");
     return ESPANK_ERROR;
   }
-  
+
   if (hwloc_topology_load(topo) < 0) {
     opt_enable = 0;
     slurm_error("mpibind: hwloc_topology_load");
@@ -770,13 +757,13 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
        (opt_gpu >= 0 && mpibind_set_gpu_optim(mph, opt_gpu) != 0) ||
        (restr_type >= 0 && mpibind_set_restrict_type(mph, restr_type) != 0) ||
        (restr_str[0] && mpibind_set_restrict_ids(mph, restr_str) != 0) ) {
-    opt_enable = 0; 
+    opt_enable = 0;
     slurm_error("mpibind: Unable to set input parameters");
     return ESPANK_ERROR;
   }
 
   mpibind_set_topology(mph, topo);
-  
+
   PRINT_DEBUG("%s: ntasks=%d nthreads=%d greedy=%d gpu=%d "
 	      "topo=%p exclusive=%d restr_type=%d restr_ids=%s\n",
 	      header,
@@ -817,37 +804,36 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     // This call had an issue with buffer overrun. Now fixed!
     mpibind_mapping_snprint(buf, PRINT_MAP_BUF_SIZE, mph);
 
-    if (nodeid == 0 || opt_verbose > 1) { 
+    if (nodeid == 0 || opt_verbose > 1) {
       PRINT("mpibind: %d GPUs on this node\n", ngpus);
       PRINT("%s", buf);
     }
   }
-#endif 
-  
-  return ESPANK_SUCCESS;  
-}
+#endif
 
+  return ESPANK_SUCCESS;
+}
 
 /*
  * Remote context (slurmstepd)
- * Called once per task 
+ * Called once per task
  */
 int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
 {
 #if 0
   char name[] = "slurm_spank_task_init";
   print_context(name);
-#endif 
+#endif
 
   if (!spank_remote(sp) || !opt_enable)
     return ESPANK_SUCCESS;
 
-  char header[16];  
-  int taskid = get_local_taskid(sp); 
+  char header[16];
+  int taskid = get_local_taskid(sp);
   uint32_t ntasks = get_local_ntasks(sp);
   sprintf(header, "Task %d/%d", taskid, ntasks);
 
-  /* Bind this task to the calculated cpus */ 
+  /* Bind this task to the calculated cpus */
   if (mpibind_apply(mph, taskid) != 0) {
     slurm_error("mpibind: Failed to apply mapping");
     return ESPANK_ERROR;
@@ -863,7 +849,7 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
     if (env_var_values[taskid]) {
       //      fprintf(stderr, "%s: setting %s=%s\n", header,
       //	      env_var_names[i], env_var_values[taskid]);
-      
+
       if (spank_setenv(sp, env_var_names[i], env_var_values[taskid], 1)
 	  != ESPANK_SUCCESS) {
 	slurm_error("mpibind: Failed to set %s in environment\n",
@@ -873,9 +859,8 @@ int slurm_spank_task_init(spank_t sp, int ac, char *argv[])
   }
 
 #if 1
-  clean_up(mph, topo); 
+  clean_up(mph, topo);
 #endif
-  
-  return ESPANK_SUCCESS;  
-}
 
+  return ESPANK_SUCCESS;
+}
