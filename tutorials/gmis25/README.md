@@ -4,6 +4,7 @@
 *Jane E. Herriman*, Lawrence Livermore National Laboratory<br>
 *Fernando Posada-Correa*, Oak Ridge National Laboratory<br>
 *Suzanne Parete-Koon*, Oak Ridge National Laboratory<br>
+*Tony Ramirez*, Oak Ridge National Laboratory<br>
 
 ## Description
 
@@ -43,11 +44,12 @@ Hands-on exercises conducted in an AWS cluster environment ensure practical expo
 | Begin | End | Topic |
 |-:|-:|:-|
 | 13:30 | 13:50 | Introduction to Supercomputing |
-| 13:50 | 15:20 | Module 1: Parallel Computing with MPI |
+| 13:50 | 14:20 | Module 1: UNIX Basics | 
+| 14:20 | 15:20 | Module 2: Parallel Computing with MPI |
 | *15:20* | *15:35* | *Break* |
-| 15:35 | 16:55 | Module 2: Computing Architecture and Topology |
+| 15:35 | 16:55 | Module 3: Computing Architecture and Topology |
 | *16:55* | *17:10* | *Break* |
-| 17:10 | 18:30 | Module 3: Hardware Affinity for Applications |
+| 17:10 | 18:30 | Module 4: Hardware Affinity for Applications |
 
 </center>
 
@@ -74,6 +76,11 @@ srun -N1 -n1 mpi
 <p align="center">
    <img src="../figures/sierra.png" width="750"/>
 </p>
+
+
+1. UNIX Basics
+
+   Learn the essentials of working in UNIX-like systems, which form the backbone of most HPC environments. This module introduces participants to foundational UNIX concepts, including navigating the file system, managing and searching files, and performing basic edits with the popular text editor vim. By the end, participants will be comfortable moving around a UNIX system and handling core tasks needed for effective HPC use.
 
 
 1. [Parallel Computing with MPI](https://github.com/suzannepk/mpi_parallel)
