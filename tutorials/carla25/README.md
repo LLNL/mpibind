@@ -1,7 +1,7 @@
 
 
 
-# Supercomputing Architecture: Locality, Topology, and Affinity
+# Supercomputing Architecture: Locality & Topology
 *Edgar A. León*<br>
 Lawrence Livermore National Laboratory 
 

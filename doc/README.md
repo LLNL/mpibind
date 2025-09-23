@@ -11,9 +11,13 @@
 
 ## Conference Tutorials
 
+[Supercomputing Foundations](https://github.com/LLNL/mpibind/blob/master/tutorials/gmis25/README.md)
+* Great Minds in STEM Conference (GMiS)
+* October 2025, San Diego, CA
+
 [Supercomputing Architecture: Locality & Topology](https://github.com/LLNL/mpibind/blob/master/tutorials/carla25/README.md)
 * DevOps School for HPC
-* Latin America High Performance Computing Conference
+* Latin America High Performance Computing Conference (CARLA)
 * September 2025, Virtual 
 
 [Bridging Applications and Hardware](https://github.com/LLNL/mpibind/blob/master/tutorials/eurosys25/README.md)
