@@ -11,6 +11,11 @@
 
 ## Conference Tutorials
 
+[Supercomputing Architecture: Locality & Topology](https://github.com/LLNL/mpibind/blob/master/tutorials/carla25/README.md)
+* DevOps School for HPC
+* Latin America High Performance Computing Conference
+* September 2025, Virtual 
+
 [Bridging Applications and Hardware](https://github.com/LLNL/mpibind/blob/master/tutorials/eurosys25/README.md)
 * 4th Tutorial on Mapping and Affinity (MAP)
 * ASPLOS and EuroSys

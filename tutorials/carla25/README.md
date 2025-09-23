@@ -1,7 +1,16 @@
-# Module 1: Discovering the node architecture topology
 
-*Edgar A. León* and *Jane E. Herriman*<br>
-Lawrence Livermore National Laboratory
+
+
+# Supercomputing Architecture: Locality, Topology, and Affinity
+*Edgar A. León*<br>
+Lawrence Livermore National Laboratory 
+
+This course offers a practical introduction to high-performance computing (HPC) architectures, with a focus on system topology and processor affinity. Participants will begin with a concise review of computer architecture fundamentals relevant to modern supercomputing systems, including compute cores, cache hierarchies, and memory domains.
+
+The session will explore node topology and hardware resource identification using hwloc, the hardware locality library, helping attendees visualize and interpret the structure of compute nodes. Attendees will also learn utilities to compute CPU masks and bind processes to specific hardware resources. Through this practical exploration, participants will develop a foundational understanding of locality-aware computing, including distinctions between affinity policies, binding strategies, and application-to-hardware mappings.
+
+By the end of the course, attendees will be equipped with essential knowledge and tools to begin reasoning about how HPC system architecture shapes software performance and scalability.
+
 
 
 ## Table of contents
@@ -459,6 +468,8 @@ lassen.xml
 pascal.xml
 tioga.xml
 ```
+
+These files are also available on the [topo-xml](../../topo-xml) directory. 
 
 Using these files, you should be able to create the outputs for `lstopo-no-graphics` that you'd see on these respective machines, simply by adding `--input <machine>.xml` to the commands shown above; as an example, 
 
