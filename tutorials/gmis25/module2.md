@@ -126,7 +126,7 @@ Each L2 cache has 2 cores, and there are 3 L2 caches per L3 cache.
 
 ## Example architectures
 
-The topologies of a few example architectures are summarized and diagramed [here](archs.md).
+The topologies of a few example architectures are summarized and diagramed [here](https://github.com/LLNL/mpibind/blob/master/tutorials/cug24/archs.md).
 
 We'll focus on `Tioga` and `RZAdams` --- early access systems for El Capitan --- in examples throughout the coming modules. `Tioga` has MI250X nodes (including MI250X GPUs) and `RZAdams` is composed of nodes with MI300A APUs!
 
@@ -1614,7 +1614,7 @@ tioga12    Task   0/  4 running on 16 CPUs: 0-15
 
 ##### Example 6
 
-An MI250X has 64 cores and 8 GPUs split across 4 NUMAnodes. Here is a program run with 4 MPI tasks where each task gets the resources of a NUMAnoode: 16 CPUs and 2 GPUs per task.
+An MI250X has 64 cores and 8 GPUs split across 4 NUMAnodes. Here is a program run with 4 MPI tasks where each task gets the resources of a NUMAnode: 16 CPUs and 2 GPUs per task.
 
 <details>
 <summary>
