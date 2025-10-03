@@ -1,4 +1,4 @@
-# Module 2: Computing architecture and topology
+# Module 3: Computing architecture and topology
 
 *Edgar A. León* and *Jane E. Herriman*<br>
 Lawrence Livermore National Laboratory
@@ -6,7 +6,8 @@ Lawrence Livermore National Laboratory
 
 ## Table of contents
 
-1. [Linux and parallel programming](module1.md)
+1. Unix Basics
+1. Parallel Computing with MPI
 1. [Computing architecture and topology](module2.md)
    1. [Learning objectives](#learning-objectives)
    1. [Background](#background)
@@ -20,7 +21,7 @@ Lawrence Livermore National Laboratory
    1. [Reporting affinity](#reporting-affinity)
    1. [Extra exercises](#extra-exercises)
    1. [References](#references) 
-1. [Mapping applications to the hardware](module3.md)
+1. Hardware Affinity for Applications
 
 
 
