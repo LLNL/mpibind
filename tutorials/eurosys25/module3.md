@@ -956,7 +956,7 @@ fi
 In exercise B, we saw that our output for 
 
 ```
-srun -n2 -c6 --cpu-bind=thread --gpu-bind=per_task:1 sh -c 'CUDA_VISIBLE_DEVICES=0,4 mpi+gpu'
+srun -n2 -c6 --cpu-bind=thread sh -c 'CUDA_VISIBLE_DEVICES=0,4 mpi+gpu'
 ```
 
 was different than that of

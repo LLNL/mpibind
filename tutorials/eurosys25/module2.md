@@ -486,13 +486,13 @@ Do you see the mappings you expected? Which cores are used for `-n3` and `-n8`?
 
 ### Example 10. `map_cpu`
 
-As in the last example, we'll assign 8 tasks to the same 8 cores. This time, we'll manually assign these tasks in a round robin fashion between the two sockets by changing the order of the list of cores passed to `--cpu-bind=map_cpu`. This means that tasks are assigned in the order of the NUMA domains, but that each NUMA domain receives a first task before the first NUMA domain receives a second task.
+As in the last example, we'll assign 8 tasks to the same 8 cores. This time, we'll manually assign these tasks in a round robin fashion between the NUMA domains by changing the order of the list of cores passed to `--cpu-bind=map_cpu`. This means that tasks are assigned in the order of the NUMA domains, but that each NUMA domain receives a first task before the first NUMA domain receives a second task.
 
 <details>
 <summary>
 
 ```
-# Round robin the tasks between the two sockets
+# Round robin the tasks between the NUMA domains
 $ srun -N1 -n8 --cpu-bind=map_cpu:0,16,32,48,1,17,33,49 mpi
 ```
 </summary>
@@ -627,7 +627,7 @@ srun -t1 -N1 -n1 hwloc-calc --taskset --physical-output NUMAnode:0.core:4-8
 Check your work by using the mask created in the following:
 
 ```
-srun -t1 -N1 -n1 hwloc-calc <MASK> --intersect core
+srun -t1 -N1 -n1 hwloc-calc <mask> --intersect core
 ```
 
 #### Hands-on exercise E: Using masks to bind tasks
@@ -635,7 +635,7 @@ srun -t1 -N1 -n1 hwloc-calc <MASK> --intersect core
 On AWS, use your mask from exercise D to bind two tasks to this set of cores by running
 
 ```
-srun -N1 -n2 --cpu-bind=mask_cpu:<Mask from Ex. D> mpi
+srun -N1 -n2 --cpu-bind=mask_cpu:<mask-from-ex-d> mpi
 ```
 
 You should see output like:
@@ -815,7 +815,7 @@ Check that you get the same mask using either syntax!
 2. After creating the mask for the second socket, check that it was correct with the `--cpu-bind=mask_cpu` flag:
 
 ```
-[user2@ip-10-0-0-130 ~]$ srun -N1 -t1 --cpu-bind=mask_cpu:<Mask from Ex.1> mpi
+[user2@ip-10-0-0-130 ~]$ srun -N1 -t1 --cpu-bind=mask_cpu:<mask-from-ex-1> mpi
 gpu-st-g4dnmetal-1 Task   0/  1 running on 48 CPUs: 24-47,72-95
 ```
 
