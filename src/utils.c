@@ -260,7 +260,7 @@ int mpibind_cores_to_pus(hwloc_topology_t topo, char *cores,
   while (i >= 0) {
     core = hwloc_get_obj_by_depth(topo, core_depth, i);
     if ( !core ) {
-      PRINT("Logical core %d not in topology\n", i);
+      PRINT("WARN: Logical core %d not in topology\n", i);
       return 1;
     }
 

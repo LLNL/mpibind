@@ -524,6 +524,10 @@ int mpibind_load_topology(hwloc_topology_t topo)
     return 1;
   }
 
+#if VERBOSE >= 1
+  print_topo_brief(topo);
+#endif
+
   /* Remove NUMA domains with intersecting CPUs */
   if ( numas_have_intersecting_cpus(topo) )
     restrict_numas_with_intersecting_cpus(topo);

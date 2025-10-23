@@ -363,8 +363,24 @@ int restrict_to_allocated_cores(spank_t sp, hwloc_topology_t topo)
     return -1;
   }
 
+  /* Do not try to restrict the topology to the allocated cores
+     if Slurm has already done that. This is dependent on the
+     Slurm resource selection plugin:
+     - CR_core: Only the allocated cores are visible
+       in slurm_spank_user_init
+     - CR_core_memory: All of the cores of the node are visible
+       in slurm_spank_user_init */
+  int ncores_alloc = mpibind_range_nints(cores);
+  int ncores_hwloc = hwloc_get_nbobjs_by_depth(topo,
+					       mpibind_get_core_depth(topo));
+  if (ncores_hwloc <= ncores_alloc)
+    return 0;
+
+  PRINT_DEBUG("Restricting topology to allocated cores %s\n", cores);
+
   char pus[LONG_STR_SIZE];
-  mpibind_cores_to_pus(topo, cores, pus, LONG_STR_SIZE);
+  if (mpibind_cores_to_pus(topo, cores, pus, LONG_STR_SIZE) != 0)
+    return -1;
 
   hwloc_bitmap_t cpus = hwloc_bitmap_alloc();
   hwloc_bitmap_list_sscanf(cpus, pus);
@@ -678,40 +694,16 @@ int slurm_spank_user_init(spank_t sp, int ac, char *argv[])
     }
   }
 
-#if 1
   if (mpibind_load_topology(topo) != 0) {
     opt_enable = 0;
     slurm_error("mpibind: mpibind_load_topology");
     return ESPANK_ERROR;
   }
-#else
-  /* Make sure OS binding functions are actually called
-     Could also use HWLOC_THISSYSTEM=1, but that applies
-     globally to all hwloc clients */
-  int topo_flags = HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM;
-  if (hwloc_topology_set_flags(topo, topo_flags) < 0)
-    PRINT_DEBUG("mpibind: OS binding functions may not be called");
-
-  /* Make sure OS and PCI devices are not filtered out */
-  if (mpibind_filter_topology(topo) < 0) {
-    opt_enable = 0;
-    slurm_error("mpibind: Failed to incorporate key topology components");
-    return ESPANK_ERROR;
-  }
-
-  if (hwloc_topology_load(topo) < 0) {
-    opt_enable = 0;
-    slurm_error("mpibind: hwloc_topology_load");
-    return ESPANK_ERROR;
-  }
-
-  if (hwloc_topology_is_thissystem(topo) == 0)
-    slurm_spank_log("mpibind: OS binding may not be enforced");
-#endif
 
   /* Restrict the topology to the cores allocated for the job.
      Note that restricting to current binding does not work
-     because slurm_spank_user_init runs on the whole node */
+     because, in some Slurm configurations, slurm_spank_user_init
+     runs on the whole node */
   if (!exclusive && restrict_to_allocated_cores(sp, topo) < 0)
     slurm_spank_log("mpibind: Failed to restrict topology to allocated cores");
 #endif
